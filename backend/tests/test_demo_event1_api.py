@@ -208,7 +208,7 @@ def test_agent_review_off_mengembalikan_disabled_tanpa_panggilan(
             commodity=commodity
         ),
     )
-    monkeypatch.setattr("app.api.demo.review_decision", _fake_review)
+    monkeypatch.setattr("app.services.agent_review_hook.review_decision", _fake_review)
     monkeypatch.setattr("app.api.demo.settings.multi_agent_review", False)
 
     head = pemakai("sppg_head", "Jakarta")
@@ -243,7 +243,7 @@ def test_agent_review_on_runtime_mati_tetap_201(
             commodity=commodity
         ),
     )
-    monkeypatch.setattr("app.api.demo.review_decision", _fake_review)
+    monkeypatch.setattr("app.services.agent_review_hook.review_decision", _fake_review)
     monkeypatch.setattr("app.api.demo.settings.multi_agent_review", True)
     # Jalur AgentCore harus DIPAKSA di sini: `AGENT_REVIEW_MODE` bisa bernilai
     # `local` di `.env` mesin demo, dan tes ini menguji pemanggilan runtime.
@@ -281,7 +281,7 @@ def test_agent_review_on_completed_membawa_run_id(
         ),
     )
     monkeypatch.setattr(
-        "app.api.demo.review_decision",
+        "app.services.agent_review_hook.review_decision",
         lambda decision_id, *, timeout_seconds: AgentReviewResult(
             status="completed",
             run_id="run-abc",
@@ -338,7 +338,7 @@ def test_agent_review_completed_mempersist_9_baris(client, monkeypatch, pemakai)
         },
     )
     monkeypatch.setattr(
-        "app.api.demo.review_decision",
+        "app.services.agent_review_hook.review_decision",
         lambda decision_id, *, timeout_seconds: AgentReviewResult(
             status="completed",
             run_id=run_id,

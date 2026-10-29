@@ -25,6 +25,65 @@ router = APIRouter()
 
 _bearer = HTTPBearer(auto_error=False)
 
+#: Host yang dianggap "lokal" untuk pintu autofill demo. `testclient` muncul dari
+#: TestClient in-process (tidak pernah lewat jaringan). Semua host lain = remote.
+_HOST_LOKAL = frozenset(
+    {"127.0.0.1", "::1", "localhost", "::ffff:127.0.0.1", "testclient"}
+)
+
+
+def _ip_gateway() -> str | None:
+    """IP gateway default container (di Docker Desktop = host yang menjalankan browser).
+
+    Browser demo di laptop host menghubungi `localhost:8000`; dari dalam container
+    paket itu masuk dengan alamat gateway bridge (terukur `172.20.0.1`), bukan
+    `127.0.0.1`. Jadi "lokal" harus mencakup gateway, tetapi **tidak** seluruh
+    RFC1918 — klien LAN punya alamat sendiri dan tetap ditolak.
+    """
+    try:
+        with open("/proc/net/route", encoding="ascii") as berkas:
+            next(berkas)
+            for baris in berkas:
+                kolom = baris.split()
+                if len(kolom) > 2 and kolom[1] == "00000000":
+                    nilai = int(kolom[2], 16)
+                    return ".".join(str((nilai >> geser) & 0xFF) for geser in (0, 8, 16, 24))
+    except (OSError, StopIteration, ValueError):
+        return None
+    return None
+
+
+def boleh_autofill_dari(request: object | None) -> bool:
+    """True bila pemanggil `GET /auth/demo-login` boleh menerima sandi demo.
+
+    Audit 2026-10-29 (AUD-005): dua flag (`DEMO_MODE` + `DEMO_LOGIN_AUTOFILL`)
+    hanya menjawab "apakah demo mengizinkan autofill", bukan "siapa yang boleh
+    bertanya". Endpoint ini tanpa token, dan dev compose mem-publish
+    `0.0.0.0:8000`, jadi siapa pun di LAN/jaringan demo bisa membaca sandi
+    ketiga peran. Penjaga ketiga di sini: **hanya pemanggil lokal** (loopback,
+    TestClient in-process, atau gateway container = host).
+
+    Override eksplisit untuk demo yang sengaja dibuka lebar:
+    `DEMO_LOGIN_ALLOW_REMOTE=true` (didokumentasikan di `.env.example`).
+
+    Parameter sengaja `object` (duck-typed): hanya `.client.host` yang dibaca,
+    sehingga aturan ini bisa diuji tanpa membangun `Request` asli.
+    """
+    if (os.environ.get("DEMO_LOGIN_ALLOW_REMOTE") or "").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }:
+        return True
+    klien = getattr(request, "client", None)
+    host = getattr(klien, "host", None) if klien is not None else None
+    if (host or "") in _HOST_LOKAL:
+        return True
+    gateway = _ip_gateway()
+    return bool(gateway) and host == gateway
+
+
 # Hash bcrypt dummy untuk timing konsisten saat email tidak dikenal.
 _DUMMY_HASH = bcrypt.hashpw(b"timing-equalizer", bcrypt.gensalt()).decode()
 
@@ -72,6 +131,11 @@ def _issue_token(user: User) -> str:
         "sub": str(user.id),
         "role": user.role,
         "loc": str(user.location_id) if user.location_id else None,
+        # `typ` menandai token yang diterbitkan untuk SESI MANUSIA lewat login.
+        # Endpoint admin menolak token tanpa penanda ini (audit 2026-10-29,
+        # AUD-006): token layanan agen adalah JWT milik akun `bgn_monitor`,
+        # sehingga tanpa pembeda ia bisa mengelola pengguna.
+        "typ": "user",
         "iat": now,
         "exp": now + _expire_minutes() * 60,
     }
@@ -114,6 +178,9 @@ async def get_current_user(
     ).scalar_one_or_none()
     if user is None:
         raise HTTPException(status_code=401, detail="token tidak valid")
+    # Jejak jenis token untuk guard `require_sesi_manusia` (AUD-006). Disimpan
+    # sebagai atribut transien, bukan kolom DB: nilainya milik request ini saja.
+    setattr(user, "_token_typ", claims.get("typ"))
     return user
 
 
@@ -126,6 +193,25 @@ def require_roles(*allowed: str):
         return user
 
     return _guard
+
+
+async def require_sesi_manusia(
+    user: User = Depends(get_current_user),
+) -> User:
+    """Guard untuk endpoint tulis administratif (audit 2026-10-29, AUD-006).
+
+    RBAC saja tidak cukup di sini: token layanan agen adalah JWT milik akun
+    berperan `bgn_monitor`, jadi dari sisi RBAC ia identik dengan operator
+    manusia. Endpoint admin karena itu menuntut klaim `typ="user"` yang HANYA
+    diterbitkan jalur login. Token tanpa klaim itu ditolak (fail-closed); sesi
+    manusia cukup login ulang.
+    """
+    if getattr(user, "_token_typ", None) != "user":
+        raise HTTPException(
+            status_code=403,
+            detail="endpoint ini hanya untuk sesi pengguna, bukan token layanan",
+        )
+    return user
 
 
 # CATATAN audit 2026-10-11: di sini dulu ada `require_target_location` yang
@@ -152,19 +238,20 @@ def _kunci_laju(request: Request, email: str) -> str:
 
 
 @router.get("/auth/demo-login")
-async def demo_login_accounts():
-    """Akun demo untuk layar login — TANPA token, tapi dua kunci harus aktif.
+async def demo_login_accounts(request: Request):
+    """Akun demo untuk layar login — TANPA token, tapi TIGA kunci harus aktif.
 
     Halaman login bersifat publik dan belum punya sesi, jadi `GET
     /auth/demo-accounts` (ber-token `bgn_monitor`) tidak bisa dipakainya. Pintu
     ini dibuat khusus untuk itu, dan hanya terbuka bila `DEMO_MODE` aktif **dan**
-    `DEMO_LOGIN_AUTOFILL` aktif (lihat `demo_login_autofill_aktif()`). Default
-    keduanya mati, sehingga instalasi nyata menjawab `{enabled:false, accounts:[]}`
-    dan kata sandi tidak pernah keluar dari server.
+    `DEMO_LOGIN_AUTOFILL` aktif (lihat `demo_login_autofill_aktif()`) **dan**
+    pemanggilnya lokal (lihat `boleh_autofill_dari()`). Default ketiganya mati,
+    sehingga instalasi nyata menjawab `{enabled:false, accounts:[]}` dan kata
+    sandi tidak pernah keluar dari server.
 
-    Konsekuensi yang harus disadari: selama dua kunci itu aktif, siapa pun yang
-    bisa menjangkau backend demo dapat membaca sandi akun demo. Karena itu
-    `DEMO_MODE` wajib `false` di luar sesi demo (Rules.md §1.4).
+    Konsekuensi yang harus disadari: selama kunci-kunci itu aktif, proses lokal
+    mana pun yang bisa menjangkau backend demo dapat membaca sandi akun demo.
+    Karena itu `DEMO_MODE` wajib `false` di luar sesi demo (Rules.md §1.4).
     """
     from app.seed.demo_credentials import (
         DemoCredentialError,
@@ -172,7 +259,7 @@ async def demo_login_accounts():
         demo_login_autofill_aktif,
     )
 
-    if not demo_login_autofill_aktif():
+    if not demo_login_autofill_aktif() or not boleh_autofill_dari(request):
         return {"enabled": False, "accounts": []}
     try:
         akun = akun_demo_untuk_browser()

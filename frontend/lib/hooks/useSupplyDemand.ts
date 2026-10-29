@@ -124,6 +124,6 @@ export function useSupplyDemand(
   return {
     detail,
     loading: aktif && (balance.isLoading || supply.isLoading || demand.isLoading),
-    error: semuaGagal ? "pasokan, kebutuhan, saldo, dan batch tidak terjawab server" : null,
+    error: semuaGagal ? "pasokan, kebutuhan, saldo, dan batch belum terbaca" : null,
   };
 }

@@ -32,14 +32,24 @@ const html = renderToStaticMarkup(
 );
 
 describe("kartu Ringkasan (KPI strip)", () => {
-  it("menampilkan lima angka dengan labelnya", () => {
-    expect(html).toContain('class="summary-kpi-value">60<');
+  it("menampilkan empat angka dengan labelnya", () => {
+    // S2 (29 Okt 2026): angka yang dipromosikan = pemasok DALAM jangkauan
+    // (60 pemasok − 30 di luar = 30), bukan total yang sudah jadi pil kepala.
+    expect(html).toContain('class="summary-kpi-value">30<');
+    expect(html).toContain("Pemasok dalam jangkauan 150 km");
     expect(html).toContain('class="summary-kpi-value">82%<');
     expect(html).toContain('class="summary-kpi-value">4<');
-    expect(html).toContain('class="summary-kpi-label">Pemasok<');
     expect(html).toContain("Keandalan di bawah 60%");
     expect(html).toContain("Tanpa stok layak hari ini");
-    expect(html).toContain("Di luar jangkauan 150 km");
+  });
+
+  it("hanya angka pertama yang dipromosikan", () => {
+    expect(html.match(/data-lead="true"/g)).toHaveLength(1);
+    expect(html).toMatch(/<li class="summary-kpi-item" data-tone="plain" data-lead="true">/);
+  });
+
+  it("tidak lagi menampilkan kolom 'Di luar jangkauan'", () => {
+    expect(html).not.toContain("Di luar jangkauan");
   });
 
   it("tidak punya satu pun tombol", () => {
@@ -61,13 +71,14 @@ describe("kartu Ringkasan (KPI strip)", () => {
       <SupplierSummary metrics={metrics({ lowReliability: 0, outOfReach: 0 })} reachKm={150} />
     );
     expect(nol).toContain('data-tone="plain"');
-    expect(nol.match(/summary-kpi-item/g)).toHaveLength(5);
+    expect(nol.match(/summary-kpi-item/g)).toHaveLength(4);
   });
 
-  it("tanpa ambang jangkauan: empat angka saja", () => {
+  it("tanpa ambang jangkauan: tetap empat angka, yang dipromosikan = pemasok terdaftar", () => {
     const tanpa = renderToStaticMarkup(<SupplierSummary metrics={metrics()} reachKm={null} />);
     expect(tanpa.match(/summary-kpi-item/g)).toHaveLength(4);
-    expect(tanpa).not.toContain("Di luar jangkauan");
+    expect(tanpa).toContain("Pemasok terdaftar");
+    expect(tanpa).toContain('class="summary-kpi-value">60<');
   });
 
   it("loading menandai kartu sibuk, tanpa mengubah isi", () => {

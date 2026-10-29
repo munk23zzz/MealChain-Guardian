@@ -116,3 +116,47 @@ def test_empty_content_is_returned_as_is(monkeypatch):
     _install_fake_urlopen(monkeypatch, payload={"choices": [{"message": {"content": ""}}]})
     caller = build_caller("cb/kimi-k3")
     assert caller("x") == ""
+
+
+# --- normalisasi endpoint (29 Okt 2026) ---------------------------------------------------
+#
+# INFERHUB_URL di operator berisi base `https://api.inferhub.dev/v1` sehingga POST
+# mendarat di `/v1` dan SELALU 404 ("404 page not found"), padahal API InferHub hidup dan
+# katalognya 397 model. Akibat yang terukur di rantai nyata: 8 slot fallback InferHub mati
+# serentak dan chain turun langsung ke Bedrock. Tes ini mengunci bentuk URL yang dikirim.
+
+
+def test_base_url_tanpa_subpath_dinormalisasi_ke_chat_completions(monkeypatch):
+    monkeypatch.setenv("INFERHUB_URL", "https://api.inferhub.dev/v1")
+    monkeypatch.setenv("INFERHUB_API_KEY", "test-key-123")
+    sent = _install_fake_urlopen(
+        monkeypatch,
+        payload={"choices": [{"message": {"content": "ok"}}]},
+    )
+
+    assert build_caller("cb/kimi-k3")("halo") == "ok"
+    assert sent["url"] == "https://api.inferhub.dev/v1/chat/completions"
+
+
+def test_base_url_dengan_garis_miring_penutup_tidak_menggandakan_subpath(monkeypatch):
+    monkeypatch.setenv("INFERHUB_URL", "https://api.inferhub.dev/v1/")
+    monkeypatch.setenv("INFERHUB_API_KEY", "test-key-123")
+    sent = _install_fake_urlopen(
+        monkeypatch,
+        payload={"choices": [{"message": {"content": "ok"}}]},
+    )
+
+    build_caller("cb/kimi-k3")("halo")
+    assert sent["url"] == "https://api.inferhub.dev/v1/chat/completions"
+
+
+def test_url_lengkap_tidak_diubah(monkeypatch):
+    monkeypatch.setenv("INFERHUB_URL", "https://api.inferhub.dev/v1/chat/completions")
+    monkeypatch.setenv("INFERHUB_API_KEY", "test-key-123")
+    sent = _install_fake_urlopen(
+        monkeypatch,
+        payload={"choices": [{"message": {"content": "ok"}}]},
+    )
+
+    build_caller("cb/kimi-k3")("halo")
+    assert sent["url"] == "https://api.inferhub.dev/v1/chat/completions"

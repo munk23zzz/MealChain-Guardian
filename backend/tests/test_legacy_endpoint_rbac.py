@@ -163,7 +163,15 @@ def test_bgn_monitor_mutasi_ditolak_403(client):
 
 _LOGISTICS_BODY = {"source": "Bogor", "target": "Jakarta", "quantity_kg": 100}
 _LOGISTICS_BODY_SMALL = {"source": "Bogor", "target": "Jakarta", "quantity_kg": 1}
-_SDC_BODY = {"purchase_cost": "100000", "freshness_score": "0.9", "safety_status": "pass"}
+_SDC_BODY = {
+    "purchase_cost": "100000",
+    "freshness_score": "0.9",
+    "safety_status": "pass",
+    # Sejak 29 Okt 2026 susut gudang dihitung dari umur simpan + lama simpan,
+    # jadi komoditas (atau shelf_life_days) wajib disebut. Kesegaran tidak lagi
+    # menjadi pengali susut.
+    "commodity": "telur",
+}
 
 
 def test_role_sppg_head_lewat_guard(client):

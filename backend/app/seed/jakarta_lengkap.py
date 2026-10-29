@@ -52,6 +52,7 @@ from app.models import (
     SupplyRecord,
     User,
 )
+from app.seed.rapikan_jejak import rapikan_jejak
 from app.seed.seed_data import _seed_database_url
 
 WIB = timezone(timedelta(hours=7))
@@ -996,6 +997,10 @@ async def seed_all(session: AsyncSession, now: datetime) -> dict:
     hasil |= await seed_decisions(session, now)
     hasil |= await seed_exclusions(session, now)
     await session.commit()
+    # Urutan waktu jejak dirapikan SESUDAH semua penyemai menulis (audit 29 Okt
+    # 2026): beberapa penyemai menulis `step_at` dari jam yang berbeda dari
+    # `created_at` keputusan, sehingga jejak tercatat mendahului keputusannya.
+    hasil |= {"rapikan_jejak": await rapikan_jejak(session)}
     hasil |= await rebuild_ledger(session, now)
     await session.commit()
     return hasil

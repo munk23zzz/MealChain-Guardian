@@ -92,6 +92,17 @@ describe("hoursLeft / hoursLabel", () => {
     expect(hoursLabel(null)).toBe("—");
   });
 
+  it("di bawah satu jam memakai menit, bukan jam yang dibulatkan", () => {
+    // Audit 29 Okt 2026: 31 menit dulu ditulis "lewat 1 jam", 5 menit juga
+    // "lewat 1 jam", dan 10 menit bisa menjadi "lewat 0 jam".
+    expect(hoursLabel(-31 / 60)).toBe("lewat 31 menit");
+    expect(hoursLabel(31 / 60)).toBe("31 menit lagi");
+    expect(hoursLabel(-5 / 60)).toBe("lewat 5 menit");
+    expect(hoursLabel(0.2)).toBe("12 menit lagi");
+    expect(hoursLabel(-0.004)).toBe("lewat kurang dari 1 menit");
+    expect(hoursLabel(0)).toBe("kurang dari 1 menit lagi");
+  });
+
   it("tanggal tak terbaca → null (bukan 0)", () => {
     expect(hoursLeft(null, NOW)).toBe(null);
     expect(hoursLeft("bukan tanggal", NOW)).toBe(null);
@@ -422,11 +433,15 @@ describe("daftar periksa penerimaan barang (workflow petugas, bukan data server)
 // sisanya sebelum barang dipakai") padahal tombolnya aktif di 0/5 dan server
 // menerima snapshot kosong; pesan sesudah simpan pun menyuruh menandai ulang.
 describe("kalimat penerimaan — tanpa gerbang palsu, bentuk lampau sesudah simpan", () => {
-  it("sebelum simpan: menyebut sisa titik dan izin mencatat sebagian", () => {
+  it("sebelum simpan: menyebut sisa titik dan syarat tombol simpan", () => {
+    // Revisi 29 Okt 2026 (Dok 05 §2: tombol simpan mati selama ada butir kosong).
+    // Kalimat lama berbunyi "Boleh disimpan sebagian" — benar saat gerbangnya
+    // belum ada, dan menjadi bohong begitu gerbangnya dipasang.
     const s = receivingSentence(receivingState({ kemasan: true }));
     expect(s).toContain("1 dari 5");
     expect(s).toContain("4 belum");
-    expect(s).toContain("Boleh disimpan sebagian");
+    expect(s).toContain("Tombol simpan aktif setelah kelima titik dijawab");
+    expect(s).not.toContain("Boleh disimpan sebagian");
     expect(s).not.toContain("tandai sisanya");
   });
 
@@ -963,11 +978,12 @@ describe("safetyStatusGroups — lima kelompok eksklusif", () => {
     expect(nilai.ditahan).toBe(1);
   });
 
-  it("urutan kelompok tetap: aman, gagal, perlu verifikasi, belum diuji, ditahan", () => {
+  it("urutan kelompok tetap: aman, gagal, kedaluwarsa, perlu verifikasi, belum diuji, ditahan", () => {
     const rows = safetyRows([batch({ id: "1" })], NOW);
     expect(safetyStatusGroups(rows).map((g) => g.key)).toEqual([
       "aman",
       "gagal",
+      "kedaluwarsa",
       "verifikasi",
       "belum",
       "ditahan",

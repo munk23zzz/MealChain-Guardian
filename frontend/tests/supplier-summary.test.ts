@@ -1,12 +1,14 @@
 // Angka Ringkasan halaman Pemasok — kontrak murni (KPI strip, 29 Okt 2026).
 //
 // Yang dikunci:
-//   1. urutan dan label lima angka tetap (label = kalimat biasa, bukan kode);
+//   1. EMPAT angka, urut tetap, dan HANYA yang pertama dipromosikan (lead);
 //   2. "Tanpa stok layak" = pemasok dikurangi yang sedang kirim, tidak pernah
 //      negatif walau data server tidak konsisten;
 //   3. angka 0 TETAP ditampilkan (bukan disembunyikan) — pada strip KPI, nol
 //      adalah jawaban yang sah;
-//   4. baris "Di luar jangkauan" hanya ada bila peran punya ambang jangkauan.
+//   4. angka "di luar jangkauan" TIDAK lagi jadi kolom sendiri (S2, 29 Okt
+//      2026): jumlah pemasok sudah jadi pil kepala halaman, dan "di luar
+//      jangkauan" sudah tertulis di baris penyaring jangkauan.
 
 import { describe, expect, it } from "vitest";
 
@@ -29,22 +31,34 @@ function metrics(over: Partial<DirectoryMetrics> = {}): DirectoryMetrics {
 }
 
 describe("strip KPI Ringkasan", () => {
-  it("lima angka, urut tetap, label berbahasa manusia", () => {
+  it("empat angka, urut tetap, label berbahasa manusia", () => {
     const kpi = kpiRingkasan(metrics(), 150);
     expect(kpi.map((k) => k.label)).toEqual([
-      "Pemasok",
+      "Pemasok dalam jangkauan 150 km",
       "Rata-rata keandalan",
       "Keandalan di bawah 60%",
       "Tanpa stok layak hari ini",
-      "Di luar jangkauan 150 km",
     ]);
-    expect(kpi.map((k) => k.value)).toEqual(["60", "82%", "4", "9", "30"]);
+    // 60 pemasok, 30 di luar jangkauan → 30 dalam jangkauan (angka yang dipromosikan).
+    expect(kpi.map((k) => k.value)).toEqual(["30", "82%", "4", "9"]);
+    expect(kpi.every((k) => k.label.startsWith("Di luar jangkauan") === false)).toBe(true);
   });
 
-  it("tanpa ambang jangkauan hanya empat angka", () => {
+  it("tepat satu angka dipromosikan, dan itu yang pertama", () => {
+    const kpi = kpiRingkasan(metrics(), 150);
+    expect(kpi.filter((k) => k.lead)).toHaveLength(1);
+    expect(kpi[0].lead).toBe(true);
+  });
+
+  it("tanpa ambang jangkauan: yang dipromosikan = pemasok terdaftar", () => {
     const kpi = kpiRingkasan(metrics(), null);
     expect(kpi).toHaveLength(4);
-    expect(kpi.some((k) => k.label.startsWith("Di luar jangkauan"))).toBe(false);
+    expect(kpi[0]).toEqual({
+      label: "Pemasok terdaftar",
+      value: "60",
+      tone: "plain",
+      lead: true,
+    });
   });
 
   it("nol tetap ditampilkan dan tidak diberi nada peringatan", () => {
@@ -54,7 +68,7 @@ describe("strip KPI Ringkasan", () => {
       value: "0",
       tone: "plain",
     });
-    expect(kpi.find((k) => k.label.startsWith("Di luar jangkauan"))?.tone).toBe("plain");
+    expect(kpi.find((k) => k.label === "Tanpa stok layak hari ini")?.tone).toBe("plain");
   });
 
   it("angka yang perlu dilihat diberi nada warn", () => {
@@ -79,11 +93,15 @@ describe("strip KPI Ringkasan", () => {
   });
 
   it("ambang jangkauan muncul di label, bukan angka telanjang", () => {
-    expect(kpiRingkasan(metrics(), 75).at(-1)?.label).toBe("Di luar jangkauan 75 km");
+    expect(kpiRingkasan(metrics(), 75)[0].label).toBe("Pemasok dalam jangkauan 75 km");
   });
 
   it("bukan kontrol: hasilnya data biasa, tanpa medan aksi", () => {
     const kpi = kpiRingkasan(metrics(), 150);
-    expect(kpi.every((k) => Object.keys(k).sort().join(",") === "label,tone,value")).toBe(true);
+    const kunciSah = new Set(["label", "tone", "value", "lead"]);
+    expect(kpi.every((k) => Object.keys(k).every((nama) => kunciSah.has(nama)))).toBe(true);
+    expect(kpi.some((k) => "onClick" in k || "href" in k || "action" in k)).toBe(false);
+    // `lead` hanya ada pada angka yang dipromosikan (tidak dipaksakan ke semua).
+    expect(kpi.filter((k) => k.lead === true)).toHaveLength(1);
   });
 });

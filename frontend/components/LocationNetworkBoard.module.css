@@ -5,35 +5,17 @@
    tab lain. Yang tersisa hanya tiga hal yang belum punya padanan global:
    kalimat ringkasan, tombol baris lokasi, dan angka rata kanan. */
 
-.headline {
-  margin: 0;
-  max-width: 72ch;
-  color: var(--navy-900);
-  font-size: var(--fs-4);
-  font-weight: 600;
-  line-height: 1.45;
-  font-variant-numeric: tabular-nums;
-}
-
-.issues {
-  margin: 8px 0 0;
-  padding: 0;
-  list-style: none;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px 14px;
-  color: var(--warn-ink);
-  font-size: var(--fs-2);
-}
-
-.issues li::before {
-  content: "· ";
-  color: var(--ink-muted);
-}
+/* `.headline` dan `.issues` PINDAH ke globals sebagai `.network-lead-text` /
+   `.network-lead-issues` (L2, 29 Okt 2026). Alasannya bukan selera: aturan kartu
+   utama halaman ini (`--fs-5`, satu baris, garis tepi bernada) harus satu tempat
+   dengan `.network-lead` supaya bisa dibaca sebagai satu kontrak, dan kelas
+   modul tidak terlihat oleh pratinjau statis sehingga ukurannya tidak bisa
+   diverifikasi tanpa membangun Next. */
 
 .rowButton {
   display: inline-flex;
-  align-items: baseline;
+  /* Chevron kini kotak CSS (bukan glyph), jadi tengahkan vertikal. */
+  align-items: center;
   gap: 4px;
   min-height: 32px;
   padding: 0;
@@ -82,20 +64,16 @@
 }
 
 @media (max-width: 640px) {
-  .headline {
-    font-size: var(--fs-3);
-  }
-
   .region {
     display: none;
   }
 }
 
-/* Penanda bahwa nama lokasi bisa dibuka; tanpa ini baris terlihat seperti teks biasa. */
-.chevron {
-  color: var(--ink-muted);
-  font-size: var(--fs-1);
-}
+/* Penanda bahwa nama lokasi bisa dibuka. Sejak upgrade visual 30 Okt 2026
+   chevron digambar dengan CSS (`.row-chevron` di theme-ext.css) — glyph
+   `▸/▾` ikut bergantung font dan duduk di baseline sehingga terbaca seperti
+   tanda hubung. */
+
 
 .openRow td {
   background: var(--surface-muted, #f4f6f9);

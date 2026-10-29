@@ -107,3 +107,42 @@ export function formatDate(iso: string | null | undefined): string {
     timeZone: TZ,
   });
 }
+
+/**
+ * ISO → "28 Okt 08.41 WIB" — selalu dengan tanggal.
+ *
+ * Dipakai jejak agent. `formatClockUtc` sengaja tidak dipakai lagi di sana:
+ * jam saja membuat langkah yang terjadi kemarin terbaca sebagai langkah hari ini.
+ * Tahun hanya dicetak bila berbeda dari tahun `sekarang`, supaya baris trace
+ * tetap ringkas untuk data tahun berjalan.
+ */
+export function formatTraceWib(
+  iso: string | null | undefined,
+  sekarang: Date = new Date()
+): string {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "—";
+  // Tahun dibandingkan dalam WIB, bukan zona mesin ini: `getFullYear()` di
+  // mesin UTC dan di mesin Jakarta memberi tahun yang berbeda untuk jam yang
+  // sama, dan baris trace tidak boleh berubah menurut laptop pembacanya.
+  const tahun = (nilai: Date) =>
+    nilai.toLocaleDateString("id-ID", { year: "numeric", timeZone: TZ });
+  const perluTahun =
+    Number.isNaN(sekarang.getTime()) || tahun(d) !== tahun(sekarang);
+  const tanggal = d.toLocaleDateString("id-ID", {
+    day: "numeric",
+    month: "short",
+    ...(perluTahun ? { year: "numeric" as const } : {}),
+    timeZone: TZ,
+  });
+  const jam = d
+    .toLocaleTimeString("id-ID", {
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+      timeZone: TZ,
+    })
+    .replace(":", ".");
+  return `${tanggal} ${jam} WIB`;
+}

@@ -33,6 +33,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import settings
 from app.core.freshness import classify_freshness, evaluate_freshness
 from app.core.policy_store import profil_untuk_komoditas
+from app.core.price import price_deviation
 from app.core.safe_delivered_cost import (
     SafeDeliveredCostInputs,
     calculate_safe_delivered_cost,
@@ -42,6 +43,7 @@ from app.core.supplier_leg import supplier_leg_km
 from app.core.trip_cost import biaya_angkut_trip
 from app.models import (
     Batch,
+    BatchReceipt,
     Commodity,
     Decision,
     DecisionEvidence,
@@ -110,6 +112,19 @@ class SupplierCandidate:
     batch_ids: tuple[str, ...] = ()
 
     def to_dict(self) -> dict:
+        # Deviasi & klasifikasi harga lahir dari fungsi domain yang sama dengan
+        # endpoint `/price/deviation`; `None` bila salah satu harga tidak ada.
+        price_deviation_pct: str | None = None
+        klasifikasi_harga: str | None = None
+        if self.quote_price is not None and self.reference_price is not None:
+            try:
+                hasil = price_deviation(self.quote_price, self.reference_price)
+            except (ValueError, ZeroDivisionError):
+                hasil = None
+            if isinstance(hasil, dict):
+                nilai = hasil.get("deviation_pct")
+                price_deviation_pct = str(nilai) if nilai is not None else None
+                klasifikasi_harga = str(hasil.get("status") or "") or None
         return {
             "supplier_id": self.supplier_id,
             "supplier": self.supplier_name,
@@ -117,6 +132,13 @@ class SupplierCandidate:
             "capacity_kg_per_week": _str_or_none(self.capacity_kg_per_week),
             "quote_price_per_kg": _str_or_none(self.quote_price),
             "reference_price_per_kg": _str_or_none(self.reference_price),
+            # Deviasi harga dihitung DI SINI oleh kode, bukan oleh model, dan
+            # ikut tersimpan di jejak OPTIMIZE. Tanpa ini angka deviasi hanya
+            # ada di fakta worker Price (teks model) sehingga verifier menandai
+            # narasi supervisor "harga deviasi -1,92%" sebagai angka tanpa
+            # sumber dan verdict jatuh ke `flagged` (29 Okt 2026).
+            "price_deviation_pct": price_deviation_pct,
+            "price_classification": klasifikasi_harga,
             "available_kg": str(self.available_kg),
             "quantity_kg": str(self.quantity_kg),
             "leg_km": _str_or_none(self.leg_km),
@@ -246,6 +268,28 @@ async def evaluate_suppliers(
     }
 
     kandidat: list[SupplierCandidate] = []
+    # Batch yang sudah punya penerimaan DISETUJUI bukan stok yang bisa dibeli
+    # lagi: barangnya sudah masuk dapur, dan DB hanya mengizinkan satu
+    # penerimaan disetujui per batch (`uq_batch_receipts_satu_disetujui`).
+    # Tanpa gerbang ini kasus demo bisa menunjuk batch yang riwayatnya sudah
+    # "diterima", sehingga layar menampilkan barang tiba sendiri padahal tidak
+    # ada manusia yang menyetujui penerimaan untuk kasus itu (terukur
+    # 30 Okt 2026: keputusan wortel `pending_approval` sudah berstatus terima).
+    sudah_diterima = set(
+        (
+            await db.execute(
+                select(BatchReceipt.batch_id)
+                .join(Batch, Batch.id == BatchReceipt.batch_id)
+                .where(
+                    BatchReceipt.status == "disetujui",
+                    Batch.location_id == target.id,
+                    Batch.commodity_id == komoditas.id,
+                )
+            )
+        )
+        .scalars()
+        .all()
+    )
     for sup in pemasok:
         batch_rows = (
             (
@@ -291,6 +335,9 @@ async def evaluate_suppliers(
             # kandidat. Menolak di sini membuat kasus itu tidak punya binding
             # sama sekali (terukur 28 Okt 2026: "safety gate memblokir karena
             # batch acuan tidak layak" pada wortel-coldchain-hold).
+            if b.id in sudah_diterima:
+                stok_reasons.append(f"batch {str(b.id)[:8]} sudah diterima")
+                continue
             if b.safety_status == "fail":
                 stok_reasons.append(
                     f"batch {str(b.id)[:8]} gagal uji keamanan"

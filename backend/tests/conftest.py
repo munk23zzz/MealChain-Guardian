@@ -174,6 +174,25 @@ def _hapus_user(conn, email: str) -> None:
         ),
         {"e": email},
     )
+    # 29 Okt 2026: `batch_receipts.recorded_by` juga NO ACTION. Penyemai demo
+    # memilih pencatat dari tabel users, jadi sisa user fixture dari run
+    # sebelumnya bisa ikut terpilih menjadi `recorded_by`; tanpa pembersihan ini
+    # seluruh berkas tes yang memakai `auth_headers` gagal di setup dengan
+    # ForeignKeyViolation — gejalanya sama seperti catatan di atas, beda tabel.
+    conn.execute(
+        text(
+            "DELETE FROM batch_receipts WHERE recorded_by IN "
+            "(SELECT id FROM users WHERE email = :e)"
+        ),
+        {"e": email},
+    )
+    conn.execute(
+        text(
+            "DELETE FROM supplier_exclusions WHERE proposed_by IN "
+            "(SELECT id FROM users WHERE email = :e)"
+        ),
+        {"e": email},
+    )
     conn.execute(text("DELETE FROM users WHERE email = :e"), {"e": email})
 
 
@@ -333,7 +352,11 @@ def pytest_collection_modifyitems(config, items):
 # `%@test.local`: sapuan ini tidak bisa menyentuh data demo.
 # ---------------------------------------------------------------------------
 
-_SISA_TEST_LIKE = "%@test.local"
+_SISA_TEST_LIKE = ("%@test.local", "%@uji-%.local")
+# `%@uji-%.local` ditambahkan 29 Okt 2026: tes integrasi membuat akun
+# `f9.*@uji-f9.local`. Pola lama tidak menangkapnya, jadi residunya bertahan —
+# dan karena pembersih ini juga yang menjaga DB demo, akun uji itu sempat muncul
+# sebagai pemilik lokasi `F9-tgt-...` di pemilih cakupan BGN.
 
 # Dua sesi bisa menjalankan pytest BERSAMAAN pada DB yang sama. Sapuan tanpa
 # batas umur pernah menghapus user milik suite yang sedang berjalan: login
@@ -359,26 +382,27 @@ def _sapu_sisa_test() -> int:
         )
         try:
             with engine.begin() as conn:
+                # Tanpa saringan umur: FK `approvals_approved_by_fkey` tetap
+                # menggagalkan DELETE users bila ada satu approval milik user uji
+                # yang baru dibuat (terukur 28 Okt 2026: suite penuh gagal saat
+                # dijalankan berurutan, padahal berkasnya lulus sendiri-sendiri).
+                pola = {f"p{i}": satu for i, satu in enumerate(_SISA_TEST_LIKE)}
+                cocok = " OR ".join(f"email LIKE :{kunci}" for kunci in pola)
                 conn.execute(
                     text(
-                        # Tanpa saringan umur: FK `approvals_approved_by_fkey`
-                        # tetap menggagalkan DELETE users bila ada satu approval
-                        # milik user uji yang baru dibuat (terukur 28 Okt 2026:
-                        # suite penuh gagal saat dijalankan berurutan, padahal
-                        # berkasnya lulus sendiri-sendiri).
                         "DELETE FROM approvals WHERE approved_by IN "
-                        "(SELECT id FROM users WHERE email LIKE :p)"
+                        f"(SELECT id FROM users WHERE {cocok})"
                     ),
-                    {"p": _SISA_TEST_LIKE},
+                    pola,
                 )
                 hasil = conn.execute(
                     text(
-                        "DELETE FROM users WHERE email LIKE :p "
+                        f"DELETE FROM users WHERE ({cocok}) "
                         "AND created_at < now() - interval '"
                         + _SISA_UMUR_TENGGANG
                         + "'"
                     ),
-                    {"p": _SISA_TEST_LIKE},
+                    pola,
                 )
             return int(hasil.rowcount or 0)
         finally:

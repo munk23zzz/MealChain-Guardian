@@ -15,5 +15,5 @@ export function catatanAliranPutus(opsi: {
   galatTercatat: boolean;
 }): string | null {
   if (opsi.dibatalkan || opsi.galatTercatat) return null;
-  return "kanal log ditutup server sebelum putaran selesai — langkah berikutnya tidak tersiar";
+  return "kanal log ditutup sebelum putaran selesai — langkah berikutnya tidak tersiar";
 }

@@ -89,7 +89,8 @@ describe("SupplierBoard", () => {
     expect(html).toContain("Pemasok");
     // Ringkasan (29 Okt 2026) = satu baris angka besar, hanya dibaca:
     // angka + label kecil, tanpa tombol. Rata-rata (0,93 + 0,38 + 0,80) / 3 = 70%.
-    expect(html).toContain('class="summary-kpi-value">3</b><span class="summary-kpi-label">Pemasok<');
+    // S2: tanpa ambang jangkauan, angka yang dipromosikan = pemasok terdaftar.
+    expect(html).toContain('class="summary-kpi-value">3</b><span class="summary-kpi-label">Pemasok terdaftar<');
     expect(html).toContain('class="summary-kpi-value">70%</b>');
     expect(html).toContain("Keandalan di bawah 60%");
     expect(html).toContain("Tanpa stok layak hari ini");
@@ -170,7 +171,7 @@ describe("SupplierBoard", () => {
 
   it("dengan konteks keputusan: panel eksklusi nyata dipasang", () => {
     const html = render({ selectedDecisionId: "d1", supplierContext: CONTEXT, role: "sppg_head" });
-    expect(html).toContain("Supplier governance");
+    expect(html).toContain("Tata kelola pemasok");
   });
 
   it("tidak ada catatan internal (path API) di layar", () => {
@@ -216,26 +217,39 @@ const JALUR = {
   ],
 };
 
-describe("SupplierBoard — kolom \"Jalur kirim\" (lanjutan Fase 10)", () => {
-  it("header kolom ada; jalur belum dimuat ditulis \u2026, bukan klaim 'tidak punya jalur'", () => {
-    const html = render();
-    expect(html).toContain("Jalur kirim");
-    expect(html).toContain("\u2026");
-    // Ringkasan jalur hanya muncul kalau datanya memang dimuat.
-    expect(html).not.toContain("Jalur jalan");
+// S4 (29 Okt 2026) — kolom "Jalur kirim" DILEPAS dari daftar pemasok.
+//
+// Sebabnya: fakta jalur sudah dibaca per KIRIMAN di Papan kiriman (S3) — tujuan,
+// jarak jalan, waktu tempuh, mutu. Menyimpannya lagi sebagai satu sel ringkas
+// per pemasok membuat dua penyaji untuk fakta yang sama, dan kolom itu termasuk
+// yang mendorong tabel ke geseran mendatar.
+describe("SupplierBoard — kolom \"Jalur kirim\" sudah tidak ada (S4)", () => {
+  const tanpa = [
+    "Jalur kirim",
+    "Jalur jalan",
+    "\u2192 Jakarta \u00b7 110,4 km",
+  ];
+
+  it("header & sel jalur tidak lagi dirender di DAFTAR, dengan atau tanpa data jalur", () => {
+    for (const html of [render(), render({ supplierRoutes: JALUR })]) {
+      // Papan kiriman sah memakai `.route-cell`; yang diuji di sini tabel daftar.
+      const mulai = html.indexOf('class="location-table directory-table"');
+      expect(mulai).toBeGreaterThan(-1);
+      const daftar = html.slice(mulai, html.indexOf("</table>", mulai));
+      for (const teks of tanpa) expect(daftar).not.toContain(teks);
+      expect(daftar).not.toContain('class="route-tag"');
+      expect(daftar).not.toContain('class="route-cell"');
+    }
   });
 
-  it("pemasok yang mengirim ditulis tujuan + jarak JALAN, baris lain '\u2014'", () => {
+  it("jalur tetap terbaca di Papan kiriman (pindah, bukan hilang)", () => {
     const html = render({ supplierRoutes: JALUR });
-    expect(html).toContain("\u2192 Jakarta \u00b7 110,4 km");
-    expect(html).toContain('title="Jakarta 110,4 km (jarak jalan dari OSRM)"');
-    expect(html).toContain("\u2014");
-    // Dulu "Jalur jalan 1 dari 1" berdiri di kartu Ringkasan; kartu itu kini
-    // hanya angka KPI, jadi ringkasan jalur dibaca dari sel tabel (title) saja.
-    expect(html).not.toContain("Jalur jalan 1 dari 1");
+    // Papan kiriman memuat kolom Jalur per kiriman — di sanalah angka ini dibaca.
+    expect(html).toContain(">Jalur</th>");
+    expect(html).toContain("110,4 km jalan");
   });
 
-  it("jarak LURUS tidak diduplikasi di kolom jalur (itu urusan kolom Jarak)", () => {
+  it("jarak LURUS tidak muncul di daftar (itu urusan kolom Jarak)", () => {
     const html = render({ supplierRoutes: JALUR });
     expect(html).not.toContain("78,35");
   });
@@ -339,5 +353,77 @@ describe("SupplierBoard — kerapian tabel & bentuk pil (Fase 12c)", () => {
     const html = render();
     expect(html).toContain("supplier-summary");
     expect(html).not.toContain("board-grid board-grid-2");
+  });
+});
+
+// S4 (29 Okt 2026) — "Daftar pemasok" dirapikan jadi satu bilah kontrol + tabel
+// enam kolom. Kontrak di bawah menjaga dua hal yang mudah rusak lagi: (1) satu
+// angka hanya dicetak sekali, (2) kontrol tidak kembali berserak ke beberapa baris.
+describe("SupplierBoard — bilah kontrol daftar (S4)", () => {
+  it("cari, jumlah, dan penyaring jangkauan duduk di SATU wadah", () => {
+    const html = render();
+    const mulai = html.indexOf('class="directory-toolbar"');
+    expect(mulai).toBeGreaterThan(-1);
+    const akhir = html.indexOf("</div>", html.indexOf('class="directory-toolbar-note"'));
+    const bilah = html.slice(mulai, akhir);
+    expect(bilah).toContain('class="board-search-field"');
+    expect(bilah).toContain('id="cari-pemasok-status"');
+  });
+
+  it("tidak ada lagi tumpukan baris lama (summary-row / penyaring terpisah)", () => {
+    const html = render();
+    expect(html).not.toContain("board-summary-row");
+    expect(html).not.toContain('class="reach-filter"');
+  });
+
+  it("satu angka, satu tempat: id status pencarian tidak kembar", () => {
+    const html = render();
+    expect(html.split('id="cari-pemasok-status"').length - 1).toBe(1);
+    // Pil jumlah di kepala kartu ("Daftar pemasok" + pil) sudah tidak ada:
+    // teks pil hanya boleh muncul sekali di seluruh halaman.
+    const pil = html.match(/class="count-pill[^"]*"[^>]*>(\d+) pemasok</g) ?? [];
+    expect(pil.length).toBe(1);
+  });
+
+  it("penyaring jangkauan berupa tombol berlabel jumlah, hanya saat ambang ada", () => {
+    // Tanpa ambang (peran non-SPPG) jangkauan tidak punya arti → tombol tidak ada.
+    expect(render()).not.toContain("directory-reach-toggle");
+
+    // Dengan ambang: tombol menyebut JENIS jumlahnya, bukan "filter" telanjang.
+    const dekat = {
+      id: "s1",
+      name: "Wortel Lestari Cianjur",
+      location: "Cianjur",
+      commodity: "wortel",
+      certification_status: "haccp",
+      reliability_score: 0.93,
+      latitude: -6.824,
+      longitude: 107.1636,
+      // Jarak dilaporkan server; tanpa `distance_km` barisnya dihitung "jarak
+      // tidak diketahui", bukan "di luar jangkauan" — dua hal berbeda.
+      distance_km: 5,
+      excluded_at_hub: false,
+      excluded_scope_locations: [],
+    };
+    const jauh = {
+      ...dekat,
+      id: "s9",
+      name: "Beras Jakarta",
+      location: "Jakarta",
+      latitude: -6.2,
+      longitude: 106.8166,
+      distance_km: 110,
+    };
+    const html = render({ suppliers: { count: 2, total: 2, items: [dekat, jauh] }, reachKm: 50 });
+    expect(html).toContain('class="directory-reach-toggle"');
+    expect(html).toContain('aria-pressed="false"');
+    expect(html).toContain("Hanya dalam jangkauan (1)");
+  });
+
+  it("status selalu teks + bentuk, bukan warna saja", () => {
+    const html = render();
+    expect(html).toContain('class="status-cell"');
+    expect(html).toContain("Aktif");
+    expect(html).toContain("Dikecualikan di");
   });
 });

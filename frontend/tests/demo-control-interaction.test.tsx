@@ -370,3 +370,46 @@ describe("bukti putaran mengikuti komoditas yang dijalankan", () => {
     expect(bukti.at(-1)!.jalur).toContain("decision_id=d-beras");
   });
 });
+
+// --- butir 4: nama komoditas di dropdown, tanpa angka ----------------------
+
+describe("dropdown komoditas hanya memuat nama", () => {
+  it("opsi berisi nama saja; angka kasus tetap tampil di kalimat bawahnya", async () => {
+    // Alasan: pada demo, "Beras — kekurangan 2.113 kg" membuat daftar pilihan
+    // sulit dipindai dan angkanya bisa berubah tiap putaran. Angka kasus tetap
+    // ada — di `catatanKasus` di bawah dropdown, dari respons server yang sama.
+    pasangFetch({
+      "GET /demo/session": () => sesi(),
+      "GET /demo/data-status": () => STATUS_DATA,
+      "GET /demo/agent/last-run": () => ({ found: false }),
+      "GET /demo/agent/commodities": () => ({
+        commodities: ["beras", "ayam"],
+        kasus: [
+          { commodity: "beras", status: "shortage", shortage_kg: 2113 },
+          { commodity: "ayam", status: "surplus", surplus_kg: 40 },
+        ],
+      }),
+    });
+
+    const wadah = await pasangPanel();
+    const opsi = Array.from(wadah.querySelectorAll("option")).map((o) => ({
+      nilai: o.getAttribute("value"),
+      teks: (o.textContent ?? "").trim(),
+    }));
+
+    // Teks opsi = nama komoditas itu sendiri, persis.
+    expect(opsi).toEqual(
+      expect.arrayContaining([
+        { nilai: "beras", teks: "beras" },
+        { nilai: "ayam", teks: "ayam" },
+      ])
+    );
+    // Tidak ada satuan berat di dalam dropdown.
+    const isiDropdown = Array.from(wadah.querySelectorAll("option"))
+      .map((o) => o.textContent ?? "")
+      .join(" ");
+    expect(isiDropdown).not.toMatch(/kg|kekurangan|surplus/i);
+    // Angka kasus TIDAK hilang — pindah ke catatan di bawah dropdown.
+    expect(teks(wadah)).toContain("2.113 kg");
+  });
+});

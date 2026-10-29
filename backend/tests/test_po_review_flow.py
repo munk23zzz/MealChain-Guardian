@@ -23,14 +23,12 @@ Kontrak yang dikunci tes ini:
 """
 
 import json
-import uuid
 from datetime import datetime, timedelta, timezone
 
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, text
 
-from app.api.actions import get_verifier_chain
 from app.main import app
 from tests.dsn import DSN_SYNC
 from tests.test_actions import (

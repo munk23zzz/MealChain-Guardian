@@ -354,16 +354,20 @@ export function wasteRingkas(
   const data = (payload ?? {}) as WastePayload;
   if (!data.recorded?.available) return [];
 
+  // Angka yang tidak tersedia ditulis `—` DENGAN kata "belum tercatat": tanda
+  // pisah tanpa keterangan terbaca seperti kolom kosong, sedangkan `0 kg` akan
+  // berbohong (tidak ada pengukuran, bukan pengukuran nol).
   const baris = (
     label: string,
     sumber: { available?: boolean; kg?: number | null; events?: number } | undefined
   ) => ({
     label,
     value: sumber?.available ? wasteKg(sumber?.kg) : DASH,
-    hint:
-      sumber?.available && Number.isFinite(Number(sumber?.events))
+    hint: sumber?.available
+      ? Number.isFinite(Number(sumber?.events))
         ? `${sumber?.events} peristiwa`
-        : null,
+        : null
+      : "belum tercatat",
   });
 
   return [
@@ -371,4 +375,34 @@ export function wasteRingkas(
     baris("Dialihkan", data.diverted),
     baris("Tanpa mitra", data.unassigned),
   ];
+}
+
+/**
+ * Satu kalimat ringkas untuk kepala kartu Limbah (L5, 29 Okt 2026).
+ *
+ * Dibaca dari `wasteRingkas` — jadi angka yang tidak tersedia tetap muncul
+ * sebagai frasa "belum tercatat", tidak pernah sebagai 0 kg. Kalau belum ada
+ * angka sama sekali, hasilnya string kosong: pemanggil menulis "Belum dicatat."
+ */
+export function wasteSentence(
+  rows: { label: string; value: string }[],
+  days: number
+): string {
+  if (!rows.length) return "";
+  const frasa = (row: { value: string } | undefined, ada: string, tidak: string) => {
+    if (!row) return tidak;
+    return row.value.trim() && row.value.trim() !== DASH ? `${row.value} ${ada}` : tidak;
+  };
+  const bagian = [
+    frasa(rows[0], "tercatat", "jumlah tercatat belum ada"),
+    frasa(rows[1], "dialihkan ke mitra", "pengalihan ke mitra belum tercatat"),
+    frasa(rows[2], "tanpa mitra", "limbah tanpa mitra belum tercatat"),
+  ];
+  return `${bagian.join(" · ")} — ${days} hari terakhir.`;
+}
+
+/** Jumlah pasangan + ambang surplus, untuk pil dan kalimat kepala Rencana alih. */
+export function planRingkas(plan: unknown): { jumlah: number; ambang: number } {
+  const dariServer = planFromServer(plan, 6);
+  return { jumlah: dariServer?.rows.length ?? 0, ambang: dariServer?.minSurplusKg ?? 150 };
 }

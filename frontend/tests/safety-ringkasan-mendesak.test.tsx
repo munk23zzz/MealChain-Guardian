@@ -109,15 +109,20 @@ describe("ringkasan — berat pada angka gagal", () => {
   });
 });
 
-describe("ringkasan — label tombol tinjau", () => {
-  it("menyebut jumlah batch yang perlu tindakan saat tidak ada yang gagal", () => {
+describe("ringkasan — pintu masuk tindakan", () => {
+  // 30 Okt 2026: tombol "Tinjau N batch …" di kepala kartu dilepas. Tile angka
+  // sudah melakukan hal yang sama (menyaring daftar lalu menggulir ke sana),
+  // jadi kepala kartu dulu punya DUA kontrol untuk satu tindakan. Kontrak yang
+  // dijaga sekarang: angkanya hidup di tile, dan tile-nya menyebut jumlah batch.
+  it("jumlah batch yang perlu tindakan dibaca dari tile, bukan tombol terpisah", () => {
     const perluVerifikasi = [
       { ...BATCHES[1], safety_status: "needs_verification" },
       { ...BATCHES[2], safety_status: "needs_verification" },
     ];
     const html = renderToStaticMarkup(<FoodSafetyBoard batches={perluVerifikasi} now={NOW} />);
     const ringkasan = kartu(html, "safety-ringkasan");
-    expect(ringkasan).toContain("Tinjau 2 batch perlu tindakan");
+    expect(ringkasan).not.toContain("Tinjau ");
+    expect(ringkasan).toContain("Saring daftar ke Perlu verifikasi: 2 batch");
   });
 });
 

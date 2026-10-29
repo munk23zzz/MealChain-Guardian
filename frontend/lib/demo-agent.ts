@@ -12,6 +12,7 @@
 // Urutan & label agen dipakai bersama panel Agent Log: satu sumber kebenaran
 // supaya "sembilan agen" tidak berbeda susunannya di dua layar.
 import { SWARM_AGENTS } from "./agent-swarm";
+import type { LangkahAgent } from "./agent-stream";
 
 export type AgentStep = {
   step_name: string;
@@ -248,6 +249,25 @@ export function stepNames(run: AgentRun | null): string[] {
   return langkah.map((s) => (s.step_name && s.step_name.trim() ? s.step_name : "—"));
 }
 
+/**
+ * Langkah TERSIMPAN (`agent_traces`) → baris log proses pengambilan data.
+ *
+ * Dipakai saat putaran sudah ditutup / halaman dimuat ulang: kanal SSE tidak
+ * menyimpan apa pun, yang tersisa hanya baris jejak. Jam (`at`) sengaja string
+ * kosong karena `agent_traces` tidak menyimpan waktu per langkah — terminal
+ * mencetak kolom jam kosong, bukan jam karangan. `ringkas` juga kosong: server
+ * hanya menyiarkan ringkasan pada kanal hidup, tidak menyimpannya per langkah.
+ */
+export function langkahTersimpan(run: AgentRun | null): LangkahAgent[] {
+  const langkah = run?.steps ?? [];
+  return langkah.map((s) => ({
+    step: s.step_name && s.step_name.trim() ? s.step_name : "—",
+    tool: s.tool_called ?? null,
+    ringkas: "",
+    at: "",
+  }));
+}
+
 /** Kalimat narasi supervisor — menyebut provider yang benar-benar menjawab. */
 export function supervisorLine(sup: AgentSupervisor | null | undefined): string {
   if (!sup || !sup.status || sup.status === "missing") {
@@ -448,7 +468,14 @@ function kartuSupervisor(
 }
 
 /**
- * Kartu sembilan agen untuk panel "Bukti agent" di Demo Control — urutan
+ * Kartu sembilan agen (dipakai bersama panel Agent Log).
+ *
+ * 29 Okt 2026: blok "Bukti agent" di Demo Control TIDAK lagi merender kartu
+ * ini — panel itu kini hanya terminal "Log proses pengambilan data". Fungsi
+ * dipertahankan karena kontrak datanya masih diuji (`demo-agent.test.ts`);
+ * menghapusnya butuh pembersihan terpisah bersama tesnya.
+ *
+ * Urutan
  * pipeline: tujuh worker → supervisor → verifier.
  *
  * Selalu sembilan kartu bila putaran punya baris review. Status hanya dari data

@@ -246,22 +246,12 @@ describe("KPIDashboard — mode demo", () => {
     expect(dom.querySelector('[data-testid="kpi-demo-note"]')).not.toBeNull();
   });
 
-  it("kartu yang punya estimate merender baris 'estimasi'", () => {
+  it("baris estimasi tidak lagi dirender di kartu (dihapus 29 Okt 2026)", () => {
+    // Estimasi adalah isi lipatan "Rincian angka" yang dihapus bersama
+    // segitiganya. Datanya tetap ada di payload; yang berubah hanya tampilannya.
     const dom = mount(<KPIDashboard kpi={envelope("demo")} />);
-    const est = kartu(dom, "Safe Delivered Cost").querySelector(
-      '[data-testid="kpi-estimate"]',
-    );
-    expect(est).not.toBeNull();
-    expect(est!.textContent).toContain("estimasi");
-    expect(est!.textContent).toContain("proyeksi biaya kirim pekan depan");
-  });
-
-  it("estimate tak tersedia tetap muncul sebagai estimasi tidak tersedia", () => {
-    const dom = mount(<KPIDashboard kpi={envelope("demo")} />);
-    const est = kartu(dom, "Procurement Price Deviation").querySelector(
-      '[data-testid="kpi-estimate"]',
-    );
-    expect(est!.textContent).toContain("estimasi tidak tersedia");
+    expect(dom.querySelectorAll('[data-testid="kpi-estimate"]')).toHaveLength(0);
+    expect(dom.querySelectorAll("details")).toHaveLength(0);
   });
 
   it("kartu tanpa estimate tidak merender baris estimasi apa pun", () => {
@@ -368,31 +358,24 @@ describe("KpiScopeToggle", () => {
 /* ------------------------------------------------ (e) regresi provenance    */
 
 describe("KPIDashboard — provenance lengkap (regresi)", () => {
-  it("semua label provenance tampil di kartu", () => {
+  it("label provenance teknis tidak lagi tampil di kartu", () => {
+    // 29 Okt 2026: pemilik meminta halaman KPI berisi hal informatif saja, jadi
+    // label audit (metode, rumus, pembanding, basis periode) tidak dicetak di
+    // kartu. Yang tetap terlihat hanya tingkat bukti satu kata ("Bukti: …").
     const dom = mount(<KPIDashboard kpi={envelope("demo")} />);
-    const prov = kartu(dom, "Safe Delivered Cost").querySelector(
-      '[data-testid="kpi-provenance"]',
-    );
-    expect(prov).not.toBeNull();
-    const teks = prov!.textContent ?? "";
+    const teks = kartu(dom, "Safe Delivered Cost").textContent ?? "";
     for (const label of [
       "Tingkat bukti",
-      "Sumber",
       "Basis periode",
       "Metode",
       "Pembanding",
-      "Definisi",
       "Rumus",
     ]) {
-      expect(teks).toContain(label);
+      expect(teks).not.toContain(label);
     }
-    // Nilainya ikut, bukan hanya labelnya.
-    expect(teks).toContain("safe_delivered_cost.cost_idr");
-    expect(teks).toContain("recorded_at");
-    expect(teks).toContain("sdc-v2");
-    // Baseline kosong = "tanpa baseline" + alasan, bukan 0.
-    expect(teks).toContain("tanpa baseline");
-    expect(teks).toContain("target belum disepakati pemilik");
+    expect(teks).not.toContain("sdc-v2");
+    expect(teks).not.toContain("safe_delivered_cost.cost_idr");
+    expect(teks).toContain("Bukti:");
   });
 
   it("metrik tanpa provenance tidak merender blok provenance", () => {
@@ -419,7 +402,10 @@ describe("KPIDashboard — provenance lengkap (regresi)", () => {
     expect(html).toContain("kpi-group");
     expect(html).toContain("Simulasi (sesi demo)");
     expect(html).toContain("kpi-demo-note");
-    expect(html).toContain("Tingkat bukti");
+    // Kartu kini satu bentuk yang bisa diklik, tanpa lipatan teknis.
+    expect(html).toContain('role="button"');
+    expect(html).not.toContain("<details");
+    expect(html).not.toContain("Tingkat bukti");
   });
 });
 
@@ -486,7 +472,10 @@ describe("asal baris pada kartu KPI", () => {
     expect(asal?.basis).toBe("historical_seed");
     expect(asal?.historicalSeed).toBe(70);
     expect(asal?.text).toContain("70");
-    expect(asal?.text.toLowerCase()).toContain("bukan catatan lapangan");
+    // 29 Okt 2026: keterangan "(historical_seed)" dan "bukan catatan lapangan baru"
+    // dibuang dari teks — di layar keduanya terbaca sebagai kode, bukan penjelasan.
+    expect(asal?.text).toBe("data historis: 70 baris");
+    expect(asal?.text).not.toContain("historical_seed");
   });
 
   it("kartu menyatakan asal baris historis tanpa membuka detail", () => {
@@ -496,8 +485,11 @@ describe("asal baris pada kartu KPI", () => {
         scope="operational"
       />
     );
-    expect(html).toContain('data-testid="kpi-basis"');
-    expect(html).toContain("historical_seed");
+    // 29 Okt 2026: baris "Basis data: data historis (historical_seed): N baris
+    // — bukan catatan lapangan baru" DIHAPUS dari kartu. Kode basis mentah tidak
+    // boleh muncul di layar; asal baris tetap tersedia di panel audit.
+    expect(html).not.toContain('data-testid="kpi-basis"');
+    expect(html).not.toContain("historical_seed");
   });
 
   it("kartu berisi catatan lapangan tidak diberi label historis", () => {

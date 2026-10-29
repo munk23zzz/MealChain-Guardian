@@ -76,3 +76,52 @@ export function stepDurationLabel(step: any): string | null {
     maximumFractionDigits: 1,
   })} dtk`;
 }
+
+/**
+ * Berapa langkah jejak yang tercatat SEBELUM keputusannya dibuat.
+ *
+ * Kenapa perlu: 39 dari 48 keputusan di data demo punya seluruh langkah
+ * bertanggal lebih awal daripada `created_at` keputusannya. Itu cacat data,
+ * bukan urutan kejadian nyata. Selama cacatnya ada, halaman harus mengatakannya
+ * terang-terangan — menyembunyikannya dengan jam tanpa tanggal adalah cara
+ * paling mudah membuat pembaca menyimpulkan hal yang salah.
+ */
+export function jejakSebelumKeputusan(
+  createdAt: string | null | undefined,
+  steps: ReadonlyArray<{ step_at?: unknown }> | null | undefined
+): { jumlah: number; pertama: string | null } {
+  if (!createdAt) return { jumlah: 0, pertama: null };
+  const lahir = new Date(createdAt).getTime();
+  if (Number.isNaN(lahir)) return { jumlah: 0, pertama: null };
+  let jumlah = 0;
+  let pertama: string | null = null;
+  let pertamaMs = Number.POSITIVE_INFINITY;
+  for (const s of steps ?? []) {
+    const iso = typeof s?.step_at === "string" ? s.step_at : null;
+    if (!iso) continue;
+    const ms = new Date(iso).getTime();
+    if (Number.isNaN(ms) || ms >= lahir) continue;
+    jumlah += 1;
+    if (ms < pertamaMs) {
+      pertamaMs = ms;
+      pertama = iso;
+    }
+  }
+  return { jumlah, pertama };
+}
+
+/**
+ * Catatan bila jejak tidak dimulai dari DETECT.
+ *
+ * Di data demo ada 9 keputusan yang jejaknya mulai dari LEARN / PREDICT /
+ * OPTIMIZE. Tanpa kalimat, pembaca menyimpulkan agent melewatkan pendeteksian;
+ * yang benar: tahap awalnya tidak tercatat pada data ini.
+ */
+export function catatanAwalJejak(
+  steps: ReadonlyArray<{ step_name?: unknown }> | null | undefined
+): string | null {
+  const pertama = steps?.[0]?.step_name;
+  if (typeof pertama !== "string" || !pertama) return null;
+  if (pertama === "DETECT") return null;
+  return `Jejak ini dimulai dari ${pertama}, bukan DETECT — tahap awal tidak tercatat pada data demo.`;
+}

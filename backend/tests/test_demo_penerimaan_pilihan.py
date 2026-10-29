@@ -47,3 +47,48 @@ def test_tidak_pernah_lebih_dari_dua_dan_tidak_duplikat():
 
 def test_kosong_sama_sekali_tidak_melempar():
     assert pilih_batch_penerimaan([], []) == []
+
+
+# --------------------------------------------------------------------------
+# Demo "kasus pengiriman" (29 Okt 2026): baris penerimaan yang dipakai mendemokan
+# persetujuan harus (a) duduk di batch DEMO — supaya sesi demo memiliki barisnya,
+# bukan menumpang batch kanonik — dan (b) membawa BERAT TIMBANGAN, supaya
+# "diterima 513 dari 540 kg" bisa diperagakan. Dua helper di bawah murni supaya
+# kontraknya bisa diuji tanpa DB.
+# --------------------------------------------------------------------------
+
+
+def test_batch_demo_diurutkan_lebih_dulu():
+    from app.seed.demo_template import urutkan_demo_dulu
+
+    seed = _B("seed-1")
+    seed.origin = "seed"
+    demo_a = _B("demo-a")
+    demo_a.origin = "demo"
+    demo_b = _B("demo-b")
+    demo_b.origin = "demo"
+
+    hasil = urutkan_demo_dulu([seed, demo_b, demo_a])
+    assert [b.id for b in hasil] == ["demo-a", "demo-b", "seed-1"]
+
+
+def test_berat_timbangan_selalu_kurang_dari_pesanan():
+    from decimal import Decimal
+
+    from app.seed.demo_template import berat_timbangan
+
+    for pesanan in (Decimal("540"), Decimal("120"), Decimal("90.5"), Decimal("1000")):
+        terima = berat_timbangan(pesanan)
+        assert terima < pesanan, (pesanan, terima)
+        # Dua desimal (kolom NUMERIC(10,2)) dan tidak pernah nol/negatif.
+        assert -terima.as_tuple().exponent <= 2, terima
+        assert terima > 0, terima
+
+
+def test_berat_timbangan_nol_tidak_dikarang():
+    from decimal import Decimal
+
+    from app.seed.demo_template import berat_timbangan
+
+    assert berat_timbangan(Decimal("0")) is None
+    assert berat_timbangan(None) is None

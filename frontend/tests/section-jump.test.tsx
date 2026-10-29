@@ -184,12 +184,22 @@ describe("SectionJump — penanda posisi", () => {
 });
 
 describe("daftar bagian per halaman", () => {
-  it("Decision & Evidence: empat tujuan, urutan sesuai urutan baca keputusan", () => {
+  it("Decision & Evidence: lima tujuan, urutan sesuai urutan baca halaman", () => {
+    // Tahap 7 (29 Okt 2026): "Keamanan & pemasok" jadi tujuan tersendiri dan
+    // label disamakan dengan judul bagian yang tercetak. id jangkar tetap.
     expect(evidenceSections().map((i) => i.id)).toEqual([
       EVIDENCE_SECTION_IDS.ringkasan,
       EVIDENCE_SECTION_IDS.keputusan,
       EVIDENCE_SECTION_IDS.bukti,
+      EVIDENCE_SECTION_IDS.keamanan,
       EVIDENCE_SECTION_IDS.jejak,
+    ]);
+    expect(evidenceSections().map((i) => i.label)).toEqual([
+      "Ringkasan",
+      "Persetujuan",
+      "Bukti biaya",
+      "Keamanan & pemasok",
+      "Jejak & integritas",
     ]);
   });
 

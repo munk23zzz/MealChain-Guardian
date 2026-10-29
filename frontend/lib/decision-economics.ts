@@ -132,7 +132,6 @@ export function buildCostView(
       ? {
           label: "Referensi pasar",
           value: `${formatRupiah(market.price_per_kg)} per kg`,
-          note: "harga acuan PIHPS — pembanding bahan, bukan biaya PO",
         }
       : {
           label: "Referensi pasar",
@@ -165,8 +164,9 @@ export function buildCostView(
       "Penalti risiko internal untuk membandingkan pilihan. Tidak ditagihkan ke pemasok.",
     rows: [
       {
-        label: "Expected loss",
+        label: "Susut gudang",
         value: formatRupiah(payload.expected_loss ?? null),
+        note: "bukan risiko — biaya karena lama disimpan",
       },
       {
         label: "Risiko kesegaran",

@@ -14,6 +14,7 @@ import os
 import uuid
 from datetime import datetime, timedelta
 from decimal import Decimal
+from functools import lru_cache
 from pathlib import Path
 
 from sqlalchemy import select, text
@@ -76,6 +77,23 @@ def canonical_hash(payload: object) -> str:
 def _load_json(path: Path | None = None) -> dict:
     with open(path or SEED_PATH, encoding="utf-8") as f:
         return json.load(f)
+
+
+@lru_cache(maxsize=1)
+def nama_lokasi_kanonik(seed_path: Path | None = None) -> frozenset[str]:
+    """Nama lokasi dari snapshot kanonik — satu-satunya daftar SPPG yang SAH.
+
+    Dipakai pembersih data demo untuk memisahkan lokasi jaringan dari residu uji
+    yang dibuat tes integrasi (mis. `F9-tgt-d8ec4354`, terukur 29 Okt 2026:
+    lokasi itu muncul di pemilih cakupan BGN sebagai "11 lokasi" dan pemasoknya
+    ikut dihitung, 61 bukan 60). Acuannya snapshot, BUKAN `role_hint`: kolom itu
+    boleh kosong pada instalasi lama, sedangkan snapshot selalu memuat daftar
+    lokasi resmi.
+
+    Di-cache: isinya tetap untuk satu proses, dan pemanggilnya (pembersih demo)
+    berjalan berkali-kali per build.
+    """
+    return frozenset(loc["name"] for loc in _load_json(seed_path)["locations"])
 
 
 def build_seed_rows(reference_time: datetime, seed_path: Path | None = None) -> dict:

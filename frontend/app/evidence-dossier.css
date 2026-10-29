@@ -452,8 +452,10 @@
 }
 .evidence-page .batch-eval-table th:nth-child(1),
 .evidence-page .batch-eval-table td:nth-child(1) { width: 96px; }
+/* Kolom "Gerbang" butuh 176 px: label terpanjangnya "ditahan — butuh bukti"
+   terukur terpotong pada 132 px (sel nowrap, table-layout fixed). */
 .evidence-page .batch-eval-table th:nth-child(2),
-.evidence-page .batch-eval-table td:nth-child(2) { width: 132px; }
+.evidence-page .batch-eval-table td:nth-child(2) { width: 176px; }
 .evidence-page .batch-eval-table th:nth-child(3),
 .evidence-page .batch-eval-table td:nth-child(3) { width: 100px; }
 .evidence-page .batch-eval-table th:nth-child(4),
@@ -476,9 +478,7 @@
    · Kartu "Penerimaan barang" memakai judul kalimat 14 px padahal ia blok
      setingkat "BUKTI"/"GOVERNANCE & PERSETUJUAN" — satu-satunya kepala blok
      di halaman ini yang tidak memakai bahasa label.
-   · `.trace-list` menampilkan angka DUA KALI: penanda daftar bawaan
-     (`list-style: decimal`) plus lencana `.trace-mark` di tiap baris, dan
-     `padding-left: 40px` mendorong seluruh jejak ke kanan tanpa alasan. */
+   */
 
 .evidence-page .goods-receipt > .card-header > h2 {
   display: flex;
@@ -508,18 +508,6 @@
   gap: 6px 12px;
 }
 .evidence-page .goods-receipt > .card-header > .evidence-note { margin: 0; }
-
-.evidence-page .trace-list {
-  list-style: none;
-  margin: 0;
-  padding-left: 0;
-}
-.evidence-page .trace-item {
-  display: grid;
-  grid-template-columns: 24px minmax(0, 1fr);
-  gap: 12px;
-  align-items: start;
-}
 
 /* Panel "Supplier governance" memakai CSS module (kelas ber-hash), jadi
    dipilih lewat `aria-label` seksinya — penanda yang stabil dan memang sudah
@@ -610,5 +598,1105 @@
 @media (max-width: 640px) {
   .evidence-page .catatan-teknis-row {
     grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   TAHAP 1 — KEPALA KARTU + BILAH KENDALI (29 Okt 2026)
+
+   Lingkup sengaja SEMPIT: hanya kepala halaman dan tempat pemilih keputusan.
+   Isi halaman (ringkasan, keputusan, bukti, jejak) tidak disentuh di tahap ini.
+
+   Kepala memakai pola Overview (`.page-header` di globals.css) supaya
+   bentuknya sama dengan halaman lain; berkas ini hanya menambah dua hal yang
+   belum ada di sana:
+     1. pil status keputusan (`.evidence-header-status`) dengan nada per status;
+     2. bilah kendali (`.evidence-controls`) sebagai kartu tempat pemilih.
+
+   Semua nilai dari token yang sudah ada — tidak ada palet, radius, atau
+   bayangan baru.
+   ─────────────────────────────────────────────────────────────────────────── */
+
+/* Irama halaman disamakan dengan Overview (14 px), bukan 18 px. */
+.evidence-page {
+  gap: 14px;
+}
+
+/* Pil status keputusan. `nowrap` supaya label tidak pecah dua baris di kolom
+   sempit (panduan Compact Label Overflow: batasi nilai yang tak terduga,
+   jangan biarkan label pendek membungkus). */
+.evidence-header-status {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: var(--radius-control-sm);
+  background: var(--accent-soft);
+  color: var(--ink);
+  font-size: var(--fs-1);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+/* Nada mengikuti keparahan, memakai token yang sudah dipakai lencana lain. */
+.evidence-header-status[data-status="pending_approval"],
+.evidence-header-status[data-status="needs_verification"],
+.evidence-header-status[data-status="verifier_flagged"] {
+  background: var(--warn-bg);
+  color: var(--warn-ink);
+}
+.evidence-header-status[data-status="approved"],
+.evidence-header-status[data-status="executed"] {
+  background: var(--ok-bg);
+  color: var(--ok-ink);
+}
+.evidence-header-status[data-status="rejected"],
+.evidence-header-status[data-status="expired"] {
+  background: var(--danger-bg);
+  color: var(--danger-ink);
+}
+
+/* Bilah kendali: kartu putih tipis berisi pemilih keputusan. */
+.evidence-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 10px 14px;
+  padding: 12px 14px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-1);
+}
+.evidence-controls .evidence-picker {
+  flex: 1 1 320px;
+  min-width: 0;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   TAHAP 2 — BLOK PERSETUJUAN (gaya clean dashboard, 29 Okt 2026)
+
+   Aturan bentuk:
+     · satu kartu rapat, satu judul, satu pil status, satu pemicu aksi;
+     · tiga jawaban dibaca berurutan (yang menahan → dibutuhkan → setelah ini);
+     · penyetuju sebagai TABEL (peran · keadaan · dicatat), bukan daftar kartu;
+     · semua warna dari token status yang sudah ada; tidak ada hex baru.
+   Tabel di bawah 640 px berubah jadi baris bertumpuk (Table Handling: jangan
+   biarkan tabel lebar merusak layout).
+   ─────────────────────────────────────────────────────────────────────────── */
+
+.approval-block {
+  display: grid;
+  gap: 12px;
+  padding: 14px 16px;
+  /* Sama dengan bagian lain: lompatan #zona-keputusan tidak boleh mendarat di
+     bawah nav yang menempel. */
+  scroll-margin-top: 132px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-1);
+}
+
+.approval-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.approval-head h2 {
+  margin: 0;
+  font-size: var(--fs-3);
+  font-weight: 700;
+}
+.approval-head-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.approval-note {
+  margin: 0;
+  font-size: var(--fs-2);
+  color: var(--ink-subtle);
+  text-wrap: pretty;
+}
+
+/* Kotak penahan: judul menyebut akibatnya, isi menyebut sebab dari server. */
+.approval-blocker {
+  padding: 10px 12px;
+  border: 1px solid var(--warn-border);
+  border-radius: var(--radius);
+  background: var(--warn-bg);
+  color: var(--warn-ink);
+}
+.approval-blocker-title {
+  margin: 0 0 4px;
+  font-size: var(--fs-1);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.approval-blocker-list {
+  margin: 0;
+  padding-left: 16px;
+  font-size: var(--fs-2);
+  display: grid;
+  gap: 2px;
+}
+.approval-clear {
+  margin: 0;
+  font-size: var(--fs-2);
+  color: var(--ok-ink);
+}
+
+/* Dua jawaban sisanya sebagai baris label–nilai rapat. */
+.approval-facts {
+  margin: 0;
+  display: grid;
+  gap: 6px;
+}
+.approval-fact {
+  display: grid;
+  grid-template-columns: 110px minmax(0, 1fr);
+  gap: 10px;
+  align-items: baseline;
+}
+.approval-fact dt {
+  font-size: var(--fs-1);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ink-subtle);
+}
+.approval-fact dd {
+  margin: 0;
+  font-size: var(--fs-2);
+  text-wrap: pretty;
+}
+
+/* Tabel penyetuju — rapat, angka waktu rata kanan tabular. */
+.approval-roles {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--fs-2);
+}
+.approval-roles-caption {
+  padding-bottom: 4px;
+  text-align: left;
+  font-size: var(--fs-1);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ink-subtle);
+}
+.approval-roles th,
+.approval-roles td {
+  padding: 7px 10px;
+  text-align: left;
+  border-top: 1px solid var(--line);
+  vertical-align: top;
+}
+.approval-roles thead th {
+  border-top: 0;
+  font-size: var(--fs-1);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ink-subtle);
+  font-weight: 600;
+}
+.approval-roles tbody th {
+  font-weight: 600;
+}
+.approval-role-note {
+  display: block;
+  margin-top: 2px;
+  font-size: var(--fs-1);
+  font-weight: 500;
+  color: var(--ink-subtle);
+}
+.approval-role-waktu {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+@media (max-width: 640px) {
+  .approval-fact {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 2px;
+  }
+  .approval-roles thead {
+    display: none;
+  }
+  .approval-roles tbody tr {
+    display: grid;
+    gap: 2px;
+    padding: 8px 0;
+    border-top: 1px solid var(--line);
+  }
+  .approval-roles tbody th,
+  .approval-roles tbody td {
+    padding: 0;
+    border-top: 0;
+  }
+  .approval-role-waktu {
+    text-align: left;
+  }
+}
+
+/* Kepala halaman di layar sempit: judul dan penanda ditumpuk, penanda rata
+   kiri. Tanpa ini, judul dua baris berdesakan dengan kolom chip di kanannya
+   (terukur 375 px: "menunggu persetujuan" menempel ke kalimat penjelas).
+   Cakupan sengaja hanya halaman ini supaya kepala Overview tidak ikut berubah. */
+@media (max-width: 640px) {
+  .evidence-page .page-header {
+    /* Sejak pemilih digabung (29 Okt 2026) kepala adalah GRID, bukan flex —
+       `flex-direction` tidak lagi berpengaruh; yang menumpuk kolom adalah ini. */
+    grid-template-columns: minmax(0, 1fr);
+    align-items: flex-start;
+  }
+  .evidence-page .page-header-meta {
+    align-items: flex-start;
+    text-align: left;
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   TAHAP 1 — RINGKASAN KEPUTUSAN (gaya clean dashboard, 29 Okt 2026)
+
+   Urutan baca: band keadaan → judul keputusan → strip angka → triase.
+   Angka memakai `tabular-nums` supaya kolomnya lurus; label kecil kapital
+   memakai token tipografi yang sudah ada. Tidak ada bayangan bertumpuk: satu
+   kartu, satu `--shadow-1`.
+   ─────────────────────────────────────────────────────────────────────────── */
+
+.dash-summary {
+  display: grid;
+  gap: 10px;
+  /* Nav bagian menempel di atas layar (top: 72px, tinggi 44 px): tanpa jarak ini
+     judul bagian mendarat TERTUTUP nav setelah lompatan. */
+  scroll-margin-top: 132px;
+  padding: 14px 16px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-1);
+}
+
+.dash-summary-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 14px;
+  font-size: var(--fs-1);
+  color: var(--ink-subtle);
+}
+.dash-summary-item {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  white-space: nowrap;
+}
+.dash-summary-item strong {
+  color: var(--ink);
+  font-weight: 600;
+}
+.dash-summary-item[data-state="lewat"] {
+  color: var(--danger-ink);
+  font-weight: 600;
+}
+.dash-summary-id {
+  font-family: var(--font-data, ui-monospace, monospace);
+}
+/* 29 Okt 2026: status TIDAK diulang di band — pil status sudah ada di kepala
+   halaman, dan dua tempat untuk satu fakta di layar yang sama membuat pembaca
+   memeriksa apakah keduanya berbeda. */
+
+.dash-summary-title {
+  margin: 0;
+  font-size: var(--fs-5);
+  line-height: 1.25;
+  font-weight: 700;
+  color: var(--ink);
+  text-wrap: balance;
+}
+
+/* Strip angka: kartu-kartu rapat, bukan tabel bergaris rambut. */
+.dash-kpis {
+  margin: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  grid-auto-rows: 1fr;   /* label satu/dua baris tidak menggeser tinggi kartu */
+  gap: 10px;
+}
+.dash-kpi {
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  min-width: 0;
+}
+.dash-kpi dt {
+  font-size: var(--fs-1);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ink-subtle);
+}
+.dash-kpi dd {
+  margin: 2px 0 0;
+  font-size: var(--fs-6);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+  white-space: nowrap;
+  overflow-wrap: normal;
+}
+
+/* Triase: hanya dirender bila ada temuan. */
+.dash-flags {
+  display: grid;
+  gap: 6px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+}
+.dash-flags-title {
+  margin: 0;
+  font-size: var(--fs-1);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ink-subtle);
+}
+.dash-flags-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 4px;
+}
+.dash-flag {
+  display: grid;
+  grid-template-columns: minmax(0, 220px) minmax(0, 1fr);
+  gap: 10px;
+  align-items: baseline;
+  font-size: var(--fs-2);
+}
+.dash-flag-label {
+  font-weight: 600;
+  color: var(--ink);
+}
+.dash-flag-text {
+  color: var(--ink);
+  text-wrap: pretty;
+}
+.dash-flag[data-tone="warn"] .dash-flag-label {
+  color: var(--warn-ink);
+}
+.dash-flag[data-tone="danger"] .dash-flag-label {
+  color: var(--danger-ink);
+}
+
+@media (max-width: 640px) {
+  .dash-kpis {
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  }
+  /* Baris keadaan dipecah dan dibiarkan membungkus. Terukur: satu butir nowrap
+     ("#id · iterasi v2 · memperbaiki keputusan sebelumnya") ber-min-content
+     410 px, dan karena grid halaman mengambil min-content terbesar, SELURUH
+     halaman melebar 410 px pada viewport 375. */
+  .dash-summary-item {
+    white-space: normal;
+  }
+  /* Terukur 375 px: kartu 150 px, "Rp16.206.000" pada 20 px terpotong.
+     Turunkan satu langkah (16 px) — nilainya tetap utuh, tanpa membungkus
+     angka di tengah. */
+  .dash-kpi dd {
+    font-size: var(--fs-4);
+    /* Terukur: "23 jam 46 menit lagi" pada 16 px tetap 132 px dan terpotong di
+       kartu 124 px. Nilai pendek (angka) tetap satu baris; kalimat tenggat
+       dibiarkan membungkus satu kali daripada hilang. */
+    white-space: normal;
+  }
+  .dash-flag {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 2px;
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   TAHAP 3 — BUKTI BIAYA (29 Okt 2026)
+   Dua tabel berdampingan: yang ditagihkan (PO) dan yang analitis (SDC). Tabel,
+   bukan daftar fakta — angka biaya dibandingkan baris-per-baris, dan kolom
+   nilai rata kanan supaya digit terakhir bisa ditumpuk mata.
+   ═══════════════════════════════════════════════════════════════════════════ */
+.dash-cost {
+  display: grid;
+  gap: 12px;
+  padding: 16px 18px 18px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-1);
+  scroll-margin-top: 132px;
+}
+
+.dash-cost-head {
+  display: grid;
+  gap: 3px;
+}
+
+.dash-cost-title {
+  margin: 0;
+  font-size: var(--fs-4);
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+}
+
+.dash-cost-lead {
+  margin: 0;
+  max-width: 76ch;
+  font-size: var(--fs-1);
+  line-height: 1.5;
+  color: var(--ink-subtle);
+}
+
+.dash-cost-kosong {
+  margin: 0;
+  font-size: var(--fs-2);
+  color: var(--ink-subtle);
+}
+
+.dash-cost-catatan {
+  margin: 0;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+  font-size: var(--fs-1);
+  color: var(--ink-subtle);
+}
+
+.cost-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 12px;
+  align-items: start;
+}
+
+.cost-block {
+  display: grid;
+  gap: 6px;
+  padding: 12px 14px 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+.cost-block-title {
+  margin: 0;
+  font-size: var(--fs-2);
+  font-weight: 650;
+  color: var(--ink);
+}
+
+.cost-block-nota {
+  margin: 0;
+  font-size: var(--fs-1);
+  line-height: 1.45;
+  color: var(--ink-subtle);
+}
+
+.cost-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 4px;
+}
+
+/* Judul tabel sudah ada di h3 di atasnya; caption hanya untuk pembaca layar. */
+.cost-caption {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.cost-row th,
+.cost-row td {
+  padding: 7px 0;
+  font-size: var(--fs-2);
+  font-weight: 400;
+  text-align: left;
+  vertical-align: top;
+  border-top: 1px solid var(--line);
+}
+
+.cost-row:first-child th,
+.cost-row:first-child td {
+  border-top: 0;
+}
+
+.cost-row th {
+  color: var(--ink-subtle);
+  padding-right: 16px;
+}
+
+.cost-row td {
+  text-align: right;
+  white-space: nowrap;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Catatan pendek menempel di belakang label, di baris yang sama.
+   Selektornya sengaja digabung (`.cost-note.cost-note-inline`): aturan
+   `.cost-note { display: block }` ditulis SESUDAH blok ini, jadi selektor
+   tunggal akan kalah dan catatan kembali jatuh ke baris sendiri — terukur
+   sebagai baris 53 px di antara baris 35 px. */
+.cost-note.cost-note-inline {
+  display: inline;
+  margin: 0 0 0 5px;
+  white-space: nowrap;
+}
+
+.cost-row-total th,
+.cost-row-total td {
+  font-weight: 650;
+  color: var(--ink);
+  border-top: 1px solid var(--ink-subtle);
+}
+
+.cost-note {
+  display: block;
+  margin-top: 2px;
+  font-variant-numeric: normal;
+  font-size: var(--fs-1);
+  font-weight: 400;
+  line-height: 1.4;
+  color: var(--ink-subtle);
+  white-space: normal;
+}
+
+@media (max-width: 640px) {
+  .cost-grid {
+    grid-template-columns: 1fr;
+  }
+  .cost-row th {
+    padding-right: 10px;
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   TAHAP 4 — KEAMANAN & PEMASOK (29 Okt 2026)
+   Dua pertanyaan, dua kolom: "apakah isinya aman" dan "siapa yang mengirim".
+   Keduanya tabel karena pembaca membandingkan baris, bukan membaca prosa.
+   ═══════════════════════════════════════════════════════════════════════════ */
+.dash-safety {
+  display: grid;
+  gap: 12px;
+  padding: 16px 18px 18px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-1);
+  scroll-margin-top: 132px;
+}
+
+.dash-safety-head {
+  display: grid;
+  gap: 3px;
+}
+
+.dash-safety-title {
+  margin: 0;
+  font-size: var(--fs-4);
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+}
+
+.dash-safety-lead {
+  margin: 0;
+  max-width: 76ch;
+  font-size: var(--fs-1);
+  line-height: 1.5;
+  color: var(--ink-subtle);
+}
+
+.safety-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 12px;
+  align-items: start;
+}
+
+.safety-block {
+  display: grid;
+  gap: 6px;
+  padding: 12px 14px 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+.safety-block-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.safety-block-title {
+  margin: 0;
+  font-size: var(--fs-2);
+  font-weight: 650;
+  color: var(--ink);
+}
+
+.safety-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 2px;
+}
+
+/* Judul tabel sudah ada di h3 di atasnya; caption hanya untuk pembaca layar. */
+.safety-caption {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.safety-row th,
+.safety-row td {
+  padding: 7px 0;
+  font-size: var(--fs-2);
+  font-weight: 400;
+  text-align: left;
+  vertical-align: top;
+  border-top: 1px solid var(--line);
+}
+
+.safety-row:first-child th,
+.safety-row:first-child td {
+  border-top: 0;
+}
+
+.safety-row th {
+  width: 58%;
+  padding-right: 16px;
+  color: var(--ink-subtle);
+}
+
+.safety-row td {
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Nada status hanya mengubah warna teks nilai — tidak ada latar berwarna,
+   supaya satu baris "Gagal" tidak membaca sekeras satu kartu peringatan. */
+.safety-row td[data-tone="ok"] {
+  color: var(--ok-ink);
+}
+
+.safety-row td[data-tone="warn"] {
+  color: var(--warn-ink);
+}
+
+.safety-row td[data-tone="danger"] {
+  color: var(--danger-ink);
+  font-weight: 600;
+}
+
+.safety-note {
+  display: block;
+  margin-top: 2px;
+  font-size: var(--fs-1);
+  font-weight: 400;
+  color: var(--ink-subtle);
+}
+
+.safety-kosong {
+  margin: 2px 0 0;
+  font-size: var(--fs-1);
+  line-height: 1.45;
+  color: var(--ink-subtle);
+}
+
+.safety-exclusions {
+  margin: 4px 0 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 8px;
+}
+
+.safety-exclusions li {
+  display: grid;
+  gap: 2px;
+  padding-top: 8px;
+  border-top: 1px solid var(--line);
+  font-size: var(--fs-1);
+}
+
+.safety-exclusions strong {
+  font-size: var(--fs-2);
+  font-weight: 650;
+  color: var(--ink);
+}
+
+.safety-exclusion-status {
+  color: var(--warn-ink);
+  font-weight: 600;
+}
+
+.safety-exclusion-reason {
+  color: var(--ink-subtle);
+  line-height: 1.45;
+}
+
+@media (max-width: 640px) {
+  .safety-grid {
+    grid-template-columns: 1fr;
+  }
+  .safety-row th {
+    width: auto;
+    padding-right: 10px;
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   TAHAP 5 — IDENTITAS & EVALUASI BATCH (29 Okt 2026)
+   Satu kartu, dua tabel: ciri keputusan di atas, batch yang terikat di bawah.
+   Tabel evaluasi memakai `.batch-eval-table` yang sudah ada (gerbang yang sama
+   dengan dispatch) — tidak ada gaya baru untuk isi yang sama.
+   ═══════════════════════════════════════════════════════════════════════════ */
+.dash-ident {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+  padding: 16px 18px 18px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-1);
+  scroll-margin-top: 132px;
+}
+
+.dash-ident-head {
+  display: grid;
+  gap: 3px;
+}
+
+.dash-ident-title {
+  margin: 0;
+  font-size: var(--fs-4);
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+}
+
+.dash-ident-lead {
+  margin: 0;
+  max-width: 76ch;
+  font-size: var(--fs-1);
+  line-height: 1.5;
+  color: var(--ink-subtle);
+}
+
+.ident-block {
+  display: grid;
+  gap: 6px;
+  min-width: 0;   /* sama: cegah isi lebar menyeret lebar kartu */
+  padding: 12px 14px 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+.ident-block-title {
+  margin: 0;
+  font-size: var(--fs-2);
+  font-weight: 650;
+  color: var(--ink);
+}
+
+.ident-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 2px;
+}
+
+/* Judul tabel sudah ada di h3 di atasnya; caption hanya untuk pembaca layar. */
+.ident-caption {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.ident-row th,
+.ident-row td {
+  padding: 7px 0;
+  font-size: var(--fs-2);
+  font-weight: 400;
+  text-align: left;
+  vertical-align: top;
+  border-top: 1px solid var(--line);
+}
+
+.ident-row:first-child th,
+.ident-row:first-child td {
+  border-top: 0;
+}
+
+.ident-row th {
+  width: 34%;
+  padding-right: 16px;
+  color: var(--ink-subtle);
+}
+
+.ident-row td {
+  color: var(--ink);
+}
+
+.ident-note {
+  display: block;
+  margin-top: 2px;
+  font-size: var(--fs-1);
+  color: var(--ink-subtle);
+}
+
+.ident-kosong {
+  margin: 2px 0 0;
+  font-size: var(--fs-1);
+  line-height: 1.45;
+  color: var(--ink-subtle);
+}
+
+@media (max-width: 640px) {
+  .ident-row th {
+    width: auto;
+    padding-right: 10px;
+  }
+}
+
+/* Tabel evaluasi batch di dalam kartu identitas: 5 kolom tidak bisa dibagi ke
+   305 px tanpa memotong teks (terukur: halaman ikut melebar sampai 502 px).
+   Solusi yang dipilih: panel bisa digeser mendatar, bukan menyusutkan kolom —
+   angka dan label gerbang tetap utuh dan halaman tidak melebar. */
+.ident-block[data-block="evaluasi"] .batch-eval {
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  /* `min-width: 0` wajib: tanpa itu min-content tabel 560 px merambat ke grid
+     induk dan SELURUH halaman melebar (terukur 410 px di viewport 375). */
+  min-width: 0;
+}
+
+.ident-block[data-block="evaluasi"] .batch-eval-table {
+  min-width: 560px;
+}
+
+/* Label ringkas evaluasi batch: satu baris yang terbaca. Caption tabel tetap
+   ada untuk pembaca layar, tapi tidak lagi tercetak di panel sempit. */
+.ident-eval-ringkas {
+  margin: 2px 0 6px;
+  font-size: var(--fs-1);
+  letter-spacing: 0.02em;
+  color: var(--ink-subtle);
+}
+
+.ident-block[data-block="evaluasi"] .batch-eval caption {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   TAHAP 6 — JEJAK & INTEGRITAS (29 Okt 2026)
+   Satu seksi tiga blok: jejak (cerita) di atas penuh, lalu PO dan integritas
+   berdampingan. Isi tiap blok memakai komponen yang sudah ada — gaya baru hanya
+   untuk kemasannya, supaya satu baris catatan tidak punya dua rupa.
+   ═══════════════════════════════════════════════════════════════════════════ */
+.dash-trace {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+  padding: 16px 18px 18px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-1);
+  scroll-margin-top: 132px;
+}
+
+.dash-trace-head {
+  display: grid;
+  gap: 3px;
+}
+
+.dash-trace-title {
+  margin: 0;
+  font-size: var(--fs-4);
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+}
+
+.dash-trace-lead {
+  margin: 0;
+  max-width: 76ch;
+  font-size: var(--fs-1);
+  line-height: 1.5;
+  color: var(--ink-subtle);
+}
+
+.trace-block {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  padding: 12px 14px 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+.trace-block-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  min-width: 0;
+}
+
+.trace-block-title {
+  margin: 0;
+  font-size: var(--fs-2);
+  font-weight: 650;
+  color: var(--ink);
+}
+
+.trace-block-meta {
+  margin: 0;
+  font-size: var(--fs-1);
+  color: var(--ink-subtle);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.trace-kosong {
+  margin: 2px 0 0;
+  font-size: var(--fs-1);
+  line-height: 1.5;
+  color: var(--ink-subtle);
+}
+
+/* PO dan integritas berdampingan hanya bila keduanya masih terbaca sebagai
+   satu tabel lebar; di bawah 900 px ditumpuk supaya tidak ada kolom 260 px. */
+.trace-pair {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 12px;
+  min-width: 0;
+}
+
+@media (min-width: 900px) {
+  .trace-pair {
+    grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.15fr);
+  }
+}
+
+/* Panel integritas datang sebagai kartu sendiri; di dalam blok ini ia jadi isi
+   blok (satu bingkai, bukan bingkai di dalam bingkai). */
+/* data-block="pesanan", BUKAN "po": blok biaya sudah memakai "po" untuk tabel
+   Biaya PO — dua blok bernama sama membuat kueri DOM (dan siapa pun yang
+   membacanya) menunjuk blok yang salah. */
+.trace-block[data-block="integritas"] .integrity-panel {
+  border: 0;
+  padding: 0;
+  margin: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.trace-block[data-block="integritas"] .integrity-panel h3 {
+  margin: 0;
+  font-size: var(--fs-2);
+  font-weight: 650;
+  color: var(--ink);
+}
+
+@media (max-width: 640px) {
+  .trace-block-head {
+    flex-wrap: wrap;
+    gap: 2px;
+  }
+
+  .trace-block-meta {
+    white-space: normal;
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   PEMILIH DIGABUNG KE KARTU KEPALA (permintaan pemilik, 29 Okt 2026)
+
+   Sebelum: kepala (kartu) lalu bilah kendali (kartu kedua) — dua bingkai untuk
+   satu hal. Sekarang satu kartu, dua baris: judul + penanda keadaan di atas,
+   pemilih "Keputusan yang diperiksa" selebar kartu di bawah garis rambut.
+   ═══════════════════════════════════════════════════════════════════════════ */
+.evidence-page .page-header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px 12px;
+}
+
+/* Bilah kendali di dalam kepala: bukan kartu lagi — hanya baris bergaris atas. */
+.evidence-page .page-header .evidence-controls {
+  grid-column: 1 / -1;
+  align-items: center;
+  margin: 0;
+  padding: 12px 0 0;
+  background: transparent;
+  border: 0;
+  border-top: 1px solid var(--line);
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.evidence-page .page-header .evidence-controls .evidence-picker {
+  flex: 1 1 320px;
+}
+
+/* Pemilih memakai selebar barisnya. `max-width: 340px` di globals masuk akal
+   saat pemilih berada di kolom sempit, tetapi di dalam kepala selebar kartu ia
+   menyisakan ~950 px kosong dan memotong judul keputusan yang panjang. */
+.evidence-page .page-header .evidence-controls .evidence-picker,
+.evidence-page .page-header .evidence-controls .dpick {
+  max-width: none;
+}
+
+
+/* Urutan kaskade: aturan kepala di dalam blok "PEMILIH DIGABUNG" ditulis PALING
+   AKHIR berkas, jadi ia mengalahkan aturan layar sempit di atas (baris ~851)
+   walau viewport 375 px — terukur: kepala tetap dua kolom 138/143 px dan chip
+   "menunggu persetujuan" berdesakan di kanan judul. Penimpaan harus berada
+   SETELAH aturan dasarnya, bukan sebelumnya. */
+@media (max-width: 640px) {
+  .evidence-page .page-header {
+    grid-template-columns: minmax(0, 1fr);
+    align-items: flex-start;
+  }
+
+  .evidence-page .page-header .page-header-meta {
+    align-items: flex-start;
+    text-align: left;
   }
 }

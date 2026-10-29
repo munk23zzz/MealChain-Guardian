@@ -13,7 +13,7 @@ from app.models import AgentTrace
 from app.services.agent_memory import sanitize_memory_payload
 
 _VALID_STEPS = frozenset(
-    {"DETECT", "VERIFY", "TRACE", "PREDICT", "OPTIMIZE", "DECIDE",
+    {"DETECT", "VERIFY", "TRACE", "PREDICT", "OPTIMIZE", "ANALYZE", "DECIDE",
      "SUPERVISE", "ACT", "LEARN"}
 )
 

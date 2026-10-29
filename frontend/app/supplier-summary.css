@@ -61,19 +61,51 @@
   color: var(--ink-muted);
 }
 
+/* S2 (29 Okt 2026): satu angka dipromosikan. Kolomnya lebih lebar dan angkanya
+ * naik ke token hero (--fs-8) — satu-satunya angka hero di kartu ini, jadi
+ * pandangan pembaca jatuh ke situ lebih dulu. Warna tetap mengikuti data-tone. */
+.supplier-summary .summary-kpi-item[data-lead="true"] {
+  flex: 1.6 1 200px;
+}
+
+.supplier-summary .summary-kpi-item[data-lead="true"] .summary-kpi-label {
+  font-size: var(--fs-2);
+  color: var(--ink);
+}
+
+.supplier-summary .summary-kpi-item[data-lead="true"] .summary-kpi-value {
+  font-size: var(--fs-8);
+  letter-spacing: -0.02em;
+}
+
 @media (max-width: 720px) {
-  /* Dua kolom di layar sempit: label tidak lagi muat sebaris dengan angka. */
+  /* Layar sempit: angka yang dipromosikan mengambil satu baris penuh, tiga
+   * angka lain berbagi satu baris di bawahnya. */
   .supplier-summary .summary-kpi-item {
-    flex: 1 1 calc(50% - 1px);
-    padding: 6px 12px;
+    flex: 1 1 calc(33.33% - 1px);
+    padding: 6px 10px;
   }
 
-  .supplier-summary .summary-kpi-item:nth-child(odd) {
+  .supplier-summary .summary-kpi-item[data-lead="true"] {
+    flex-basis: 100%;
+    padding: 0 0 8px;
+    border-left: 0;
+  }
+
+  .supplier-summary .summary-kpi-item[data-lead="true"] .summary-kpi-label {
+    font-size: var(--fs-1);
+  }
+
+  .supplier-summary .summary-kpi-item[data-lead="true"] .summary-kpi-value {
+    font-size: var(--fs-7);
+  }
+
+  .supplier-summary .summary-kpi-item:nth-child(2) {
     border-left: 0;
     padding-left: 0;
   }
 
-  .supplier-summary .summary-kpi-item:nth-child(n + 3) {
+  .supplier-summary .summary-kpi-item:nth-child(n + 2) {
     border-top: 1px solid var(--line);
     padding-top: 10px;
   }

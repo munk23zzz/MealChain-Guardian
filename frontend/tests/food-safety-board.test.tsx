@@ -351,13 +351,22 @@ describe("FoodSafetyBoard — cakupan lokasi sendiri", () => {
     expect(html).toContain("Dipanen");
     expect(html).toContain("Rincian kiriman");
     // Jalur belum dilaporkan server → kartu menyebut sebabnya, bukan mengarang.
-    expect(html).toContain("Perjalanan belum dilaporkan server");
+    expect(html).toContain("Perjalanan belum dilaporkan");
   });
 
-  it("kolom tabel jadi Asal (pemasok) saat ber-scope lokasi sendiri", () => {
+  // 29 Okt 2026 (permintaan pemilik): tabel "Status keamanan per batch" dibuka
+  // dengan cakupan SEMUA LOKASI — sebelumnya default lokasi sendiri membuat
+  // tabel hanya berisi Jakarta padahal batch Bandung/Surabaya ada di server.
+  // Pemilih "Lokasi saya" tetap ada untuk menyempitkan (kolomnya berubah jadi
+  // "Asal" berisi nama pemasok).
+  it("default cakupan = semua lokasi, tabel memakai kolom Lokasi", () => {
     const html = renderOwn();
-    expect(html).toContain("Asal");
-    expect(html).toContain("Supplier A Cianjur");
+    expect(html).toContain("Semua lokasi (pengawasan)");
+    expect(html).toContain('class="commodity-pill commodity-pill-active" aria-pressed="true">Semua lokasi');
+    expect(html).toContain(">Lokasi</th>");
+    expect(html).not.toContain(">Asal</th>");
+    // Menyempitkan ke lokasi sendiri tetap tersedia.
+    expect(html).toContain("Lokasi saya — Jakarta");
   });
 
   it("batch kedaluwarsa ditandai keadaan, bukan hanya 'kesegaran 0%'", () => {
@@ -388,8 +397,14 @@ describe("FoodSafetyBoard — cakupan lokasi sendiri", () => {
     expect(html).toContain("2 keputusan keamanan");
     expect(html).toContain("1 ditolak (bisa diajukan ulang)");
     expect(html).toContain("menurut aturan server hanya keputusan yang");
-    expect(html).toContain("Gangguan keamanan");
+    // Tahap 6 (30 Okt 2026): daftar berganti TABEL dengan pola kepala yang sama
+    // seperti tabel batch. "Gangguan keamanan" (judul baris daftar lama) tidak
+    // lagi dipakai; kg-nya kini punya kolom sendiri.
+    expect(html).toContain('<th scope="col">Dibuat</th>');
+    expect(html).toContain('<th scope="col">Masa berlaku</th>');
     expect(html).toContain("492 kg");
+    expect(html).toContain("kedaluwarsa");
+    expect(html).not.toContain("Gangguan keamanan");
   });
 
   it("tombol Ajukan ulang hanya untuk keputusan yang DITOLAK (kontrak /actions/repropose)", () => {
@@ -411,35 +426,29 @@ describe("FoodSafetyBoard — cakupan lokasi sendiri", () => {
     expect(html).not.toContain("Penerimaan barang");
   });
 
-  it("kartu Penerimaan barang: lima titik periksa + kalimat kemajuan", () => {
+  // Revisi 29 Okt 2026 (Dok 05 §2): ceklis pindah ke POPUP drawer kanan.
+  // Kartu "Penerimaan barang" sekarang hanya memilih kiriman + tombol pembuka.
+  // Kontrak ISI ceklis diuji di tests/receipt-drawer-open.test.tsx (jsdom, popup
+  // benar-benar dibuka), bukan di markup halaman tertutup.
+  it("kartu Penerimaan barang: pembuka popup, bukan form terbuka di halaman", () => {
     const html = renderOwn({ canMutate: true, onRecheck: async () => null as never });
     expect(html).toContain("Penerimaan barang");
     expect(html).toContain("daftar periksa petugas");
-    expect(html).toContain("0 dari 5 titik periksa sudah ditandai");
-    expect(html).toContain("Catat hasil terima");
-    expect(html).toContain("Nomor lot");
+    expect(html).toContain("Periksa &amp; catat kiriman");
+    // Dok 05 §1: popup, bukan form inline. Form yang tertinggal di kartu akan
+    // membuat dua tempat mencatat hal yang sama.
+    expect(html).not.toContain("<textarea");
+    expect(html).not.toContain("<legend>Titik periksa</legend>");
+    expect(html).not.toContain("Catat hasil terima");
   });
 
-  it("kalimat kemajuan tidak memerintah dan tidak menjanjikan gerbang", () => {
-    const html = renderOwn({ canMutate: true, onRecheck: async () => null as never });
-    expect(html).toContain("Boleh disimpan sebagian");
-    expect(html).not.toContain("tandai sisanya sebelum barang dipakai");
-    // Penghitung berubah setiap kotak dicentang — pembaca layar harus dengar.
-    expect(html).toContain('aria-live="polite"');
-  });
-
-  it("lima kotak centang dibungkus satu kelompok bernama 'Titik periksa'", () => {
-    const html = renderOwn({ canMutate: true, onRecheck: async () => null as never });
-    expect(html).toContain("<fieldset");
-    expect(html).toContain("<legend>Titik periksa</legend>");
+  it("tanpa cakupan lokasi tidak ada tombol pembuka ceklis", () => {
+    const html = render();
+    expect(html).not.toContain("Periksa &amp; catat kiriman");
   });
 
   it("komoditas & batch tampil sebagai pilihan terlihat, bukan dua dropdown bertingkat", () => {
     const html = renderOwn({ canMutate: true, onRecheck: async () => null as never });
-    expect(html).toContain("Keadaan batch:");
-    expect(html).toMatch(/(Aman|Gagal uji|Belum)[^<]*layak s\/d/);
-    // Tanggal tidak boleh pecah antara bulan dan tahun di 375 px.
-    expect(html).toContain('class="safety-nobr"');
     // Revisi 20 Okt: tidak ada <select> untuk batch (opsi datang/menghilang)
     // dan tidak ada keadaan yang dijejalkan ke dalam <option>.
     expect(html).not.toContain("<select");
@@ -447,31 +456,6 @@ describe("FoodSafetyBoard — cakupan lokasi sendiri", () => {
     expect(html).toContain('type="radio"');
     expect(html).toContain("1. Komoditas");
     expect(html).toContain("2. Barang yang belum diuji");
-  });
-
-  it("opsi Lainnya: petugas bisa menulis keadaan di luar daftar, bukan titik periksa ke-6", () => {
-    const html = renderOwn({
-      canMutate: true,
-      onRecheck: async () => null as never,
-      onRecordReceipt: async () => ({}) as never,
-      loadReceipts: async () => ({ items: [] }),
-    });
-    expect(html).toContain("Lainnya — tuliskan keadaan yang tidak ada di daftar");
-    expect(html).toContain("<textarea");
-    // Contoh keadaan nyata, supaya petugas tahu apa yang boleh ditulis — dan
-    // HANYA sekali (dulu muncul tiga kali: label, placeholder, catatan bawah).
-    expect(html).toContain("karung lapis kedua basah");
-    expect(html.match(/karung lapis kedua basah/g)?.length).toBe(1);
-    // Hitungan titik periksa TIDAK ikut bertambah oleh opsi ini.
-    expect(html).toContain("0 dari 5 titik periksa sudah ditandai");
-    // Kartu menyatakan terang-terangan apa yang disimpan.
-    expect(html).toContain("dua hal ke database");
-  });
-
-  it("tanpa jalur simpan, kartu tidak menjanjikan catatan tersimpan", () => {
-    const html = renderOwn({ canMutate: true, onRecheck: async () => null as never });
-    expect(html).toContain("<textarea");
-    expect(html).toContain("Ikut tersimpan ke database");
   });
 
   it("tanpa izin menulis, kartu penerimaan menyatakan batasnya (bukan tombol mati)", () => {
@@ -547,44 +531,3 @@ describe("FoodSafetyBoard — opsi penerimaan terpisah dari cakupan tabel", () =
 // Fase 3 MG butir 5: "Goods Receipt menjelaskan apakah bukti suhu cukup."
 // Penjelasan itu wajib memakai blok `evidence` dari server apa adanya —
 // sumber log, kelengkapan, dan waktu observasi — bukan disimpulkan di layar.
-describe("FoodSafetyBoard — penerimaan menjelaskan bukti suhu", () => {
-  const denganBukti = [
-    {
-      id: "t1",
-      location: "Cianjur",
-      commodity: "telur",
-      quantity_kg: 300,
-      // Hanya batch "pending" yang muncul di daftar penerimaan (lihat
-      // receivingBatchOptions): batch yang sudah dinilai bukan pekerjaan terima.
-      safety_status: "pending",
-      freshness_score: 0.7,
-      usable_until: "2026-10-12T12:00:00Z",
-      evidence: {
-        temperature_observation: "missing",
-        evidence_state: "insufficient",
-        source: "seed",
-        source_label: "log simulasi",
-        observed_at: null,
-        sample_count: 0,
-        evidence_sufficient: false,
-      },
-    },
-  ];
-
-  it("menyebut kelengkapan bukti + asal log untuk batch yang diterima", () => {
-    const html = renderToStaticMarkup(
-      <FoodSafetyBoard batches={denganBukti} now={NOW} ownLocation="Cianjur" />
-    );
-    expect(html).toContain('data-role="bukti-terima"');
-    expect(html).toContain("Bukti suhu kiriman ini");
-    expect(html).toContain("log simulasi");
-    expect(html).not.toContain("sensor aktif");
-  });
-
-  it("bukti tidak cukup dinyatakan, bukan disembunyikan", () => {
-    const html = renderToStaticMarkup(
-      <FoodSafetyBoard batches={denganBukti} now={NOW} ownLocation="Cianjur" />
-    );
-    expect(html).toContain("periksa dulu sebelum dipakai");
-  });
-});

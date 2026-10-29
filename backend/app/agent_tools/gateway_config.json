@@ -75,7 +75,7 @@
     },
     {
       "name": "cost.safe_delivered",
-      "description": "Safe Delivered Cost (formula Opsi A terkunci).",
+      "description": "Safe Delivered Cost (formula Opsi A terkunci). Wajib menyebut `commodity` (atau `shelf_life_days`): susut gudang dihitung dari umur simpan dan lama simpan, bukan dari kesegaran.",
       "method": "POST",
       "path": "/cost/safe-delivered",
       "target": {

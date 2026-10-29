@@ -95,18 +95,19 @@ describe("Decision & Evidence — blok biaya Fase 5", () => {
     const html = render();
     const po = blok(html, "po");
     const sdc = blok(html, "sdc");
-    expect(po).not.toContain("Expected loss");
+    expect(po).not.toContain("Susut gudang");
     expect(po).not.toContain("Penalti keamanan");
     expect(po).not.toContain("Rp 7.434.200");
     expect(sdc).not.toContain("Bahan");
   });
 
-  it("menampilkan referensi pasar sebagai pembanding harga bahan", () => {
+  it("menampilkan referensi pasar tanpa catatan pembanding", () => {
     const html = render();
     const po = blok(html, "po");
     expect(po).toContain("Referensi pasar");
     expect(po).toContain("Rp 31.000");
-    expect(po.toLowerCase()).toContain("pembanding");
+    // Catatan "pembanding bahan, bukan biaya PO" dihapus 29 Okt 2026.
+    expect(po.toLowerCase()).not.toContain("pembanding");
   });
 
   it("menulis tidak tercatat bila tidak ada acuan pasar — bukan Rp 0", () => {

@@ -174,7 +174,7 @@ export default function HumanReviewPanel({
           {bolehMeninjau
             ? tanpaCatatan
               ? null
-              : "Reviewer menambah bukti; status dihitung server."
+              : "Reviewer menambah bukti; status dihitung dari bukti."
             : "Peran ini hanya dapat melihat catatan review (read-only)."}
         </span>
       </div>

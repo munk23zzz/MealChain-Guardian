@@ -20,16 +20,13 @@ from decimal import Decimal
 
 from sqlalchemy import select
 
-from app.ai_providers.forecast_client import (
-    run_forecast,
-    sap_rpt_caller_from_env,
-)
 from app.ai_providers.verifier_client import run_verifier
 from app.core.config import settings
 from app.db import create_engine, create_session_maker
-from app.models import Commodity, Decision, DemandRecord, DemoSession, Location
+from app.models import Commodity, Decision, DemoSession, Location
 from app.services import recommendation_service as rs
 from app.services.agent_memory import catat_learn
+from app.services.forecast_service import forecast_kebutuhan
 from app.services.supervisor_client import run_supervisor
 from app.services.trace_persistence import persist_trace_steps
 
@@ -311,59 +308,48 @@ async def _run_event1(
         await persist_binding(session, decision, chosen["candidate"])
 
         # TRACE (rekaman langkah; step itu sendiri sudah berjalan di atas)
+        # Jumlah langkah diisi di AKHIR (lihat `steps_recorded` sebelum blok
+        # persist): angka 6 yang dulu ditulis tangan tidak sama dengan jumlah
+        # langkah nyata putaran ini.
         traces.append(
             _TraceStep(
                 "TRACE",
                 None,
                 {"decision_id": str(decision.id)},
-                {"steps_recorded": 6},
+                {},
             )
         )
 
-        # PREDICT: histori demand NYATA per (target, commodity) dari DB.
-        demand_rows = (
-            await session.execute(
-                select(DemandRecord)
-                .where(
-                    DemandRecord.location_id == decision.target_location_id,
-                    DemandRecord.commodity_id == decision.commodity_id,
-                )
-                .order_by(
-                    DemandRecord.recorded_at.asc(), DemandRecord.id.asc()
-                )
-            )
-        ).scalars().all()
-        history = [float(r.quantity_kg) for r in demand_rows]
-        if history:
-            forecast = run_forecast(
-                history,
-                horizon_days=FORECAST_HORIZON_DAYS,
-                # S4-10: provider NYATA bila env SAP AI Core lengkap; None
-                # (env kosong/tes terisolasi) → chain/statistik seperti sebelumnya.
-                sap_rpt=sap_rpt_caller_from_env(),
-            )
-            predict_out = {
-                "forecast_qty_kg": forecast.forecast_qty_kg,
-                "method": forecast.method,
-                "provider": forecast.provider,
-                "fallback_used": forecast.fallback_used,
-                "attempts": _attempt_dicts(forecast.attempts),
-            }
-        else:
-            predict_out = {
-                "forecast_qty_kg": None,
-                "method": "statistical_fallback",
-                "provider": None,
-                "fallback_used": True,
-                "attempts": [],
-                "note": "histori demand kosong; tanpa panggilan model",
-            }
+        # PREDICT: satu pintu peramalan (`services/forecast_service`) — jendela
+        # 28 hari tanpa baris masa depan, ambang minimum riwayat, cache, dan
+        # SAP-RPT-1.6 bila kredensial terisi. Dulu blok ini memakai SELURUH
+        # riwayat (termasuk baris bertanggal ke depan) dan memanggil model tanpa
+        # cache, sehingga berbeda dari endpoint /demand/forecast.
+        forecast = await forecast_kebutuhan(
+            session,
+            location_id=decision.target_location_id,
+            commodity_id=decision.commodity_id,
+            horizon_days=FORECAST_HORIZON_DAYS,
+        )
+        predict_out = {
+            "forecast_qty_kg": forecast.qty_kg,
+            "method": forecast.method,
+            "provider": forecast.source,
+            "source": forecast.source,
+            "fallback_used": forecast.fallback_used,
+            "sample_count": forecast.sample_count,
+            "cache_hit": forecast.cache_hit,
+            "reason": forecast.reason,
+            "attempts": _attempt_dicts(forecast.attempts),
+        }
+        if forecast.qty_kg is None:
+            predict_out["note"] = forecast.reason or "histori demand kosong; tanpa panggilan model"
         traces.append(
             _TraceStep(
                 "PREDICT",
                 "forecast.provider",
                 {
-                    "history_points": len(history),
+                    "history_points": forecast.sample_count,
                     "horizon_days": FORECAST_HORIZON_DAYS,
                 },
                 predict_out,
@@ -404,6 +390,14 @@ async def _run_event1(
         # decision tetap lahir)
         supervise_out = run_supervisor(
             {
+                # Id keputusan ikut supaya tool supervisor (cost/evidence)
+                # benar-benar bisa membaca data; tanpa ini agen hanya bertanya
+                # balik "saya memerlukan decision_id" (terukur 29 Okt 2026).
+                "decision_id": str(decision.id),
+                "batch_ids": chosen.get("batch_ids") if isinstance(chosen, dict) else None,
+                "supplier_id": (
+                    chosen.get("supplier_id") if isinstance(chosen, dict) else None
+                ),
                 "commodity": commodity,
                 "target_location": target_location,
                 "surplus": detect["surplus"],
@@ -419,16 +413,33 @@ async def _run_event1(
             "provider": supervise_out.provider,
             "fallback_used": supervise_out.fallback_used,
             "attempts": _attempt_dicts(supervise_out.attempts),
+            "decision_id": str(decision.id),
         }
-        if supervise_out.status == "narrated":
-            traces.append(
-                _TraceStep(
-                    "SUPERVISE",
-                    "supervisor.narration",
-                    {"decision_id": str(decision.id)},
-                    supervisor_payload,
-                )
+        # Tahap SUPERVISE SELALU dicatat, termasuk saat provider mati: baris
+        # yang hilang membuat panel 10 tahap tidak bisa membedakan "tidak
+        # diawasi" dari "tidak pernah jalan". Kegagalan dicatat sebagai fakta.
+        if supervise_out.status != "narrated":
+            supervisor_payload["note"] = (
+                "narasi tidak tersedia; tahap dicatat apa adanya tanpa mengarang "
+                "ringkasan"
             )
+        traces.append(
+            _TraceStep(
+                "SUPERVISE",
+                (
+                    "supervisor.narration"
+                    if supervise_out.status == "narrated"
+                    else f"supervisor.{supervise_out.status}"
+                ),
+                {"decision_id": str(decision.id)},
+                supervisor_payload,
+            )
+        )
+
+        # Jumlah langkah NYATA (dulu ditulis tangan 6 di baris TRACE).
+        for step in traces:
+            if step.step_name == "TRACE" and isinstance(step.output_summary, dict):
+                step.output_summary["steps_recorded"] = len(traces)
 
         for step in traces:
             persist_trace_steps(
@@ -454,6 +465,17 @@ async def _run_event1(
         # boleh berubah karena Memory (gerbang butir 6).
         # ------------------------------------------------------------------
         if _memory_write_aktif():
+            # Bahan LEARN (29 Okt 2026): pelajaran tidak cukup dari keputusan ini
+            # saja — agent juga membaca penolakan lain yang sudah tercatat untuk
+            # kota+komoditas yang sama (keputusan `rejected` manusia dan
+            # penerimaan yang ditolak saat serah terima).
+            from app.services.rejection_feedback import riwayat_penolakan
+
+            riwayat = await riwayat_penolakan(
+                session,
+                target_location_id=decision.target_location_id,
+                commodity_id=decision.commodity_id,
+            )
             memori = await asyncio.to_thread(
                 catat_learn,
                 f"{demo_session_id or 'sesi-lokal'}:{decision.id}",
@@ -467,6 +489,7 @@ async def _run_event1(
                     "safe_delivered_cost": chosen["safe_delivered_cost"],
                     "surplus": detect.get("surplus"),
                     "shortage": detect.get("shortage"),
+                    "penolakan_sebelumnya": riwayat,
                 },
             )
             persist_trace_steps(
@@ -476,7 +499,11 @@ async def _run_event1(
                     {
                         "step_name": "LEARN",
                         "tool_called": "agentcore.memory.write",
-                        "input_summary": {"key": "learn", "decision_id": str(decision.id)},
+                        "input_summary": {
+                            "key": "learn",
+                            "decision_id": str(decision.id),
+                            "riwayat_penolakan_dibaca": riwayat["jumlah"],
+                        },
                         "output_summary": memori,
                     }
                 ],

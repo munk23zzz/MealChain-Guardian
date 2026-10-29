@@ -2,9 +2,20 @@
 
 import { evidenceRowsFromDossier, type ComplianceDossier } from "../lib/evidence";
 import { safetyLabel } from "../lib/bahasa";
+import { formatDateTime } from "../lib/datetime";
 // Satuan diterjemahkan di satu tempat (WS-C): "percent" → "persen".
 import { unitLabel } from "./KPIDashboard";
 import styles from "./ComplianceEvidencePanel.module.css";
+
+/** Nama bukti dalam bahasa manusia — kunci backend tidak dicetak mentah. */
+const JENIS_BUKTI: Record<string, string> = {
+  human_inspection: "Pemeriksaan manusia",
+  temperature: "Suhu",
+  gps: "Lokasi GPS",
+  sap_purchase_order: "Pesanan pembelian (SAP)",
+  sap_goods_receipt: "Penerimaan barang (SAP)",
+  market_price: "Harga pasar",
+};
 
 export default function ComplianceEvidencePanel({ dossier }: { dossier: ComplianceDossier }) {
   const rows = evidenceRowsFromDossier(dossier);
@@ -26,11 +37,20 @@ export default function ComplianceEvidencePanel({ dossier }: { dossier: Complian
         <ul className={styles.list}>
           {rows.map((row) => (
             <li className={styles.item} key={row.id} data-testid="compliance-evidence-row">
-              <div><strong>{row.evidenceType}</strong> <span className={`${styles.status} ${styles[row.status.toLowerCase() as keyof typeof styles] ?? ""}`}>{row.status}</span></div>
+              {/* Kunci backend tidak dicetak mentah (audit 29 Okt 2026):
+                  "human_inspection"/"NEEDS_VERIFICATION" di layar terbaca
+                  sebagai bocoran istilah, bukan keterangan bukti. */}
+              <div>
+                <strong>{JENIS_BUKTI[row.evidenceType] ?? row.evidenceType.replace(/_/g, " ")}</strong>{" "}
+                <span className={`${styles.status} ${styles[row.status.toLowerCase() as keyof typeof styles] ?? ""}`}>
+                  {safetyLabel(row.status)}
+                </span>
+              </div>
               <div>Hasil: {row.reading === null ? "Belum diukur" : String(row.reading)}{unitLabel(row.unit) ? ` ${unitLabel(row.unit)}` : ""}</div>
               <small className={styles.small}>
-                Sumber: {row.source == null ? "Tidak tersedia" : String(row.source)} · Waktu: {row.recordedAt ?? "Tidak tersedia"}
-                {row.rule ? ` · Rule: ${String(row.rule)}` : ""}
+                Sumber: {row.source == null ? "Tidak tersedia" : String(row.source)} · Waktu:{" "}
+                {row.recordedAt ? formatDateTime(row.recordedAt) : "Tidak tersedia"}
+                {row.rule ? ` · Aturan: ${String(row.rule)}` : ""}
                 {row.consistency === false ? " · Konsistensi: tidak konsisten" : row.consistency === true ? " · Konsistensi: konsisten" : " · Konsistensi: Tidak tersedia"}
               </small>
             </li>

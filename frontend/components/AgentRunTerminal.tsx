@@ -56,9 +56,18 @@ export default function AgentRunTerminal({
 
   useEffect(() => {
     const badan = badanRef.current;
-    if (!badan || !ikut) return;
+    // Gulir otomatis hanya selama putaran BERJALAN. Log yang sudah selesai
+    // (dibaca dari jejak tersimpan) harus terbuka dari baris pertama: kalau
+    // ikut melompat ke dasar, langkah DETECT — awal proses yang justru ingin
+    // ditunjukkan — tidak pernah terlihat sekali pun.
+    if (!badan || !ikut || !aktif) return;
     badan.scrollTop = badan.scrollHeight;
-  }, [langkah.length, ikut]);
+  }, [langkah.length, ikut, aktif]);
+
+  // Satu set baris hampir selalu seragam: baris SSE selalu punya jam, baris
+  // jejak tersimpan tidak punya jam sama sekali. Kalau TIDAK ADA satu pun jam,
+  // kolomnya dilipat supaya log tidak menjorok 68 px dari tepi kiri.
+  const tanpaJam = langkah.length > 0 && langkah.every((l) => !l.at);
 
   const keadaan = galat ? "galat" : aktif ? "live" : langkah.length > 0 ? "selesai" : "siap";
   const label =
@@ -110,8 +119,20 @@ export default function AgentRunTerminal({
         {langkah.map((l, i) => {
           const sumber = sumberDari(l.tool);
           return (
-            <p className="dc-term-baris" key={`${l.step}-${l.at}-${i}`}>
-              <span className="dc-term-jam">{jamLangsung(l.at)}</span>
+            <p
+              className={`dc-term-baris${tanpaJam ? " dc-term-baris--tanpa-jam" : ""}`}
+              key={`${l.step}-${l.at}-${i}`}
+            >
+              {/* Jam hanya dicetak bila server mengirimnya. Baris yang dibaca
+                  dari jejak tersimpan tidak punya waktu per langkah; menulis
+                  "--.--.--" di setiap baris terbaca seperti log rusak. Bila
+                  hanya sebagian baris punya jam, yang kosong tetap memesan
+                  kolomnya supaya tepi kiri nama langkah lurus. */}
+              {l.at ? (
+                <span className="dc-term-jam">{jamLangsung(l.at)}</span>
+              ) : tanpaJam ? null : (
+                <span className="dc-term-jam dc-term-jam--kosong" aria-hidden="true" />
+              )}
               <span className="dc-term-langkah" title={l.tool ?? undefined}>
                 {l.step}
               </span>

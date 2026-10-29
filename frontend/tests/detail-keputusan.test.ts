@@ -106,11 +106,17 @@ describe("tigaLapisBiaya: tiga lapis, bukan tabel datar", () => {
     expect(hasil.lapis[1].baris.map((b) => b.label)).toEqual(["Logistik", "Penanganan"]);
   });
 
-  it("lapis 3 = susut + kesegaran + penalti", () => {
-    expect(hasil.lapis[2].judul).toBe("Tambahan karena risiko");
+  it("lapis 3 = susut gudang, dipisah dari risiko", () => {
+    expect(hasil.lapis[2].judul).toBe("Susut selama disimpan");
     expect(hasil.lapis[2].nilai).toBe("Rp88.305");
-    expect(hasil.lapis[2].baris.map((b) => b.label)).toEqual([
-      "Perkiraan susut",
+    expect(hasil.lapis[2].baris.map((b) => b.label)).toEqual(["Susut gudang"]);
+    // Rumus susut berbasis WAKTU, bukan kesegaran.
+    expect(hasil.lapis[2].baris[0].rumus).toContain("hari simpan");
+  });
+
+  it("lapis 4 = kesegaran + penalti keamanan (tanpa susut)", () => {
+    expect(hasil.lapis[3].judul).toBe("Tambahan karena risiko");
+    expect(hasil.lapis[3].baris.map((b) => b.label)).toEqual([
       "Risiko kesegaran",
       "Penalti keamanan",
     ]);

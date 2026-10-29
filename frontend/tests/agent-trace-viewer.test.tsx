@@ -30,8 +30,13 @@ describe("AgentTraceViewer — waktu langkah", () => {
     expect(html).toContain("—");
   });
 
-  it("waktu UTC normal tetap tercetak sebagai jam:menit:detik UTC", () => {
+  it("waktu langkah tercetak dengan tanggal + WIB, bukan jam saja", () => {
+    // Audit 29 Okt 2026: jam tanpa tanggal membuat langkah kemarin terbaca
+    // sebagai langkah hari ini. `LANGKAH_VALID.step_at` = 10 Okt 2026 18:16:47 Z
+    // = 11 Okt 2026 01.16 WIB.
     const html = renderToStaticMarkup(<AgentTraceViewer steps={[LANGKAH_VALID] as any} />);
-    expect(html).toContain("18:16:47 UTC");
+    // Tahun tidak dicetak karena sama dengan tahun berjalan (2026).
+    expect(html).toContain("11 Okt 01.16 WIB");
+    expect(html).not.toContain("18:16:47 UTC");
   });
 });

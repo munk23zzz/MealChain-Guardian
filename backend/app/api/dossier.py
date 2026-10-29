@@ -52,6 +52,13 @@ async def decision_dossier(
         "content_address": address,
         "signature": sig,
         "verify": None,
+        # Baris bukti ikut dikirim (audit 29 Okt 2026). Panel "Bukti kepatuhan
+        # tersimpan" menghitung dari sini; tanpa ini ia selalu menulis 0/0/0
+        # walaupun tabel decision_evidence berisi datanya. Address & tanda
+        # tangan di atas dihitung dari `dossier` penuh — yang memang sudah
+        # memuat evidence — jadi isi yang dikirim kini sama dengan yang
+        # ditandatangani.
+        "evidence": dossier.get("evidence", []),
     }
     if sig.get("state") == "signed":
         result["verify"] = verify_signature(

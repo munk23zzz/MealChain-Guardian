@@ -250,3 +250,27 @@ async def _hapus_sesi(db, *ids):
             .execution_options(demo_session_bypass=True)
         )
     await db.commit()
+def test_komputasi_murni_tidak_ikut_ditolak(akun_sppg):
+    """`/price/deviation` menghitung harga referensi, tidak menulis apa pun.
+
+    Tanpa pengecualian ini, worker Price selalu `degraded` setiap kali putaran
+    berjalan tanpa sesi aktif (terukur 29 Okt 2026: PUTARAN beras Bandung,
+    "HTTP 409 ... aksi tulis ditolak"), dan verdict verifier ikut turun ke
+    `flagged` karena satu advisory worker error. Gerbang sesi memagari MUTASI,
+    bukan komputasi.
+    """
+    h = {"Authorization": f"Bearer {akun_sppg['token']}"}
+    with TestClient(app) as client:
+        r0 = client.get("/demo/session", headers=h)
+        assert r0.status_code == 200
+        r = client.post(
+            "/price/deviation",
+            json={"location": "Bandung", "commodity": "beras", "supplier_price": "12200"},
+            headers=h,
+        )
+    assert r.status_code != 409, (
+        "endpoint komputasi murni tidak boleh dijawab pagar sesi: " + r.text
+    )
+    # Bila prasyarat data ada, jawabannya benar-benar berisi hitungan.
+    if r.status_code == 200:
+        assert "deviation_pct" in r.json()

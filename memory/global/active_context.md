@@ -526,3 +526,21 @@ Parameter `max_distance_km` + cakupan jarak di UI dijadikan fase tersendiri sete
   (ditelusuri ke `GET /suppliers?limit=200`).
 - Tombol "Hanya dalam jangkauan (31)" masih bekerja: pressed=true, catatan berubah, tabel menyusut,
   KPI tidak berubah.
+
+### Diperbarui 29 Okt 2026 — audit Keamanan Pangan (Ronde 64)
+
+- Keadaan batch tunggal: `safetyState()` (ditahan → gagal → kedaluwarsa → verifikasi → belum → aman)
+  dipakai lencana tabel, chip saringan, tile, dan ringkasan. Chip/tile tidak bisa lagi berbeda.
+- Tile "Kedaluwarsa" ( hanya dirender bila > 0 ) + lencana baris "Kedaluwarsa" merah; batch lewat
+  masa layak tidak lagi masuk "Aman".
+- Kaki kartu "Batch perlu perhatian": "batch dengan bukti atau kesegaran bermasalah" (bukan
+  "perlu tindakan").
+- Kepala kartu Ringkasan memuat label cakupan: "Seluruh jaringan" atau nama lokasi.
+- `hoursLabel` < 1 jam memakai menit.
+- Lingkaran permintaan berhenti: prop loader di `useRef` + `useCallback` di `app/page.tsx`;
+  `/receipts/menunggu` 15/10 dtk → 1/10 dtk.
+- `/balance/map` digabung selama permintaan berjalan: 8 → 4 panggilan per muat.
+- Angka live terakhir (Jakarta Head, data demo hasil penyemaian ulang): 133 batch · 10 lokasi ·
+  3 catatan menunggu · tile 106 aman / 2 gagal / 1 kedaluwarsa / 13 verifikasi / 4 belum / 0 ditahan
+  (saat uji keadaan kedaluwarsa disuntik lalu dipulihkan).
+- Suite penuh frontend 2.720 lulus · 4 gagal (berkas sesi lain); 19 tes backend lulus.

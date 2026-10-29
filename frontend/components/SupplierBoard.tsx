@@ -18,7 +18,9 @@
 
 import { useState } from "react";
 
-import PageHeader from "./PageHeader";
+import PageShell from "./PageShell";
+import { PAGE_TITLES } from "../lib/navigation";
+import { SUPPLIER_SECTION_IDS, supplierSections } from "../lib/section-jump";
 import SupplierSummary from "./SupplierSummary";
 import Pager from "./Pager";
 import ShipmentBoard from "./ShipmentBoard";
@@ -41,11 +43,7 @@ import {
   supplierDistanceReference,
   withinReachKm,
 } from "../lib/supplier-pins";
-import {
-  routeCellLabel,
-  routeCellTitle,
-  supplierRouteSummaries,
-} from "../lib/supplier-routes";
+import { supplierRoutes as barisRute } from "../lib/supplier-routes";
 
 /** Jarak baris ada di dalam ambang jangkauan (jarak tak diketahui = tidak diklaim dekat). */
 function jarakDalamJangkauan(
@@ -148,30 +146,43 @@ export default function SupplierBoard({
       ? (exclusions as { items?: unknown }).items
       : exclusions
   );
-  // Kolom "Jalur kirim": ringkasan per PEMASOK dari data jalur server. Baris
-  // pemasok tanpa kiriman aktif tidak punya jalur — selnya "—", bukan "0 km".
-  const jalurDimuat = supplierRoutes !== null && supplierRoutes !== undefined;
-  const jalurPerPemasok = supplierRouteSummaries(supplierRoutes);
+  // S1 (29 Okt 2026): pil ketiga menyebut jumlah KIRIMAN, bukan hanya pemasok.
+  // Dihitung dari payload yang sama dengan papan kiriman (bukan angka karangan),
+  // dan tidak dirender saat jalur belum dimuat — "0 kiriman" akan bohong.
+  const ruteDimuat = supplierRoutes !== null && supplierRoutes !== undefined;
+  const jumlahKiriman = ruteDimuat ? barisRute(supplierRoutes).length : null;
+  // Satu kalimat konteks menggantikan deskripsi dua baris yang mendaftar ulang
+  // isi halaman; daftar bagiannya sudah dibawa lima tautan di bawah judul.
+  const ringkasKepala =
+    reachKm !== null
+      ? `Pemasok jaringan SPPG Anda — ringkasan, kiriman aktif, daftar dalam jangkauan ${reachKm} km, dan register eksklusi.`
+      : "Pemasok jaringan SPPG Anda — ringkasan, kiriman aktif, daftar, dan register eksklusi.";
 
   return (
-    <section className="board-page" aria-busy={loading || undefined}>
-      <PageHeader
-        title="Pemasok"
-        description="Daftar pemasok di jaringan, kepercayaan, sebarannya di peta, register eksklusi, dan usul eksklusi baru."
-        meta={
-          <span className="page-header-pills">
-            <span className="commodity-pill">{metrics.suppliers} pemasok</span>
-            <span className="commodity-pill">{register.length} eksklusi</span>
-          </span>
-        }
-      />
+    <PageShell
+      className="board-page"
+      busy={loading}
+      title={PAGE_TITLES.suppliers}
+      description={ringkasKepala}
+      sections={supplierSections()}
+      jumpAriaLabel="Bagian halaman Suppliers"
+      meta={
+        <span className="page-header-pills">
+          <span className="commodity-pill">{metrics.suppliers} pemasok</span>
+          {jumlahKiriman !== null ? (
+            <span className="commodity-pill">{jumlahKiriman} kiriman</span>
+          ) : null}
+          <span className="commodity-pill">{register.length} eksklusi</span>
+        </span>
+      }
+    >
 
       {error ? (
         <article className="card">
           <h2>Tidak bisa memuat data pemasok</h2>
           <p className="evidence-note">
-            Data pemasok tidak bisa diambil dari server aplikasi saat ini. Coba muat
-            ulang; kalau masih gagal, periksa koneksi ke backend dan coba lagi.
+            Data pemasok tidak bisa dimuat saat ini. Coba muat ulang; kalau masih
+            gagal, periksa koneksi lalu coba lagi.
           </p>
           {onRetry ? (
             <button type="button" className="button button-secondary" onClick={onRetry}>
@@ -184,7 +195,7 @@ export default function SupplierBoard({
       {/* Ringkasan hanya dibaca (keputusan pemilik 29 Okt 2026): satu baris
           angka besar, tanpa tombol. Penyaring tetap satu — tombol "Hanya dalam
           jangkauan" di atas kolom cari, dekat tabel yang ia saring. */}
-      <div className="board-grid">
+      <div className="board-grid jump-target" id={SUPPLIER_SECTION_IDS.ringkasan}>
         <SupplierSummary
           metrics={metrics}
           reachKm={reachKm}
@@ -198,12 +209,19 @@ export default function SupplierBoard({
           di halaman ini (dan peran kolom teks "Jalur kirim"): papan sudah memuat
           semua angka itu per kiriman, dan menyimpan keduanya hanya akan menjadi
           dua penyaji data yang sama. */}
-      <ShipmentBoard
-        routes={supplierRoutes}
-        note="Satu baris per kiriman aktif di jaringan. Kolom Jalur kirim di tabel bawah meringkas jalur per pemasok."
-      />
+      <div className="jump-target" id={SUPPLIER_SECTION_IDS.kiriman}>
+        <ShipmentBoard
+          routes={supplierRoutes}
+          note="Satu baris per kiriman aktif. Angka jalur, waktu, dan mutu dibaca di sini, bukan di daftar pemasok."
+          // S3: kepala papan menawarkan jalan ke daftar; tanpa kiriman pun
+          // kartunya tetap tampil supaya jangkar "Kiriman" tidak menunjuk
+          // ruang kosong.
+          empty="Belum ada kiriman aktif di jaringan."
+          tautan={{ href: `#${SUPPLIER_SECTION_IDS.daftar}`, label: "Ke daftar pemasok" }}
+        />
+      </div>
 
-      <article className="card">
+      <article className="card jump-target" id={SUPPLIER_SECTION_IDS.daftar}>
         {/* Kepala kartu: judul kiri, pencarian kanan (permintaan pemilik 19 Okt
             2026). Kolom cari menyaring daftar yang SUDAH dimuat, sesudah
             penyaring jangkauan dan SEBELUM paginasi — angka kartu Ringkasan
@@ -213,20 +231,11 @@ export default function SupplierBoard({
           {/* Kepala kartu: judul + pil jumlah. Kolom cari pindah ke bilah di
               ATAS TABEL (permintaan pemilik 19 Okt 2026) supaya berdiri dekat
               daftar yang disaringnya, bukan di kepala kartu. */}
+          {/* S4: pil jumlah tinggal SATU — di bilah kontrol, dekat daftar yang
+              ia hitung. Dulu pil yang sama juga dicetak di sini, sehingga satu
+              angka tampil dua kali dan `id`-nya kembar. */}
           <div className="directory-title">
             <h2>Daftar pemasok</h2>
-            {directoryDimuat ? (
-              <span
-                id="cari-pemasok-status"
-                className={`count-pill${kueri.trim() ? " count-pill-active" : ""}`}
-                role="status"
-                aria-live="polite"
-              >
-                {kueri.trim()
-                  ? `${dicari.length} dari ${shownRows.length} cocok`
-                  : `${shownRows.length} pemasok`}
-              </span>
-            ) : null}
           </div>
         </div>
         {!directoryDimuat ? (
@@ -239,38 +248,11 @@ export default function SupplierBoard({
           <p className="evidence-note">Tidak ada pemasok yang terdaftar.</p>
         ) : (
           <>
-            {/* Urutan (permintaan pemilik 19 Okt 2026): penyaring jangkauan
-                lebih dulu — tombol "Hanya dalam jangkauan / Tampilkan semua
-                pemasok" berdiri TEPAT DI ATAS kolom cari — lalu ringkasan +
-                kolom cari, lalu tabel. Tidak ada bilah kosong di antaranya. */}
-            {reachKm !== null && metrics.outOfReach > 0 ? (
-              <p className="reach-filter">
-                <span className="reach-filter-note">
-                  {/* Kalimat ini mengikuti keadaan: tombolnya dulu menulis
-                      "Menyembunyikan …" bahkan saat penyaring MATI, sehingga
-                      tabel penuh terbaca seperti sudah disaring. */}
-                  {hanyaJangkauan
-                    ? `${metrics.suppliers - metrics.outOfReach} pemasok dalam ${reachKm} km${
-                        reference ? ` dari ${kodeWilayah(reference.location)}` : ""
-                      }; ${metrics.outOfReach} di luarnya disembunyikan, bukan dihapus.`
-                    : `${metrics.outOfReach} dari ${metrics.suppliers} pemasok berjarak di atas ${reachKm} km${
-                        reference ? ` dari ${kodeWilayah(reference.location)}` : ""
-                      }.`}
-                </span>
-                <button
-                  type="button"
-                  className="button button-secondary"
-                  aria-pressed={hanyaJangkauan}
-                  onClick={() => ubahJangkauan(!hanyaJangkauan)}
-                >
-                  {hanyaJangkauan
-                    ? "Tampilkan semua pemasok"
-                    : `Hanya dalam jangkauan (${metrics.suppliers - metrics.outOfReach})`}
-                </button>
-              </p>
-            ) : null}
-            <div className="board-summary-row">
-              <p className="evidence-note">{reachSummary}</p>
+            {/* S4 (29 Okt 2026) — SATU bilah kontrol. Sebelumnya tiga lapis:
+                baris penyaring jangkauan, baris ringkasan + kolom cari, dan pil
+                jumlah di kepala kartu. Kini satu baris: cari · jumlah hasil ·
+                penyaring jangkauan · keterangan cakupan. */}
+            <div className="directory-toolbar">
               <div className="board-search">
                 <label className="board-search-label" htmlFor="cari-pemasok">
                   Cari pemasok
@@ -309,7 +291,38 @@ export default function SupplierBoard({
                   ) : null}
                 </div>
               </div>
+              <span
+                id="cari-pemasok-status"
+                className={`count-pill${kueri.trim() ? " count-pill-active" : ""}`}
+                role="status"
+                aria-live="polite"
+              >
+                {kueri.trim()
+                  ? `${dicari.length} dari ${shownRows.length} cocok`
+                  : `${shownRows.length} pemasok`}
+              </span>
+              {reachKm !== null && metrics.outOfReach > 0 ? (
+                <button
+                  type="button"
+                  className="directory-reach-toggle"
+                  aria-pressed={hanyaJangkauan}
+                  onClick={() => ubahJangkauan(!hanyaJangkauan)}
+                >
+                  {hanyaJangkauan
+                    ? "Tampilkan semua pemasok"
+                    : `Hanya dalam jangkauan (${metrics.suppliers - metrics.outOfReach})`}
+                </button>
+              ) : null}
             </div>
+            <p className="directory-toolbar-note">
+              {/* Satu kalimat keadaan, mengikuti penyaring yang sedang aktif —
+                  dulu dua kalimat di dua baris berbeda. */}
+              {reachKm !== null && metrics.outOfReach > 0 && hanyaJangkauan
+                ? `${metrics.suppliers - metrics.outOfReach} pemasok dalam ${reachKm} km${
+                    reference ? ` dari ${kodeWilayah(reference.location)}` : ""
+                  }; ${metrics.outOfReach} di luarnya disembunyikan, bukan dihapus.`
+                : reachSummary}
+            </p>
             {dicari.length === 0 ? (
               <div className="board-search-empty">
                 {kueri.trim() ? (
@@ -341,7 +354,7 @@ export default function SupplierBoard({
             ) : (
             <>
             <div className="board-table-wrap">
-              <table className="location-table">
+              <table className="location-table directory-table">
                 <thead>
                   <tr>
                     <th scope="col">Pemasok</th>
@@ -349,20 +362,18 @@ export default function SupplierBoard({
                     <th scope="col" className="num">
                       Keandalan
                     </th>
-                    <th scope="col">Sertifikasi</th>
                     <th scope="col" className="num">
                       Jarak
                     </th>
+                    <th scope="col">Sertifikasi</th>
                     <th scope="col">Status</th>
-                    <th scope="col">Jalur kirim</th>
                   </tr>
                 </thead>
                 <tbody>
                   {halaman.items.map((row) => {
-                    const jalur = jalurPerPemasok.get(row.id) ?? null;
                     return (
                     <tr key={row.id}>
-                      <td>
+                      <td data-label="Pemasok">
                         {/* Hub & koordinat = baris sekunder di bawah nama (Fase 12c):
                             keduanya tetap terbaca penuh, tapi tidak lagi memakan dua
                             kolom dari sembilan. */}
@@ -371,8 +382,8 @@ export default function SupplierBoard({
                           <span className="cell-meta">{supplierMetaLine(row)}</span>
                         </span>
                       </td>
-                      <td>{row.commodity}</td>
-                      <td className="num">
+                      <td data-label="Komoditas">{row.commodity}</td>
+                      <td className="num" data-label="Keandalan">
                         {row.reliabilityMeter ? (
                           <span className="reliability-cell">
                             <span className="reliability-value">{row.reliabilityLabel}</span>
@@ -393,9 +404,9 @@ export default function SupplierBoard({
                           row.reliabilityLabel
                         )}
                       </td>
-                      <td>{row.certification}</td>
-                      <td className="num">{row.distanceLabel}</td>
-                      <td>
+                      <td className="num" data-label="Jarak">{row.distanceLabel}</td>
+                      <td data-label="Sertifikasi">{row.certification}</td>
+                      <td data-label="Status">
                         <span className="status-cell">
                         {row.excluded
                           ? `Dikecualikan di ${row.excludedScopes.join(", ")}`
@@ -433,18 +444,6 @@ export default function SupplierBoard({
                         ) : null}
                         </span>
                       </td>
-                      <td className="route-cell">
-                        {/* Jalur = rute JALAN kiriman pemasok ini (server). Sebelum
-                            data jalur dimuat selnya "…", bukan "—": "belum dimuat"
-                            dan "tidak punya jalur" adalah dua hal berbeda. */}
-                        {jalurDimuat ? (
-                          <span className="route-tag" title={routeCellTitle(jalur) ?? undefined}>
-                            {routeCellLabel(jalur)}
-                          </span>
-                        ) : (
-                          "…"
-                        )}
-                      </td>
                     </tr>
                     );
                   })}
@@ -471,8 +470,20 @@ export default function SupplierBoard({
         error={receiptError}
       />
 
-      <article className="card">
-        <h2>Register eksklusi</h2>
+      {/* S5 (29 Okt 2026) — register (baca) dan usul (tulis) jadi satu keluarga:
+          bentuk kepala sama dengan Riwayat penerimaan (judul + pil jumlah + satu
+          kalimat keadaan), dan di ≥1200 px keduanya berdampingan sehingga form
+          usul tidak lagi menjadi ekor halaman. */}
+      <div className="register-grid">
+      <article className="card jump-target" id={SUPPLIER_SECTION_IDS.register}>
+        <div className="card-header">
+          <div className="directory-title">
+            <h2>Register eksklusi</h2>
+            {registerDimuat && register.length > 0 ? (
+              <span className="count-pill">{register.length} catatan</span>
+            ) : null}
+          </div>
+        </div>
         {!registerDimuat ? (
           <p className="evidence-note">
             {loading
@@ -480,13 +491,26 @@ export default function SupplierBoard({
               : "Register eksklusi belum dimuat — data ini diambil saat tab Pemasok dibuka."}
           </p>
         ) : register.length === 0 ? (
-          <p className="evidence-note">
-            Tidak ada pemasok yang sedang dieksklusi dalam cakupan Anda.
-          </p>
+          <>
+            <p className="evidence-note">
+              Tidak ada pemasok yang sedang dieksklusi dalam cakupan Anda.
+            </p>
+            <p className="register-note">
+              Eksklusi maupun pemulihannya sama-sama lewat keputusan yang disetujui. Kotak usul di
+              samping adalah jalan masuknya.
+            </p>
+            <a className="button button-secondary" href={`#${SUPPLIER_SECTION_IDS.usul}`}>
+              Ajukan eksklusi
+            </a>
+          </>
         ) : (
           <>
+            <p className="register-note">
+              Tiap baris adalah keputusan yang sudah disetujui. Pemulihan tidak mengubah status
+              keamanan batch — ia hanya memulihkan hak pemasok.
+            </p>
             <div className="board-table-wrap">
-              <table className="location-table">
+              <table className="location-table register-table">
                 <thead>
                   <tr>
                     <th scope="col">Pemasok</th>
@@ -499,11 +523,11 @@ export default function SupplierBoard({
                 <tbody>
                   {register.map((row) => (
                     <tr key={row.id}>
-                      <td>{row.supplier}</td>
-                      <td>{row.reason}</td>
-                      <td>{exclusionStatusLabel(row.status)}</td>
-                      <td>{row.at}</td>
-                      <td>
+                      <td data-label="Pemasok">{row.supplier}</td>
+                      <td data-label="Alasan">{row.reason}</td>
+                      <td data-label="Status">{exclusionStatusLabel(row.status)}</td>
+                      <td data-label="Waktu">{row.at}</td>
+                      <td data-label="Keputusan">
                         <code>{row.decisionId.slice(0, 8)}</code>
                       </td>
                     </tr>
@@ -516,6 +540,7 @@ export default function SupplierBoard({
         )}
       </article>
 
+      <div className="jump-target" id={SUPPLIER_SECTION_IDS.usul}>
       {selectedDecisionId && supplierContext ? (
         <SupplierExclusionView
           key={selectedDecisionId}
@@ -542,6 +567,8 @@ export default function SupplierBoard({
           ) : null}
         </article>
       )}
-    </section>
+      </div>
+      </div>
+    </PageShell>
   );
 }

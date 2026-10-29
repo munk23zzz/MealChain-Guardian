@@ -184,15 +184,76 @@
   }
 }
 
+/* S6 (29 Okt 2026) — di bawah 760 px tabel ini menjadi kartu berlabel, sama
+ * dengan daftar pemasok dan papan kiriman. Sebelumnya ia dipaksa `min-width:
+ * 600px` sehingga di layar 360 px pembaca harus menggeser ke samping untuk
+ * melihat kolom Nilai — persis yang dilarang aturan layout. */
 @media (max-width: 760px) {
   .receipt-headline {
     font-size: var(--fs-1);
   }
 
-  /* Di layar sempit gulir terjadi DI DALAM bungkus tabel (pola yang sama dengan
-   * tabel lain di konsol); lebar minimum menjaga kolom tidak menjadi 40 px. */
   .supplier-receipts .receipt-table {
     table-layout: auto;
-    min-width: 600px;
+    min-width: 0;
+    font-size: var(--fs-2);
+  }
+
+  .supplier-receipts .receipt-table thead {
+    display: none;
+  }
+
+  .supplier-receipts .receipt-table,
+  .supplier-receipts .receipt-table tbody,
+  .supplier-receipts .receipt-table tr,
+  .supplier-receipts .receipt-table td {
+    display: block;
+    width: 100%;
+  }
+
+  .supplier-receipts .receipt-table tr {
+    margin-bottom: var(--space-2);
+    padding: var(--space-2) var(--space-3);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    background: var(--surface);
+  }
+
+  .supplier-receipts .receipt-table td {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: var(--space-3);
+    padding: 4px 0;
+    border: 0;
+    text-align: right;
+    white-space: normal;
+  }
+
+  .supplier-receipts .receipt-table td::before {
+    content: attr(data-label);
+    flex: 0 0 auto;
+    color: var(--ink-muted);
+    font-size: var(--fs-1);
+    font-weight: 600;
+    text-align: left;
+  }
+
+  /* Selama jadi judul kartu: tanpa label, rata kiri. */
+  .supplier-receipts .receipt-table td:first-child {
+    display: block;
+    padding: 0 0 var(--space-1);
+    text-align: left;
+    font-size: var(--fs-3);
+  }
+
+  .supplier-receipts .receipt-table td:first-child::before {
+    content: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .receipt-chip {
+    transition: none;
   }
 }

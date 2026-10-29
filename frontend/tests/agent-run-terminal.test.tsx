@@ -1,4 +1,5 @@
-// Terminal log "Proses pengambilan data" di blok Bukti agent (29 Okt 2026).
+// Terminal log "Proses pengambilan data" (blok 3 Demo Control; sejak 29 Okt 2026
+// blok itu TIDAK lagi memuat sembilan kartu agen).
 //
 // Ditulis MERAH lebih dulu: komponen `AgentRunTerminal` belum ada. Yang diuji
 // adalah keadaan yang dibaca operator, bukan kelas CSS: label siaran, jumlah

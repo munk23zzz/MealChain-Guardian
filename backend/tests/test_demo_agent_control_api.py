@@ -224,6 +224,49 @@ def test_commodities_daftar_dari_database(client, pemakai):
     assert "beras" in daftar
 
 
+def test_commodities_membawa_kasus_neraca_hari_ini(client, pemakai):
+    """Balasan `/demo/agent/commodities` menyebut KASUS tiap komoditas.
+
+    Panel demo memakai `bisa_dijalankan` untuk melabeli pilihan: menjalankan agent
+    pada komoditas yang justru surplus selalu berakhir 409, jadi statusnya harus
+    terbaca SEBELUM tombol ditekan (keputusan 29 Okt 2026 — demo bervariasi per
+    kasus, tanpa jalan buntu).
+    """
+    kepala = pemakai("sppg_head", "Jakarta")
+    resp = client.get("/demo/agent/commodities", headers=_login(client, kepala))
+    assert resp.status_code == 200, resp.text
+    isi = resp.json()
+    assert isi["location"] == "Jakarta"
+    kasus = {k["commodity"]: k for k in isi["kasus"]}
+    assert set(kasus) == set(isi["commodities"]), "tiap komoditas wajib punya baris kasus"
+    for k in kasus.values():
+        assert k["status"] in {"shortage", "surplus", "balanced", "tanpa_data"}
+        assert k["bisa_dijalankan"] is (k["status"] == "shortage")
+        if k["status"] == "shortage":
+            assert k["shortage_kg"] > 0
+        elif k["status"] == "surplus":
+            assert k["sebab"], "surplus wajib menjelaskan kenapa agent tidak dijalankan"
+
+
+def test_kasus_komoditas_sepakat_dengan_balance(client, pemakai):
+    """Label kasus di panel demo = angka `/balance` untuk pasangan yang sama.
+
+    Dua tempat menghitung sendiri adalah dua kebenaran; tes ini menutup celah itu:
+    status dan kg kekurangan/surplus harus identik dengan halaman balance.
+    """
+    kepala = pemakai("sppg_head", "Jakarta")
+    headers = _login(client, kepala)
+    isi = client.get("/demo/agent/commodities", headers=headers).json()
+    for k in isi["kasus"]:
+        if k["status"] == "tanpa_data":
+            continue
+        bal = client.get(f"/balance/{isi['location']}/{k['commodity']}", headers=headers)
+        assert bal.status_code == 200, bal.text
+        assert bal.json()["status"] == k["status"]
+        assert bal.json()["shortage_kg"] == k["shortage_kg"]
+        assert bal.json()["surplus_kg"] == k["surplus_kg"]
+
+
 # --- bukti (last run) ------------------------------------------------------
 
 

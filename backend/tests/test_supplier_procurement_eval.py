@@ -26,7 +26,7 @@ from sqlalchemy import select
 
 from app.core.config import settings
 from app.db import create_engine, create_session_maker
-from app.models import Batch, DemandRecord, Location, Supplier, SupplyRecord
+from app.models import Batch, Commodity, DemandRecord, Location, Supplier, SupplyRecord
 from app.services.supplier_procurement import evaluate_suppliers
 
 
@@ -183,3 +183,67 @@ def test_peringkat_deterministik_dan_layak(telur_jakarta):
             kunci_lama = (Decimal(str(sebelum["score"])),)
             assert kunci_baru <= kunci_lama
         sebelum = baris
+
+
+# ---------------------------------------------------------------------------
+# Penerimaan harus lewat manusia: batch yang SUDAH diterima tidak boleh dipilih
+# ---------------------------------------------------------------------------
+
+
+def _batch_sudah_diterima(commodity: str) -> set[uuid.UUID]:
+    """Batch di Jakarta/komoditas itu yang punya penerimaan `disetujui`."""
+    from app.models import BatchReceipt
+
+    async def _isi():
+        engine = create_engine(settings.database_url)
+        maker = create_session_maker(engine)
+        async with maker() as session:
+            jakarta = (
+                await session.execute(select(Location).where(Location.name == "Jakarta"))
+            ).scalar_one()
+            komoditas = (
+                await session.execute(
+                    select(Commodity).where(Commodity.name == commodity)
+                )
+            ).scalar_one()
+            return set(
+                (
+                    await session.execute(
+                        select(BatchReceipt.batch_id)
+                        .join(Batch, Batch.id == BatchReceipt.batch_id)
+                        .where(
+                            BatchReceipt.status == "disetujui",
+                            Batch.location_id == jakarta.id,
+                            Batch.commodity_id == komoditas.id,
+                        )
+                    )
+                )
+                .scalars()
+                .all()
+            )
+
+    return asyncio.run(_isi())
+
+
+@pytest.mark.parametrize("komoditas", ["telur", "beras", "wortel", "ayam"])
+def test_batch_sudah_diterima_tidak_dijadikan_kandidat(komoditas):
+    """Kasus baru tidak boleh menunjuk barang yang riwayatnya sudah "diterima".
+
+    Tanpa gerbang ini layar menampilkan barang tiba sendiri padahal tidak ada
+    manusia yang menyetujui penerimaan untuk kasus itu (terukur 30 Okt 2026:
+    keputusan wortel `pending_approval` sudah berstatus terima), dan approval
+    penerimaannya jadi mustahil karena DB hanya mengizinkan satu disetujui/batch.
+    """
+    hasil = _jalankan("Jakarta", komoditas)
+    terlarang = _batch_sudah_diterima(komoditas)
+    dipilih = hasil["chosen"]
+    if dipilih is None:
+        pytest.skip(f"tidak ada kandidat untuk {komoditas}")
+    terikat = {uuid.UUID(str(b)) for b in dipilih["batch_ids"]}
+    assert not (terikat & terlarang), (
+        f"{komoditas}: batch yang sudah diterima ikut dipilih: {terikat & terlarang}"
+    )
+    # Alasan penolakan tetap dibaca manusia, bukan dibuang diam-diam.
+    for kandidat in hasil["candidates"]:
+        if set(kandidat.get("batch_ids") or ()) & {str(b) for b in terlarang}:
+            assert any("sudah diterima" in r for r in kandidat["reasons"]), kandidat

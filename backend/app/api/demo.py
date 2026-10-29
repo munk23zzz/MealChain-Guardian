@@ -33,6 +33,7 @@ import uuid
 from collections.abc import Sequence
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timedelta, timezone
+from decimal import Decimal
 from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
@@ -42,7 +43,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import delete, func, or_, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.auth import issue_token_for_user, require_roles
+from app.api.auth import require_roles
 from app.api.demo_session import butuh_sesi_aktif
 from app.api.dependencies import get_db
 from app.core.config import settings
@@ -59,6 +60,7 @@ from app.models import (
     Location,
     PriceSignal,
     Supplier,
+    SupplyRecord,
     User,
 )
 from app.seed.timeseries import (
@@ -71,14 +73,12 @@ from app.seed.timeseries import (
     purge_demo_rows,
     validate_range,
 )
-from app.services import agent_progress, agent_review_local
-from app.services.agent_review_client import AgentReviewResult, review_decision
+from app.services import agent_progress, agent_review_hook
 from app.services.demo_cost import hitung_biaya_demo
 from app.services.demo_procurement_orchestrator import (
     run_supplier_procurement,
 )
 from app.services.event1_orchestrator import run_event1
-from app.services.trace_persistence import persist_agent_review
 
 router = APIRouter()
 
@@ -1761,151 +1761,13 @@ async def _jalankan_agent_review(
 ) -> dict:
     """Review opsional setelah decision dibuat; kegagalan tidak membatalkan 201.
 
-    Dua jalur yang benar-benar berbeda, dipilih `AGENT_REVIEW_MODE`:
-
-    - `local`  → orkestrator IN-PROSES dari repo ini (`agent/orchestrator.py`).
-      Dipakai saat runtime AgentCore yang ter-deploy bisa tertinggal dari repo;
-      kode yang mengaudit adalah kode yang diuji di sini.
-    - lainnya (`advisory`/`predecision`/`agentcore`/kosong) → runtime AgentCore
-      lewat `AGENTCORE_RUNTIME_ARN`, yaitu perilaku lama (default aman).
+    Implementasinya ada di `services/agent_review_hook` supaya `POST /decisions`
+    memakai perilaku yang sama. Nama ini dipertahankan karena tes lama
+    (monkeypatch) menunjuk ke sini.
     """
-    disabled = {"status": "disabled", "run_id": None}
-    if not settings.multi_agent_review:
-        return disabled
-
-    decision_id = outcome.get("decision_id")
-    if not isinstance(decision_id, str) or not decision_id.strip():
-        return {"status": "failed", "run_id": None}
-
-    jalur = agent_review_local.transport(settings.agent_review_mode)
-    if jalur == "local":
-        # Review lokal membaca API dengan identitas PEMANGGIL (bukan token
-        # layanan berumur panjang): cakupan peran tetap ditegakkan endpoint.
-        if user is None:
-            result = AgentReviewResult(
-                status="unavailable",
-                error="user pemanggil tidak tersedia untuk token review lokal",
-            )
-        else:
-            try:
-                token = issue_token_for_user(user)
-            except Exception as exc:  # noqa: BLE001 - JWT_SECRET hilang dsb.
-                result = AgentReviewResult(
-                    status="unavailable",
-                    error=f"token review lokal gagal dibuat: {type(exc).__name__}",
-                )
-            else:
-                # Model berlatensi detik (verifier memanggilnya sekali); beri
-                # anggaran lebih lega daripada jalur runtime, tetap berbatas.
-                anggaran = float(
-                    min(max(settings.agent_review_timeout_seconds, 30), 120)
-                )
-                result = await run_in_threadpool(
-                    agent_review_local.review_decision_local,
-                    decision_id,
-                    token=token,
-                    mode=settings.agent_review_mode,
-                    timeout_seconds=anggaran,
-                )
-    else:
-        timeout = float(min(max(settings.agent_review_timeout_seconds, 1), 45))
-        try:
-            result = await run_in_threadpool(
-                review_decision, decision_id, timeout_seconds=timeout
-            )
-        except Exception:
-            result = AgentReviewResult(status="failed", error="review client gagal")
-
-    if not isinstance(result, AgentReviewResult):
-        result = AgentReviewResult(status="failed", error="review client tidak valid")
-
-    if result.completed:
-        # P5: simpan 7 baris worker + SUPERVISE agar Agent Log bisa menampilkan
-        # satu putaran review. Bila payload tidak lengkap, catat kegagalan —
-        # jangan menulis 7 baris yang tidak berasal dari runtime.
-        await _catat_review_sukses(db, decision_id, result)
-    else:
-        # Kegagalan/ timeout dicatat jujur sebagai SUPERVISE; tidak ada 7 row palsu.
-        await _catat_review_gagal(db, decision_id, result)
-
-    return {
-        "status": result.status,
-        "run_id": result.run_id,
-    }
+    return await agent_review_hook.jalankan_agent_review(db, outcome, user=user)
 
 
-async def _catat_review_sukses(
-    db: AsyncSession, decision_id: str, result: AgentReviewResult
-) -> None:
-    """Persist 9 baris review (7 worker + verifier + SUPERVISE) atau 8 dari runtime lama.
-
-    Kegagalan penyimpanan tidak membatalkan Event 1.
-    """
-    rows = (result.payload or {}).get("trace_rows")
-    if not isinstance(rows, list) or len(rows) not in (8, 9):
-        await _catat_review_gagal(
-            db,
-            decision_id,
-            AgentReviewResult(
-                status="failed",
-                run_id=result.run_id,
-                error="payload trace review tidak lengkap (wajib 9 baris)",
-            ),
-        )
-        return
-    try:
-        await persist_agent_review(
-            db, decision_id=decision_id, trace_rows=rows
-        )
-        await db.commit()
-    except Exception as exc:
-        try:
-            await db.rollback()
-        except Exception:
-            pass
-        await _catat_review_gagal(
-            db,
-            decision_id,
-            AgentReviewResult(
-                status="failed",
-                run_id=result.run_id,
-                error=f"trace review gagal disimpan: {type(exc).__name__}",
-            ),
-        )
-
-
-async def _catat_review_gagal(
-    db: AsyncSession, decision_id: str, result: AgentReviewResult
-) -> None:
-    """Tulis satu baris SUPERVISE best-effort; decision tetap ada."""
-    try:
-        import uuid
-
-        decision_uuid = uuid.UUID(decision_id)
-        if await db.get(Decision, decision_uuid) is None:
-            return
-        db.add(
-            AgentTrace(
-                decision_id=decision_uuid,
-                step_name="SUPERVISE",
-                tool_called="agent.review",
-                input_summary={"task": "review_decision"},
-                output_summary={
-                    "status": result.status,
-                    "run_id": result.run_id,
-                    "error": result.error,
-                },
-            )
-        )
-        await db.commit()
-    except Exception:
-        try:
-            await db.rollback()
-        except Exception:
-            pass
-
-
-# ---------------------------------------------------------------------------
 # Demo Control sederhana (keputusan Roy 2026-10-19).
 #
 # Tab Demo Control dipakai untuk MEMBUKTIKAN agent berjalan, bukan untuk memilih
@@ -2076,7 +1938,17 @@ async def run_demo_agent(
             outcome = await run_in_threadpool(_jalankan_pengadaan, diminta)
         except ValueError as exc:
             # Tidak ada kandidat eligible = keadaan data, bukan kerusakan server.
-            raise HTTPException(status_code=409, detail=str(exc)) from exc
+            # Pesannya DILENGKAPI neraca hari ini supaya operator tahu kasusnya
+            # (mis. "surplus, jadi tidak ada yang perlu dibeli"), bukan sekadar
+            # "tidak ada kandidat eligible" tanpa angka.
+            kasus = None
+            com = (
+                await db.execute(select(Commodity).where(Commodity.name == diminta))
+            ).scalar_one_or_none()
+            if com is not None:
+                kasus = await _kasus_komoditas(db, lokasi, com)
+            sebab = f" [{kasus['status']}: {kasus['sebab']}]" if kasus and kasus.get("sebab") else ""
+            raise HTTPException(status_code=409, detail=f"{exc}{sebab}") from exc
         komoditas_utama = diminta
         dibuat = [{"commodity": diminta, "decision_id": outcome["decision_id"]}]
         dilewati: list[dict] = []
@@ -2310,22 +2182,114 @@ async def stream_demo_agent(
     )
 
 
+async def _kasus_komoditas(
+    db: AsyncSession,
+    lokasi: Location,
+    com: Commodity,
+    *,
+    batas: datetime | None = None,
+) -> dict:
+    """Neraca TERAKHIR (bukan proyeksi) satu komoditas di lokasi ini.
+
+    Dipakai dua tempat yang harus sepakat: label kasus di dropdown Demo Control
+    dan kalimat 409 saat agent tidak menemukan kandidat. Rumusnya
+    `calculate_supply_gap` — sama dengan `/balance` — jadi "surplus" di panel demo
+    tidak mungkin berbeda dari halaman balance.
+    """
+    from app.core.gaps import calculate_supply_gap
+
+    batas = batas or datetime.now(timezone.utc)
+
+    async def _terakhir(model):
+        return (
+            await db.execute(
+                select(model)
+                .where(
+                    model.location_id == lokasi.id,
+                    model.commodity_id == com.id,
+                    model.recorded_at <= batas,
+                )
+                .order_by(model.recorded_at.desc(), model.id.desc())
+                .limit(1)
+            )
+        ).scalar_one_or_none()
+
+    baris_s = await _terakhir(SupplyRecord)
+    baris_d = await _terakhir(DemandRecord)
+    if baris_s is None and baris_d is None:
+        return {
+            "commodity": com.name,
+            "status": "tanpa_data",
+            "supply_kg": None,
+            "demand_kg": None,
+            "gap_kg": None,
+            "shortage_kg": None,
+            "surplus_kg": None,
+            "bisa_dijalankan": False,
+            "sebab": "belum ada baris pasokan/kebutuhan untuk lokasi ini",
+        }
+    gap = calculate_supply_gap(
+        Decimal(str(baris_s.quantity_kg)) if baris_s is not None else Decimal("0"),
+        Decimal(str(baris_d.quantity_kg)) if baris_d is not None else Decimal("0"),
+    )
+    bisa = gap.shortage_kg > 0
+    return {
+        "commodity": com.name,
+        "status": gap.status,
+        "supply_kg": float(gap.supply_kg),
+        "demand_kg": float(gap.demand_kg),
+        "gap_kg": float(gap.shortage_kg)
+        if gap.status == "shortage"
+        else -float(gap.surplus_kg),
+        "shortage_kg": float(gap.shortage_kg),
+        "surplus_kg": float(gap.surplus_kg),
+        "bisa_dijalankan": bisa,
+        "sebab": None
+        if bisa
+        else (
+            f"pasokan {float(gap.supply_kg):.0f} kg >= kebutuhan "
+            f"{float(gap.demand_kg):.0f} kg — tidak ada yang perlu dibeli"
+        ),
+    }
+
+
 @router.get("/demo/agent/commodities")
 async def list_agent_commodities(
     db: AsyncSession = Depends(get_db),
-    _user: User = Depends(require_roles("sppg_head", "sppg_nutritionist")),
+    user: User = Depends(require_roles("sppg_head", "sppg_nutritionist")),
 ) -> dict:
-    """Pilihan dropdown komoditas — nama yang ADA di database, bukan daftar karangan.
+    """Pilihan dropdown komoditas BESERTA kasus yang akan dihasilkannya.
 
-    Panel demo tidak boleh menawarkan komoditas yang tidak punya data: memilihnya
-    hanya akan berakhir `409 tidak ada kandidat eligible`.
+    Panel demo tidak boleh menawarkan komoditas yang tidak punya data — memilihnya
+    hanya berakhir `409 tidak ada kandidat eligible`. Karena itu balasan ini
+    membawa dua bentuk:
+
+    * `commodities` — daftar nama (kontrak lama yang dipakai dropdown).
+    * `kasus` — satu baris per komoditas: neraca pasokan/kebutuhan hari ini,
+      `status` (`shortage`/`surplus`/`balanced`/`tanpa_data`), dan
+      `bisa_dijalankan` (true hanya kalau ada kekurangan yang perlu dibeli).
+
+    Angka diambil dari baris TERAKHIR yang sudah terjadi (bukan proyeksi) dan
+    dihitung dengan `calculate_supply_gap` — rumus yang sama dengan `/balance`,
+    supaya label kasus di panel demo tidak pernah berbeda dari halaman balance.
     """
     nama = (
         (await db.execute(select(Commodity.name).order_by(Commodity.name)))
         .scalars()
         .all()
     )
-    return {"commodities": list(nama)}
+    lokasi = await _lokasi_akun(db, user)
+    batas = datetime.now(timezone.utc)
+
+    kasus = [
+        await _kasus_komoditas(db, lokasi, com, batas=batas)
+        for com in (
+            (await db.execute(select(Commodity).order_by(Commodity.name)))
+            .scalars()
+            .all()
+        )
+    ]
+    return {"commodities": list(nama), "location": lokasi.name, "kasus": kasus}
 
 
 @router.get("/demo/agent/last-run")

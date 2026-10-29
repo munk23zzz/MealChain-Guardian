@@ -6,8 +6,6 @@ yang dibuang, dan janji bahwa siaran tidak pernah menggagalkan putaran.
 
 from __future__ import annotations
 
-import queue
-
 from app.services import agent_progress
 from app.services.demo_procurement_orchestrator import _TraceStep
 

@@ -1,0 +1,220 @@
+// TAHAP 6 redesign Decision & Evidence (29 Okt 2026): blok JEJAK & INTEGRITAS.
+//
+// Yang dipaku:
+//   1. jejak dirangkai `auditTimeline` (iterasi keluarga → pengajuan → verifikasi
+//      → keputusan orang), bukan disusun ulang di komponen;
+//   2. blok PO hanya menampilkan PO milik keputusan ini, dan "belum termuat"
+//      TIDAK boleh tercetak sebagai "belum ada PO";
+//   3. tanpa sesi, blok integritas tidak memanggil API dan mengatakannya;
+//   4. tidak ada angka/verdict/tanda tangan yang dikarang di blok ini.
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+
+import { renderToStaticMarkup } from "react-dom/server";
+import { describe, expect, it } from "vitest";
+
+import DecisionTraceIntegrity from "../components/DecisionTraceIntegrity";
+
+const css = readFileSync(join(__dirname, "../app/evidence-dossier.css"), "utf8");
+
+const SELECTED = {
+  decision_id: "9e0cb1fb-4e59-409e-8d30-0c85add1ead0",
+  status: "pending_approval",
+  iteration: 2,
+  created_at: "2026-10-11T02:00:00Z",
+  proposed_by: "supervisor_agent",
+  verified_by: "verifier_agent",
+  verifier_note: "consistent",
+};
+
+const SUMMARY = {
+  verifier: { verified_by: "verifier_agent", verdict: "consistent" },
+  approvals: [
+    { role: "kepala_sppg", approved: true, approved_at: "2026-10-11T03:00:00Z" },
+    { role: "ahli_gizi_sppg", approved: null, approved_at: null },
+  ],
+};
+
+const CHAIN = [
+  {
+    decision_id: "86cad754-e175-49da-96ca-a0250ad81cb7",
+    iteration: 1,
+    status: "rejected",
+    rejection_reason: "stok tidak cukup",
+    created_at: "2026-10-10T01:00:00Z",
+  },
+];
+
+function html(
+  over: {
+    selected?: Record<string, unknown>;
+    summary?: unknown;
+    chain?: unknown;
+    token?: string | null;
+    purchaseOrders?: unknown;
+  } = {}
+) {
+  return renderToStaticMarkup(
+    <DecisionTraceIntegrity
+      selected={{ ...SELECTED, ...(over.selected ?? {}) } as never}
+      summary={"summary" in over ? over.summary : SUMMARY}
+      chain={"chain" in over ? over.chain : CHAIN}
+      token={over.token ?? null}
+      purchaseOrders={"purchaseOrders" in over ? over.purchaseOrders : []}
+    />
+  );
+}
+
+function blok(out: string, kunci: "jejak" | "po" | "integritas"): string {
+  const i = out.indexOf(`data-block="${kunci}"`);
+  if (i < 0) return "";
+  const j = out.indexOf("</article>", i);
+  return out.slice(i, j < 0 ? out.length : j);
+}
+
+describe("jejak & riwayat", () => {
+  it("merangkai iterasi lama, pengajuan, verifikasi, dan keputusan orang", () => {
+    const j = blok(html(), "jejak");
+    // iterasi lama dari /chain
+    expect(j).toContain("v1 diajukan");
+    expect(j).toContain("ditolak");
+    expect(j).toContain("alasan: stok tidak cukup");
+    // pengajuan iterasi sekarang
+    expect(j).toContain("v2 diajukan");
+    // verifikasi
+    expect(j).toContain("Diverifikasi");
+    // keputusan orang: hanya baris yang punya keputusan biner
+    expect(j).toContain("Disetujui");
+    expect(j.match(/Menunggu/g) ?? []).toHaveLength(0);
+  });
+
+  it("menyebut jumlah catatan apa adanya", () => {
+    const j = blok(html(), "jejak");
+    // 1 iterasi lama + pengajuan + verifikasi + 1 persetujuan = 4
+    expect(j).toContain("4 catatan");
+    expect(j).not.toContain("bertanda masalah");
+  });
+
+  it("menandai masalah hanya bila memang ada", () => {
+    const out = html({
+      summary: {
+        approvals: [
+          { role: "kepala_sppg", approved: false, approved_at: "2026-10-11T03:00:00Z" },
+        ],
+      },
+    });
+    expect(out).toContain("bertanda masalah");
+  });
+
+  it("tanpa jejak tidak mengarang catatan", () => {
+    const out = html({ selected: { created_at: null, iteration: null }, summary: {}, chain: [] });
+    const j = blok(out, "jejak");
+    expect(j).toContain("Belum ada jejak");
+  });
+});
+
+describe("PO keputusan ini", () => {
+  it("daftar PO belum termuat dikatakan belum termuat, bukan 'belum ada PO'", () => {
+    const p = blok(html({ purchaseOrders: undefined }), "po");
+    expect(p).toContain("belum termuat");
+    expect(p).not.toContain("Belum ada PO untuk keputusan ini");
+  });
+
+  it("daftar termuat tanpa PO keputusan ini → sebabnya disebut", () => {
+    const p = blok(html({ purchaseOrders: [] }), "po");
+    expect(p).toContain("Belum ada PO untuk keputusan ini");
+    expect(p).not.toContain("belum termuat");
+  });
+
+  it("hanya PO milik keputusan ini yang tampil", () => {
+    const p = blok(
+      html({
+        purchaseOrders: [
+          {
+            po_number: "PO-2026-0007",
+            decision_id: SELECTED.decision_id,
+            status: "draft",
+            created_at: "2026-10-11T04:00:00Z",
+          },
+          {
+            po_number: "PO-2026-9999",
+            decision_id: "keputusan-lain",
+            status: "confirmed",
+            created_at: "2026-10-11T05:00:00Z",
+          },
+        ],
+      }),
+      "po"
+    );
+    expect(p).toContain("PO-2026-0007");
+    expect(p).not.toContain("PO-2026-9999");
+  });
+
+  it("status PO dicetak sebagai tahap, bukan kode mentah", () => {
+    const p = blok(
+      html({
+        purchaseOrders: [
+          {
+            po_number: "PO-2026-0007",
+            decision_id: SELECTED.decision_id,
+            status: "draft",
+            created_at: "2026-10-11T04:00:00Z",
+          },
+        ],
+      }),
+      "po"
+    );
+    expect(p).not.toContain(">draft<");
+  });
+});
+
+describe("integritas bukti", () => {
+  it("tanpa sesi tidak memanggil API dan mengatakannya", () => {
+    const i = blok(html({ token: null }), "integritas");
+    expect(i).toContain("butuh sesi yang sudah masuk");
+    expect(i).not.toContain("Memeriksa rantai");
+    expect(i).not.toContain("integrity-panel");
+    expect(i).not.toContain("Memuat");
+  });
+
+  it("dengan sesi, panel integritas yang sudah ada yang dipakai", () => {
+    const i = blok(html({ token: "tok" }), "integritas");
+    expect(i).toContain('data-testid="integrity-panel"');
+    expect(i).toContain("Integritas Bukti");
+  });
+});
+
+describe("bentuk seksi", () => {
+  it("judul seksi dan urutan tiga blok", () => {
+    const out = html();
+    expect(out).toContain("Jejak &amp; integritas");
+    const jejak = out.indexOf('data-block="jejak"');
+    const po = out.indexOf('data-block="po"');
+    const integritas = out.indexOf('data-block="integritas"');
+    expect(jejak).toBeGreaterThan(-1);
+    expect(po).toBeGreaterThan(jejak);
+    expect(integritas).toBeGreaterThan(po);
+  });
+
+  it("tidak menulis angka biaya atau verdict karangan di seksi ini", () => {
+    const out = html();
+    expect(out).not.toContain("Rp");
+    expect(out).not.toContain("sah");
+  });
+
+  it("CSS: jejak penuh, PO & integritas berdampingan hanya dari 900 px", () => {
+    expect(css).toMatch(/\.dash-trace \{[^}]*display: grid/);
+    const pair = css.slice(css.indexOf(".trace-pair {"));
+    expect(pair.slice(0, pair.indexOf("}"))).toContain("grid-template-columns: minmax(0, 1fr)");
+    const media = css.slice(css.indexOf("@media (min-width: 900px)"));
+    expect(media.slice(0, 200)).toContain(".trace-pair");
+    expect(media.slice(0, 200)).toContain("1.15fr");
+  });
+
+  it("CSS: kartu integritas tidak menjadi bingkai di dalam bingkai", () => {
+    const mulai = css.indexOf('.trace-block[data-block="integritas"] .integrity-panel {');
+    const isi = css.slice(mulai, css.indexOf("}", mulai));
+    expect(isi).toContain("border: 0");
+    expect(isi).toContain("box-shadow: none");
+  });
+});

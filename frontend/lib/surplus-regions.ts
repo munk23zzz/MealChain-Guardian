@@ -12,6 +12,17 @@
 // - baris tanpa nama wilayah atau dengan kg tidak valid dibuang (tidak ada NaN
 //   di lebar batang);
 // - urutan wilayah menurun, mengikuti besaran surplus.
+import { formatKg } from "./overview-format";
+
+/**
+ * Angka kg tanpa satuan, untuk chip yang satuannya sudah disebut sekali di
+ * labelnya ("Dari komoditas (kg)"). Mengulang "kg" di setiap chip memakan
+ * ~17 px per chip, dan empat chip jadi tidak muat satu baris di kartu 434 px —
+ * akibatnya satu pil terbuang sendirian ke baris kedua.
+ */
+export function formatKgTanpaSatuan(value: number | string | null | undefined): string {
+  return formatKg(value).replace(/\s*kg$/, "");
+}
 
 export type SurplusKomoditas = { commodity: string; surplusKg: number };
 
@@ -181,6 +192,149 @@ export function regionSharePct(kg: number, terbesar: number): number {
   return Math.round(Math.min(100, (nilai / skala) * 100) * 100) / 100;
 }
 
+/**
+ * Satu kolom BAR VERTIKAL untuk panel surplus (30 Okt 2026).
+ *
+ * Kenapa bentuknya kolom, bukan baris: kartu ini duduk bersebelahan dengan
+ * "Kecukupan pasokan" yang juga berupa kolom. Dua kartu satu baris wajib
+ * memakai SATU bahasa grafik, kalau tidak pembaca harus menafsirkan dua
+ * geometri berbeda untuk pertanyaan yang sama ("berapa, dibanding apa").
+ *
+ * Kenapa SEMUA wilayah digambar (termasuk yang di bawah ambang): batang baris
+ * lama menyembunyikan wilayah kecil ke satu kalimat karena batang 0,5 kg tidak
+ * terlihat. Di kolom, wilayah kecil tetap kecil — dan justru itu informasinya.
+ * Ambang kirim tetap terbaca lewat nada pucat + catatan "di bawah ambang",
+ * jadi tidak ada wilayah yang hilang diam-diam.
+ */
+export type SurplusColumn = {
+  key: string;
+  label: string;
+  /** kg surplus wilayah — angka server, tanpa pembulatan ulang. */
+  surplusKg: number;
+  /** Tinggi batang 0–100 terhadap wilayah terbesar (skalanya satu untuk kartu). */
+  fillPct: number;
+  /** Nilai yang dicetak di atas batang. */
+  value: string;
+  /** Nilai yang sama tanpa satuan "kg" — untuk angka di tengah cincin. */
+  valueTanpaSatuan: string;
+  /** Baris kecil di bawah nama wilayah. */
+  note: string;
+  /** Seluruh surplus wilayah ini di bawah ambang kirim. */
+  belowThreshold: boolean;
+  /** Lencana "terbesar" — hanya berguna bila ada pembanding. */
+  badge: string | null;
+  /** Kalimat lengkap untuk pembaca layar & tooltip. */
+  aria: string;
+};
+
+/**
+ * Irisan donat "komposisi komoditas" untuk panel surplus (31 Okt 2026).
+ *
+ * Kenapa per KOMODITAS, bukan per wilayah: pemilik meminta satu diagram dengan
+ * warna berbeda per komoditas. Warna komoditas sudah punya arti tetap di seluruh
+ * aplikasi (titik pil di peta, legenda, chip), jadi memakainya di donat membuat
+ * satu warna = satu komoditas di mana pun pembaca melihatnya.
+ *
+ * Angka tetap milik server: kg dijumlahkan dari `by_commodity` per wilayah,
+ * tanpa pembulatan ulang. Bila komoditas lebih banyak dari `batas`, sisanya
+ * digabung menjadi satu irisan "Lainnya" supaya donat tidak jadi cakram tipis.
+ */
+export type SurplusSlice = {
+  key: string;
+  label: string;
+  kg: number;
+  /** Warna identitas komoditas (kelas .sr-komod-*). */
+  toneClass: string;
+  /** Pangsa terhadap total kartu, 0–100, 2 desimal. */
+  sharePct: number;
+  /** true untuk irisan gabungan "Lainnya". */
+  gabungan: boolean;
+};
+
+export function surplusCommoditySlices(
+  view: RegionSurplusView,
+  batas = 5
+): SurplusSlice[] {
+  const jumlah = new Map<string, number>();
+  for (const wilayah of view.regions) {
+    for (const komoditas of wilayah.byCommodity) {
+      const nama = String(komoditas.commodity ?? "").trim();
+      const kg = angka(komoditas.surplusKg);
+      if (!nama || kg === null || kg <= 0) continue;
+      jumlah.set(nama, (jumlah.get(nama) ?? 0) + kg);
+    }
+  }
+
+  const total = [...jumlah.values()].reduce((a, b) => a + b, 0);
+  if (total <= 0) return [];
+
+  const urut = [...jumlah.entries()].sort((a, b) => b[1] - a[1]);
+  const utama = urut.slice(0, Math.max(1, batas));
+  const sisa = urut.slice(Math.max(1, batas));
+
+  const irisan: SurplusSlice[] = utama.map(([nama, kg], index) => ({
+    key: nama,
+    label: nama,
+    kg,
+    toneClass: komoditasToneClass(nama, index),
+    sharePct: Math.round((kg / total) * 10_000) / 100,
+    gabungan: false,
+  }));
+
+  if (sisa.length) {
+    const kg = sisa.reduce((a, b) => a + b[1], 0);
+    irisan.push({
+      key: "__lainnya",
+      label: `Lainnya (${sisa.length})`,
+      kg,
+      toneClass: "sr-komod-netral",
+      sharePct: Math.round((kg / total) * 10_000) / 100,
+      gabungan: true,
+    });
+  }
+
+  return irisan;
+}
+
+export function surplusColumns(view: RegionSurplusView): SurplusColumn[] {
+  const terbesar = view.regions[0]?.surplusKg ?? 0;
+  return view.regions.map((wilayah, index) => {
+    const belowThreshold = view.minKg !== null && (wilayah.layakKg ?? 0) <= 0;
+    const komoditas = wilayah.byCommodity
+      .map((c) => `${c.commodity} ${formatKg(c.surplusKg)}`)
+      .join(", ");
+    const layak =
+      wilayah.layakKg !== null && wilayah.layakKg > 0 && wilayah.layakKg !== wilayah.surplusKg
+        ? `${formatKg(wilayah.layakKg)} layak dialihkan`
+        : null;
+    return {
+      key: wilayah.region,
+      label: wilayah.region,
+      surplusKg: wilayah.surplusKg,
+      fillPct: regionSharePct(wilayah.surplusKg, terbesar),
+      value: formatKg(wilayah.surplusKg),
+      // Nilai yang sama tanpa " kg" — dipakai di tengah cincin, dengan satuan
+      // dicetak sekali di bawahnya. Angka tetap milik server (tanpa pembulatan).
+      valueTanpaSatuan: formatKg(wilayah.surplusKg).replace(/\s*kg$/, ""),
+      note: belowThreshold
+        ? `${wilayah.locations} lokasi · di bawah ambang`
+        : `${wilayah.locations} lokasi`,
+      belowThreshold,
+      badge: index === 0 && view.regions.length > 1 ? "terbesar" : null,
+      aria: [
+        `${wilayah.region}: surplus ${formatKg(wilayah.surplusKg)}${layak ? `, ${layak}` : ""}`,
+        `${wilayah.locations} lokasi sumber (${sumberRingkas(wilayah, 3)})`,
+        belowThreshold && view.minKg !== null
+          ? `seluruh surplusnya di bawah ambang ${formatKg(view.minKg)}`
+          : null,
+        komoditas ? `rincian komoditas ${komoditas}` : "rincian komoditas belum tersedia",
+      ]
+        .filter(Boolean)
+        .join(". "),
+    };
+  });
+}
+
 /** Indeks warna komoditas — stabil per daftar, berputar untuk nama asing. */
 export function komoditasTone(daftar: readonly string[], nama: string): number {
   const index = daftar.indexOf(nama);
@@ -210,6 +364,17 @@ const KELUARGA_KOMODITAS: Record<string, string> = {
 export function komoditasKeluarga(nama: string): string | null {
   const kunci = String(nama).trim().toLowerCase();
   return KELUARGA_KOMODITAS[kunci] ?? null;
+}
+
+/**
+ * Kelas warna IDENTITAS untuk satu komoditas (memakai `--sr-komod`).
+ * Empat komoditas kanonik dapat warnanya sendiri (docs/design.md: telur amber,
+ * ayam rose, beras biru, wortel violet); nama asing memakai indeks urutan daftar
+ * supaya tetap berbeda warna tanpa mengarang arti baru.
+ */
+export function komoditasToneClass(nama: string, index = 0): string {
+  const keluarga = komoditasKeluarga(nama);
+  return `sr-komod-${keluarga ?? index % 4}`;
 }
 
 /** "Cianjur, Bogor +1" — sumber teratas, sisanya disebut sebagai jumlah. */

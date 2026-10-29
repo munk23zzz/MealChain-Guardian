@@ -106,6 +106,9 @@ def _client_sebagai(user: User | None) -> TestClient:
     if user is None:
         app.dependency_overrides.pop(get_current_user, None)
     else:
+        # Identitas palsu harus menyatakan dirinya SESI MANUSIA — guard
+        # `require_sesi_manusia` menolak token layanan agen (AUD-006).
+        setattr(user, "_token_typ", "user")
         app.dependency_overrides[get_current_user] = lambda: user
     return TestClient(app)
 

@@ -167,10 +167,20 @@ def summarize_temperature_log(
     ordered = sorted(sah, key=lambda s: s.timestamp)
     observed_minutes = 0.0
     outside_minutes = 0.0
-    for prev, curr in zip(ordered, ordered[1:]):
+    jumlah_interval = len(ordered) - 1
+    for posisi, (prev, curr) in enumerate(zip(ordered, ordered[1:])):
         duration = (curr.timestamp - prev.timestamp).total_seconds() / 60.0
         observed_minutes += duration
-        if prev.temperature_c < safe_min_c or prev.temperature_c > safe_max_c:
+        prev_luar = prev.temperature_c < safe_min_c or prev.temperature_c > safe_max_c
+        curr_luar = curr.temperature_c < safe_min_c or curr.temperature_c > safe_max_c
+        # Audit 2026-10-29 (AUD-007): interval dinilai dari `prev` — aturan lama,
+        # dan angka kalibrasi freshness/safety bergantung padanya. Yang BOCOR
+        # adalah sampel terakhir: ia tidak pernah menjadi `prev`, sehingga log
+        # yang memanas di ujung perjalanan (…5 °C, 20 °C) menghasilkan
+        # outside_minutes == 0 dan lolos gerbang. Karena itu interval TERAKHIR
+        # juga dihitung bila ujungnya di luar rentang — tanpa mengubah interval
+        # lain, supaya spike satu sampel tidak terhitung dua kali.
+        if prev_luar or (posisi == jumlah_interval - 1 and curr_luar):
             outside_minutes += duration
     return TemperatureSummary(
         observed_minutes=observed_minutes,

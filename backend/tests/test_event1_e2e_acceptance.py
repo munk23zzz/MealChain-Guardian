@@ -65,11 +65,22 @@ def test_event1_e2e_propose_approve_execute_mock_sap(client):
         # supervisor hop: decision nyata + verifier jujur (tanpa provider)
         assert outcome["decision_snapshot"]["status"] == "proposed"
         assert outcome["verifier"]["verdict"] == "UNAVAILABLE"
-        # trace tersimpan = langkah aktual
+        # trace tersimpan = langkah aktual.
+        # 29 Okt 2026: SUPERVISE kini SELALU tercatat, termasuk saat provider
+        # tidak ada — dulu baris ini hanya ditulis bila status `narrated`,
+        # sehingga panel 10 tahap kehilangan satu tahap tanpa jejak. Status
+        # kegagalannya dibaca dari `tool_called`/`output_summary`, bukan dari
+        # hilangnya baris.
         steps = _trace_rows(decision_id)
         assert [s["step_name"] for s in steps] == [
-            "DETECT", "VERIFY", "TRACE", "PREDICT", "OPTIMIZE", "DECIDE",
+            "DETECT", "VERIFY", "TRACE", "PREDICT", "OPTIMIZE", "DECIDE", "SUPERVISE",
         ]
+        supervise = steps[-1]
+        assert supervise["tool_called"] in {
+            "supervisor.unavailable",
+            "supervisor.error",
+            "supervisor.narration",
+        }
         assert all("LEARN" not in s["step_name"] for s in steps)
 
         head_h = _login(client, head)

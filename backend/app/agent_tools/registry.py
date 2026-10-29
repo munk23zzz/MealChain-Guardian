@@ -44,7 +44,11 @@ _TOOL_DESCRIPTIONS = {
     "price.deviation": "Deviasi harga supplier vs referensi PIHPS (5%/15%).",
     "logistics.estimate": "Estimasi jarak/waktu/kelayakan rute (deterministik).",
     "evidence.fuse": "Perakitan evidence audit dari snapshot rekomendasi.",
-    "cost.safe_delivered": "Safe Delivered Cost (formula Opsi A terkunci).",
+    "cost.safe_delivered": (
+        "Safe Delivered Cost (formula Opsi A terkunci). Wajib menyebut `commodity` "
+        "(atau `shelf_life_days`): susut gudang dihitung dari umur simpan dan lama "
+        "simpan, bukan dari kesegaran."
+    ),
     "balance.recommend": "Rekomendasi balancing + ranking deterministik penuh.",
     "actions.propose": "Ajukan decision untuk approval manusia (tanpa eksekusi).",
 }

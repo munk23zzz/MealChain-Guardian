@@ -19,22 +19,16 @@ describe("login polish", () => {
     expect(html).not.toContain("50 km");
   });
 
-  it("akun demo kota lain tersedia: Bandung & Surabaya (label saja)", () => {
-    // Keputusan produk 3A: approver per kota supaya alur approval bisa
-    // didemokan di luar Jakarta.
-    expect(html).toContain("Kepala Bandung");
-    expect(html).toContain("Gizi Bandung");
-    expect(html).toContain("Kepala Surabaya");
-    expect(html).toContain("Gizi Surabaya");
-    expect(html).toContain("Kota lain:");
-    // Email demo tidak dipajang di login (visual lebih bersih).
-    expect(html).not.toContain("demo.local");
-  });
-
-  it("tiga akun demo utama tetap ada untuk klik-isi cepat", () => {
-    expect(html).toContain("SPPG Head");
-    expect(html).toContain("Nutritionist");
-    expect(html).toContain("BGN Monitor");
+  it("tanpa blok akun demo: form hanya email, sandi, dan tombol Masuk", () => {
+    // Permintaan pemilik 29 Okt 2026: seluruh blok demo dihapus dari login
+    // (label "Demo:", "Kota lain:", dan pemberitahuan sandi manual). Kredensial
+    // dibagikan di luar layar, bukan dicetak di halaman publik.
+    expect(html).not.toContain("demo-block");
+    expect(html).not.toContain("demo-link");
+    expect(html).not.toContain("Kota lain:");
+    expect(html).not.toContain("SPPG Head");
+    expect(html).not.toContain("Nutritionist");
+    expect(html).not.toContain("Sandi demo tidak dikirim");
     expect(html).not.toContain("demo.local");
   });
 

@@ -6,6 +6,10 @@ Kontrak (rencana Fase 5, dipakai Fase 9):
   pernah masuk invoice; PO menagih barang dan logistik, bukan kerugian internal.
 - `sdc_total = invoice_total + expected_loss + freshness_risk + safety_penalty`
   (enam komponen). SDC adalah biaya analitis untuk membandingkan pilihan.
+  `expected_loss` kini SUSUT GUDANG (`loss_in_storage`) = harga beli × laju
+  susut × (hari simpan ÷ umur simpan) — fungsi WAKTU, bukan kesegaran
+  (konsep Performance & Audit, 29 Okt 2026). Nama kunci dipertahankan supaya
+  payload lama tetap terbaca; artinya bukan lagi `(1 − kesegaran)`.
 - `risk_method` menyebut dasar bobotnya: `simulated_policy` (bobot demo),
   `calibrated_model` (hanya bila benar-benar ada kalibrasi), atau `unavailable`
   (tidak ada dasar). Tidak ada jalur yang diam-diam mengubah bobot demo menjadi

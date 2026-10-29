@@ -21,7 +21,7 @@ const CATATAN: { label: string; text: string }[] = [
   },
   {
     label: "Review bukti batch",
-    text: "Reviewer menambah bukti; status dihitung server.",
+    text: "Reviewer menambah bukti; status dihitung dari bukti.",
   },
 ];
 

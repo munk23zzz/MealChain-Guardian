@@ -1,0 +1,214 @@
+/* Donat komposisi komoditas — kartu "Kecukupan pasokan" & "Surplus wilayah lain"
+ * (31 Okt 2026). Satu diagram, satu warna per komoditas.
+ *
+ * Kontrak bentuk:
+ *   .cd-body    donat + legenda berdampingan (menumpuk di kartu sempit)
+ *   .cd-arc     satu irisan; warnanya dari kelas .sr-komod-* (--sr-komod)
+ *   .cd-track   lingkaran dasar pucat, penanda "seluruhnya"
+ *   .cd-legend  baris angka: titik warna, nama, catatan
+ *
+ * Kenapa legenda wajib: warna hanya boleh jadi penguat. Porsi terbaca dari
+ * legenda (nama + angka), bukan dari sudut atau warna saja.
+ */
+
+.cd-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+  min-width: 0;
+}
+
+.cd-body {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  gap: 20px;
+  min-width: 0;
+  /* Kelompok donat+legenda dipusatkan sebagai satu kesatuan, bukan direntang
+     selebar kartu: donat di tengah-kiri, keterangan di samping kanannya. */
+  width: max-content;
+  max-width: 100%;
+  margin-inline: auto;
+}
+
+/* Kartu sempit: donat di atas, legenda di bawah — tetap di tengah. */
+@container (max-width: 420px) {
+  .ov-pasokan-grid .cd-body {
+    flex-direction: column;
+    gap: 10px;
+    width: 100%;
+  }
+}
+
+.cd-donut {
+  position: relative;
+  width: 156px;
+  max-width: 100%;
+  aspect-ratio: 1;
+  flex: none;
+}
+
+.cd-donut svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.cd-track {
+  fill: none;
+  stroke: var(--surface-sunken);
+  stroke-width: 13;
+}
+
+.cd-arc {
+  fill: none;
+  /* Warna identitas komoditas; jatuh ke garis kuat bila kelas tak ditemukan. */
+  stroke: var(--sr-komod, var(--line-strong));
+  stroke-width: 13;
+  transition: stroke-dasharray 420ms cubic-bezier(0.22, 0.8, 0.24, 1);
+}
+
+.cd-total {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0;
+  pointer-events: none;
+  text-align: center;
+}
+
+.cd-total-angka {
+  color: var(--ink);
+  font-size: var(--fs-5);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.05;
+  max-width: 84%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Satuan 12 px (lantai tipografi), tinta tersier 5,4:1. */
+.cd-total-unit {
+  color: var(--ink-subtle);
+  font-size: var(--fs-1);
+  font-weight: 600;
+}
+
+.cd-legend {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  min-width: 0;
+  flex: 0 0 224px;
+  width: 224px;
+  max-width: 224px;
+}
+
+.cd-row {
+  display: grid;
+  grid-template-columns: 10px minmax(0, 1fr) auto;
+  align-items: baseline;
+  gap: 8px;
+  padding: 3px 0;
+  border-bottom: 1px solid var(--line-soft);
+}
+
+/* Baris legenda yang bisa diklik (pilih komoditas di peta). Tombol mengisi
+   seluruh lebar baris — kolom titik/nama/nilai dikelola grid dalam tombol. */
+.cd-pick {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: 10px minmax(0, 1fr) auto;
+  align-items: baseline;
+  gap: 8px;
+  width: 100%;
+  padding: 3px 4px;
+  margin: -3px -4px;
+  border: 0;
+  border-radius: var(--radius-control-sm);
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.cd-pick:hover {
+  background: var(--surface-sunken);
+}
+
+.cd-pick:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.cd-row:last-child {
+  border-bottom: 0;
+}
+
+/* Titik warna komoditas: 10 px, jadi butuh warna penuh (kontras ≥3:1). */
+.cd-dot {
+  display: block;
+  width: 10px;
+  height: 10px;
+  border-radius: var(--radius-chip);
+  background-color: var(--sr-komod, var(--line-strong));
+  align-self: center;
+}
+
+.cd-name {
+  color: var(--ink);
+  font-size: var(--fs-1);
+  font-weight: 600;
+  text-transform: capitalize;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cd-note {
+  color: var(--ink-muted);
+  font-size: var(--fs-1);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.cd-caption {
+  margin: 0;
+  color: var(--ink-subtle);
+  font-size: var(--fs-1);
+  line-height: 1.3;
+  text-align: center;
+}
+
+/* Baris wilayah di bawah donat: donat memakai warna komoditas, jadi nama
+   wilayah harus tetap disebut di sini. 12 px, tinta 4,5:1. */
+.cd-wilayah {
+  margin: 0;
+  padding-top: 6px;
+  border-top: 1px solid var(--line-soft);
+  color: var(--ink-muted);
+  font-size: var(--fs-1);
+  line-height: 1.35;
+  text-align: center;
+}
+
+.cd-wrap + .cd-wilayah {
+  margin-top: 8px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cd-arc {
+    transition: none;
+  }
+}

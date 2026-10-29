@@ -83,6 +83,12 @@ export type ForecastView = {
   methodLabel: string;
   confidence: number | null;
   confidenceLabel: string;
+  /** Sumber angka dari server: `"SAP-RPT-1.6"`, `"statistical_fallback"`, atau null. */
+  source: string | null;
+  /** Terjemahan sumber untuk dibaca ("SAP-RPT-1.6" / "cadangan statistik"). */
+  sourceLabel: string;
+  /** True bila server menyatakan sudah turun ke cadangan. */
+  fallbackUsed: boolean;
   /** Kalimat jujur ketika dasarnya tipis atau angkanya tidak ada. */
   note: string | null;
 };
@@ -161,6 +167,18 @@ function methodLabel(method: string | null): string {
   return method;
 }
 
+/** Terjemahan sumber angka; nama asing diteruskan apa adanya. */
+function sourceLabel(source: string | null): string {
+  if (!source) return "sumber tidak dilaporkan";
+  const s = source.trim().toLowerCase();
+  if (s === "statistical_fallback") return "cadangan statistik";
+  if (s === "provider_forecast") return "perkiraan penyedia";
+  // Nama model ditulis apa adanya: juri perlu tahu angkanya dari model, bukan
+  // dari rata-rata berbobot.
+  if (s.startsWith("sap-rpt")) return "SAP-RPT-1.6";
+  return source.trim();
+}
+
 /**
  * Membaca balasan `GET /demand/forecast/{loc}/{com}` menjadi kartu keempat.
  *
@@ -174,19 +192,32 @@ export function buildForecastView(raw: Record<string, unknown> | null | undefine
     (raw.forecast_qty_kg ?? raw.quantity_kg ?? null) as number | string | null
   );
   const method = typeof raw.method === "string" && raw.method.trim() ? raw.method.trim() : null;
+  const source = typeof raw.source === "string" && raw.source.trim() ? raw.source.trim() : null;
+  const fallbackUsed = raw.fallback_used === true;
+  const reason = typeof raw.reason === "string" && raw.reason.trim() ? raw.reason.trim() : null;
   const confidence = toNumber(raw.confidence as number | string | null);
   const horizonDays = toNumber(raw.horizon_days as number | string | null) ?? HORIZON_HARI;
 
-  const tipis = confidence !== null && confidence < 1;
+  // "Keyakinan < 1 = dasar tipis" itu aturan CADANGAN statistik (kurang dari 3
+  // catatan → 0,67). Untuk keluaran model, `confidence` adalah probabilitas
+  // model, jadi tidak boleh dibaca sebagai "dasar tipis".
+  const sumberModel = source !== null && /^sap-rpt/i.test(source);
+  const tipis = !sumberModel && confidence !== null && confidence < 1;
   const confidenceLabel = tipis
     ? "dasar tipis"
     : confidence === null
       ? "keyakinan tidak dilaporkan"
-      : "keyakinan penuh";
+      : sumberModel
+        ? `keyakinan ${(confidence * 100).toFixed(1)}%`
+        : "keyakinan penuh";
 
   let note: string | null = null;
   if (tipis) note = "dasar tipis — kurang dari 3 catatan permintaan, jadi arahnya lebih pasti daripada angkanya.";
   else if (quantityKg === null) note = "tidak ada angka perkiraan dari server.";
+  // Cadangan yang dipakai karena model gagal bukan hal kecil: ia disebut, supaya
+  // angka statistik tidak terbaca sebagai keluaran SAP-RPT.
+  else if (fallbackUsed && source !== "statistical_fallback")
+    note = `cadangan statistik dipakai${reason ? `: ${reason}` : "."}`;
 
   return {
     quantityKg,
@@ -195,6 +226,9 @@ export function buildForecastView(raw: Record<string, unknown> | null | undefine
     methodLabel: methodLabel(method),
     confidence,
     confidenceLabel,
+    source,
+    sourceLabel: sourceLabel(source),
+    fallbackUsed,
     note,
   };
 }

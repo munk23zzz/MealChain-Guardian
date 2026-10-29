@@ -46,12 +46,18 @@ describe("CSS riwayat penerimaan", () => {
     );
   });
 
-  it("layar sempit kembali ke lebar otomatis + gulir di dalam bungkus", () => {
+  // S6 (29 Okt 2026) — dulu di ≤760 px tabel ini dipaksa `min-width: 600px`
+  // sehingga layar 360 px harus menggeser ke samping. Sekarang ia jadi kartu
+  // berlabel, pola yang sama dengan daftar pemasok dan papan kiriman.
+  it("layar sempit: kartu berlabel, tanpa lebar minimum paksa", () => {
     const mobile = css.lastIndexOf("@media (max-width: 760px)");
     expect(mobile).toBeGreaterThan(css.indexOf("table-layout: fixed"));
     const pecahan = css.slice(mobile);
     expect(pecahan).toContain("table-layout: auto");
-    expect(pecahan).toContain("min-width: 600px");
+    expect(pecahan).not.toContain("min-width: 600px");
+    expect(pecahan).toMatch(/receipt-table thead \{[^}]*display: none/);
+    expect(pecahan).toContain("content: attr(data-label)");
+    expect(pecahan).toMatch(/receipt-table td \{[^}]*white-space: normal/);
   });
 
   it("radius hanya dari skala token (bukan angka mentah)", () => {

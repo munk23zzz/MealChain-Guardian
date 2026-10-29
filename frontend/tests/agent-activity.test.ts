@@ -45,13 +45,14 @@ function blok(action: string, height = 12): LedgerBlockView {
 }
 
 describe("daftar tahap", () => {
-  it("sembilan tahap, urutan pipeline, bukan urutan abjad", () => {
+  it("sepuluh tahap, urutan pipeline, bukan urutan abjad", () => {
     expect(PIPELINE_STAGES.map((s) => s.code)).toEqual([
       "DETECT",
       "VERIFY",
       "TRACE",
       "PREDICT",
       "OPTIMIZE",
+      "ANALYZE",
       "DECIDE",
       "SUPERVISE",
       "ACT",
@@ -70,7 +71,7 @@ describe("daftar tahap", () => {
 describe("buildPipeline — keadaan tiap tahap", () => {
   it("trace belum dimuat: SEMUA tahap 'not_loaded', bukan 'absent'", () => {
     const stages = buildPipeline({ steps: null, ledger: null });
-    expect(stages).toHaveLength(9);
+    expect(stages).toHaveLength(10);
     expect(stages.every((s) => s.state === "not_loaded")).toBe(true);
   });
 
@@ -170,20 +171,24 @@ describe("penanda langkah lambat", () => {
 });
 
 describe("ringkasan strip", () => {
-  it("menghitung tahap yang punya jejak dari sembilan", () => {
+  // Pipeline kini SEPULUH tahap (ANALYZE masuk antara PREDICT dan DECIDE,
+  // 29 Okt 2026). Angka di ringkasan mengikuti panjang PIPELINE_STAGES, bukan
+  // konstanta di tes — menambah tahap tidak boleh diam-diam lolos.
+  it("menghitung tahap yang punya jejak dari sepuluh", () => {
     const stages = buildPipeline({
       steps: [step("DETECT", 0), step("VERIFY", 1)],
       ledger: [blok("execute")],
     });
     const ringkas = pipelineSummary(stages);
-    expect(ringkas).toContain("3 dari 9");
+    expect(ringkas).toContain(`3 dari ${PIPELINE_STAGES.length}`);
+    expect(PIPELINE_STAGES.length).toBe(10);
   });
 
-  it("belum dimuat tidak ditulis 0 dari 9", () => {
+  it("belum dimuat tidak ditulis 0 dari sepuluh", () => {
     const stages = buildPipeline({ steps: null, ledger: null });
     const ringkas = pipelineSummary(stages);
-    expect(ringkas).toContain("9 tahap");
-    expect(ringkas).not.toContain("0 dari 9");
+    expect(ringkas).toContain(`${PIPELINE_STAGES.length} tahap`);
+    expect(ringkas).not.toContain("0 dari");
   });
 });
 
@@ -229,5 +234,42 @@ describe("baris provenance", () => {
   it("tanpa langkah tidak mencetak baris kosong berisi '0 langkah'", () => {
     expect(provenanceLine([])).toBeNull();
     expect(provenanceLine(null)).toBeNull();
+  });
+});
+
+describe("tahap ANALYZE (29 Okt 2026)", () => {
+  // Langkah ANALYZE memakai LLM (hipotesis sebab + rekomendasi) dan SATU-SATUNYA
+  // langkah yang menuliskan `duration_ms` sungguhan. Kontrak UI: tahap ini harus
+  // muncul sebagai "present" lalu lintas normal, bukan "absent", dan durasinya
+  // dibaca dari trace apa adanya.
+
+  it("baris ANALYZE membuat tahap present dengan tool dan durasi nyata", () => {
+    const stages = buildPipeline({
+      steps: [
+        step("OPTIMIZE", 5),
+        step("ANALYZE", 6, { tool_called: "hypothesis.llm", duration_ms: 7074 }),
+        step("DECIDE", 7),
+      ],
+      ledger: [],
+    });
+
+    const analyze = stages.find((s) => s.code === "ANALYZE");
+    expect(analyze?.state).toBe("present");
+    expect(analyze?.note).toContain("hypothesis.llm");
+
+    const lambat = slowSteps(
+      [step("ANALYZE", 6, { tool_called: "hypothesis.llm", duration_ms: 7074 })],
+      { slowStepMs: 3000 }
+    );
+    expect(lambat.map((s) => s.step_name)).toEqual(["ANALYZE"]);
+  });
+
+  it("tahap ANALYZE tetap 'absent' bila tidak ada barisnya (bukan dikarang)", () => {
+    const stages = buildPipeline({
+      steps: [step("DETECT", 1), step("VERIFY", 2)],
+      ledger: [],
+    });
+    const analyze = stages.find((s) => s.code === "ANALYZE");
+    expect(analyze?.state).toBe("absent");
   });
 });

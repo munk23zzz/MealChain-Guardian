@@ -202,21 +202,23 @@ function render(extra: Record<string, unknown> = {}) {
 }
 
 describe("dossier keputusan — struktur", () => {
-  it("keputusan, persetujuan, bukti, dan jejak jadi panel ber-id", () => {
+  it("enam bagian ber-id: ringkasan, persetujuan, bukti, keamanan, identitas, jejak", () => {
+    // Tahap 8: markah lama (`evidence-hero`, `evidence-block`) pensiun bersama
+    // `DecisionDetail`; yang tetap berlaku adalah KONTRAKNYA — tiap bagian
+    // punya id tunggal yang bisa dituju nav, tidak ada id ganda, dan `#rute`
+    // tetap tidak ada (dilepas 29 Okt bersama kartu "Jalur persetujuan").
     const html = render();
-    // `jump-target` = sasaran nav bagian (scroll-margin-top dari globals.css).
-    expect(html).toContain('class="card evidence-hero jump-target" id="ringkasan"');
-    // 29 Okt 2026: pembungkus #rute dilepas bersama kartu "Jalur persetujuan".
+    for (const id of ["ringkasan", "zona-keputusan", "bukti", "keamanan", "identitas", "jejak"]) {
+      const jumlah = (html.match(new RegExp(`id="${id}"`, "g")) ?? []).length;
+      expect(jumlah, `id="${id}" muncul ${jumlah} kali`).toBe(1);
+    }
     expect(html).not.toContain('id="rute"');
-    expect(html).toMatch(/<section class="evidence-block jump-target" id="bukti"[ >]/);
-    expect(html).toContain('class="evidence-block-title">Bukti</h2>');
-    expect(html).toMatch(/<section class="evidence-block evidence-bottom jump-target" id="jejak"[ >]/);
   });
 
-  it("menandai empat bagian dossier dengan data-bagian, urut dari kepala ke jejak", () => {
+  it("menandai enam bagian dengan data-bagian, urut dari ringkasan ke jejak", () => {
     const html = render();
     const urutan = Array.from(html.matchAll(/data-bagian="([a-z]+)"/g)).map((m) => m[1]);
-    expect(urutan).toEqual(["kepala", "keputusan", "bukti", "jejak"]);
+    expect(urutan).toEqual(["ringkasan", "keputusan", "bukti", "keamanan", "identitas", "jejak"]);
   });
 
 

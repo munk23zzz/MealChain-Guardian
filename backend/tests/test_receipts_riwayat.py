@@ -210,6 +210,8 @@ class _Fx:
         status="menunggu",
         recorded_at=None,
         note=None,
+        accepted_kg=None,
+        ordered_kg=None,
     ) -> str:
         rid = uuid.uuid4()
         kapan = recorded_at or datetime.now(timezone.utc)
@@ -218,8 +220,9 @@ class _Fx:
             conn.execute(
                 text(
                     "INSERT INTO batch_receipts (id, batch_id, checked, recorded_by, "
-                    "recorded_at, status, reviewed_by, reviewed_at, review_note) "
-                    "VALUES (:id,:b,:c,:u,:t,:s,:v,:r,:n)"
+                    "recorded_at, status, reviewed_by, reviewed_at, review_note, "
+                    "ordered_kg, accepted_kg) "
+                    "VALUES (:id,:b,:c,:u,:t,:s,:v,:r,:n,:ok,:ak)"
                 ),
                 {
                     "id": str(rid),
@@ -231,6 +234,8 @@ class _Fx:
                     "v": self.head if status != "menunggu" else None,
                     "r": kapan if status != "menunggu" else None,
                     "n": note,
+                    "ok": Decimal(ordered_kg) if ordered_kg is not None else None,
+                    "ak": Decimal(accepted_kg) if accepted_kg is not None else None,
                 },
             )
         eng.dispose()
@@ -343,6 +348,28 @@ def test_disetujui_membawa_kg_diterima_dan_nilai_pembukuan(client, fx):
     assert data["ringkasan"]["disetujui"] == 1
     assert data["ringkasan"]["nilai_diterima_idr"] == 2400000.0
     assert data["ringkasan"]["kg_diterima"] == 80.0
+
+
+def test_kg_diterima_memakai_timbangan_bukan_kg_pesanan(client, fx):
+    """Dok 05 §5.1: kolom "diterima" = hasil TIMBANGAN, bukan berat pesanan.
+
+    Batch 100 kg, ditimbang 94 kg → 6 kg susut sortir. Sebelum perbaikan ini
+    ringkasan Pemasok memakai `batches.quantity_kg` sehingga menampilkan
+    "kg diterima 100" padahal yang masuk stok (dan yang dibayar) 94 kg —
+    jadi dua layar menyebut angka berbeda untuk fakta yang sama.
+    """
+    batch = fx.batch(fx.loc, kg="100")
+    fx.ikat_po(batch, price="30000.00")
+    fx.receipt(batch, status="disetujui", accepted_kg="94", ordered_kg="100")
+
+    data = _get(client, fx).json()
+    row = data["items"][0]
+    assert row["ordered_kg"] == 100.0
+    assert row["received_kg"] == 94.0
+    assert row["accepted_value_idr"] == 2820000.0  # 94 kg × Rp30.000
+    assert row["stock_kg"] == 94.0
+    assert data["ringkasan"]["kg_dipesan"] == 100.0
+    assert data["ringkasan"]["kg_diterima"] == 94.0
 
 
 def test_ditolak_tidak_pernah_membawa_kg_diterima(client, fx):

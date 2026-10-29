@@ -68,14 +68,14 @@ describe("SupplierExclusionView", () => {
     const fetchMock = vi.fn().mockReturnValue(response);
     vi.stubGlobal("fetch", fetchMock);
     const onCreated = mount(context, "sppg_nutritionist");
-    input("Alasan exclusion", "Measured issue");
-    const form = host.querySelector('form[aria-label="Usulan exclusion"]');
+    input("Alasan eksklusi", "Measured issue");
+    const form = host.querySelector('form[aria-label="Usulan eksklusi"]');
     act(() => {
       form?.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
       form?.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
     });
     expect(fetchMock).toHaveBeenCalledTimes(1);
-    expect(button("Ajukan exclusion").disabled).toBe(true);
+    expect(button("Ajukan eksklusi").disabled).toBe(true);
     expect(button("Ajukan pemulihan").disabled).toBe(true);
     await act(async () => resolve(new Response(JSON.stringify({ ...exclusion, source_decision_id: "proposal-new" }))));
     expect(onCreated).toHaveBeenCalledWith("proposal-new");
@@ -88,7 +88,7 @@ describe("SupplierExclusionView", () => {
     input("Jenis bukti tersimpan", "decision");
     input("ID bukti tersimpan", old);
     expect(button("Ajukan pemulihan").disabled).toBe(true);
-    expect(host.textContent).toContain("Bukti exclusion lama tidak dapat digunakan kembali.");
+    expect(host.textContent).toContain("Bukti eksklusi lama tidak dapat digunakan kembali.");
   });
   it("does not infer a supplier from location alone", () => {
     mount({ ...context, suppliers: [], can_propose: false, reason_unavailable: "Supplier belum teridentifikasi" });

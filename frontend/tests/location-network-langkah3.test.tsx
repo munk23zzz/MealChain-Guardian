@@ -178,16 +178,20 @@ describe("Langkah 3 — kelengkapan & kaki keterangan", () => {
     expect(html).not.toContain("catatan > 24 jam");
   });
 
-  it("rencana alih: kaki satu kalimat, rumus biaya pindah ke tooltip", () => {
+  it("rencana alih: tabel bersih, rumus biaya di tooltip judul kolom", () => {
     const html = renderToStaticMarkup(<AllocationTable plan={RENCANA} />);
-    expect(html).toContain("Hanya surplus ≥ 150 kg per lokasi.");
+    // L5: kalimat ambang pindah ke kepala kartu; yang diuji di sini cuma
+    // kebersihan badan tabel.
+    expect(html).not.toContain("Hanya surplus ≥");
     expect(html).not.toContain("Biaya = angkut");
     expect(html).toContain('title="Angkut + penanganan ÷ nilai barang"');
   });
 
-  it("judul blok limbah menyebut jendelanya sekali", () => {
+  it("blok limbah menyebut jendelanya sekali, sebagai pil di kepala", () => {
     const html = renderBoard({ wasteDays: 30 });
-    expect(html).toContain("Limbah · 30 hari terakhir");
+    expect(html).toContain("<h2>Limbah</h2>");
+    expect(html).toContain(">30 hari</span>");
+    expect(html).not.toContain("Limbah · ");
   });
 });
 

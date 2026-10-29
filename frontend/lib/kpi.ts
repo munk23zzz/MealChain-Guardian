@@ -303,3 +303,103 @@ export function fmtCoverage(value: string | number | null | undefined): string {
   const pct = n <= 1 ? n * 100 : n;
   return `${pct.toLocaleString("id-ID", { maximumFractionDigits: 1 })}%`;
 }
+
+/**
+ * Kalimat cakupan untuk panel penjelasan KPI.
+ *
+ * Kenapa kalimat, bukan angka telanjang: cakupan "60%" tidak berarti apa-apa
+ * tanpa populasi pembandingnya. Angka cakupan dipakai APA ADANYA dari server —
+ * tidak dihitung ulang di peramban.
+ *
+ * `null` = tidak ada cakupan yang bisa dikatakan; panel tidak merender blok.
+ */
+export function coverageSentence(metric: any): string | null {
+  const cakupan = fmtCoverage(metric?.coverage ?? null);
+  if (cakupan === "—") return null;
+  return `Angka ini mencakup ${cakupan} dari populasi yang bisa dinilai; sisanya tidak dinilai dan tidak dianggap nol.`;
+}
+
+/* ---------------------------------------------------------------------------
+   Penjelasan bahasa manusia (permintaan pemilik 29 Okt 2026)
+
+   Pemilik meminta panel penjelasan KPI berisi hal yang INFORMATIF, bukan teknis:
+   tidak ada versi metode, rumus, kode tabel, atau jumlah sampel. Yang ditulis di
+   sini adalah arti angka bagi pembaca operasional — satu kalimat per metrik.
+
+   Batas yang dijaga: kalimat ini TIDAK menambah klaim baru. Isinya hanya
+   mengulang definisi metrik yang sudah dipakai sistem (nama, arah perbaikan,
+   satuan). Metrik yang belum dikenal tidak diberi kalimat karangan: `null`.
+   --------------------------------------------------------------------------- */
+
+export const KPI_PLAIN: Record<string, string> = {
+  "Meal Continuity Rate":
+    "Bagian dari kebutuhan pangan yang benar-benar bisa dipenuhi. Angka ini menjawab: seberapa jauh rencana menu bisa dijalankan dengan bahan yang ada.",
+  "Avoidable Food Loss":
+    "Bahan pangan yang terbuang padahal masih layak dipakai — dicatat dalam berat dan nilainya, supaya kerugiannya terlihat.",
+  "Regional Imbalance Resolution Rate":
+    "Bagian dari kekurangan dan kelebihan antar wilayah yang berhasil diselesaikan, bukan dibiarkan menumpuk di satu tempat.",
+  "Safe Delivered Cost":
+    "Total biaya sampai barang tiba di SPPG, termasuk pengangkutan dan penanganan — bukan hanya harga barangnya.",
+  "Procurement Price Deviation":
+    "Seberapa jauh harga pengadaan menyimpang dari harga acuan yang sah. Makin kecil selisihnya, makin wajar harga yang dibayar.",
+  "Decision Time":
+    "Lama waktu dari data masuk sampai rekomendasi keputusan siap dibaca orang.",
+  "Evidence Completeness":
+    "Seberapa lengkap data pendukung dan catatan yang menopang sebuah keputusan, sehingga keputusan itu bisa ditelusuri.",
+};
+
+/** Kalimat penjelas untuk satu metrik; `null` bila metriknya belum dikenal. */
+export function metricPlain(name: unknown): string | null {
+  const key = String(name ?? "").trim();
+  return KPI_PLAIN[key] ?? null;
+}
+
+/** Nama sumber data untuk LAYAR. Kode tabel yang tidak dikenal dikembalikan apa
+ *  adanya — lebih baik jujur daripada mengarang nama. */
+export const SUMBER_LABELS: Record<string, string> = {
+  menu_plans: "Rencana menu",
+  supply_records: "Catatan pasokan",
+  demand_records: "Catatan kebutuhan",
+  purchase_orders: "Pesanan pembelian",
+  deliveries: "Catatan pengiriman",
+  price_signals: "Sinyal harga pasar",
+  decisions: "Catatan keputusan",
+  batch_records: "Catatan batch bahan",
+};
+
+/**
+ * Teks alasan/no-data dari backend DIRAPIKAN untuk layar (29 Okt 2026).
+ *
+ * Backend menulis keterangan untuk auditor: "(penyebut kosong)", "— penyebut
+ * nol", "committed", nama kolom. Di layar itu terbaca sebagai kode, bukan
+ * penjelasan — persis yang dikeluhkan pemilik. Fungsi ini MEMBUANG sisipan
+ * teknis tanpa mengubah arti kalimatnya:
+ *   - keterangan dalam kurung dibuang ("(penyebut kosong)");
+ *   - ekor "— penyebut …" dibuang;
+ *   - "committed" → "final"; spasi ganda dirapatkan; huruf awal dinaikkan.
+ * Teks kosong tetap kosong (tidak mengarang alasan).
+ */
+export function rapikanTeksBackend(teks: unknown): string {
+  let s = String(teks ?? "").trim();
+  if (!s) return "";
+  s = s.replace(/\s*\([^)]*\)/g, "");
+  s = s.replace(/\s*[—–-]\s*penyebut[^.;]*/gi, "");
+  s = s.replace(/\bcommitted\b/gi, "final");
+  // Huruf awal TIDAK diubah: teks backend sudah berbentuk kalimat, dan
+  // mengapitalkan ulang membuat kalimat yang dikutip di layar lain berbeda
+  // hurufnya (dua teks untuk satu fakta).
+  return s.replace(/\s{2,}/g, " ").replace(/\s+([.,;])/g, "$1").trim();
+}
+
+export function sumberLabel(source: unknown): string | null {
+  const key = String(source ?? "").trim();
+  if (!key) return null;
+  const dikenal = SUMBER_LABELS[key];
+  if (dikenal) return dikenal;
+  // Backend kadang mengirim DAFTAR KOLOM ("disposal_events.disposed_at, …"),
+  // bukan nama sumber. Itu bahan audit, bukan penjelasan — menyembunyikannya
+  // lebih jujur daripada mencetaknya di panel yang seharusnya informatif.
+  // Nama yang tidak mengandung titik/garis bawah tetap ditampilkan apa adanya.
+  if (/[._]/.test(key)) return null;
+  return key;
+}

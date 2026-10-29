@@ -17,7 +17,7 @@ describe("catatanAliranPutus", () => {
 
   it("menjelaskan kanal yang tertutup sebelum putaran selesai", () => {
     const teks = catatanAliranPutus({ dibatalkan: false, galatTercatat: false });
-    expect(teks).toContain("ditutup server");
+    expect(teks).toContain("kanal log ditutup sebelum putaran selesai");
     expect(teks).toContain("sebelum putaran selesai");
   });
 });

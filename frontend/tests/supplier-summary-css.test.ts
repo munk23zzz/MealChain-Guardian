@@ -46,4 +46,19 @@ describe("CSS ringkasan pemasok (KPI strip)", () => {
   it("kolom pertama tanpa garis pemisah kiri", () => {
     expect(css).toContain(".supplier-summary .summary-kpi-item:first-child");
   });
+
+  // S2 (29 Okt 2026): satu angka dipromosikan. Kontraknya: promosi terjadi
+  // lewat atribut data-lead, ukurannya memakai token (bukan piksel mentah),
+  // dan di layar sempit angka itu mengambil satu baris penuh.
+  it("angka yang dipromosikan memakai token hero, bukan piksel", () => {
+    expect(css).toMatch(
+      /\.summary-kpi-item\[data-lead="true"\] \.summary-kpi-value\s*\{[^}]*font-size:\s*var\(--fs-8\)/
+    );
+  });
+
+  it("di layar sempit angka yang dipromosikan selebar baris", () => {
+    expect(css).toMatch(
+      /@media \(max-width: 720px\)[\s\S]*\.summary-kpi-item\[data-lead="true"\][^{]*\{[^}]*flex-basis:\s*100%/
+    );
+  });
 });

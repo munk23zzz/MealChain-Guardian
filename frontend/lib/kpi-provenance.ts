@@ -118,7 +118,7 @@ export function klasifikasiAsalOf(metric: any): KpiAsal | null {
   let text: string;
   switch (basis) {
     case "historical_seed":
-      text = `data historis (historical_seed): ${seed} baris — bukan catatan lapangan baru`;
+      text = `data historis: ${seed} baris`;
       break;
     case "campuran":
       text = `campuran: ${seed} baris historis + ${live} baris lapangan`;

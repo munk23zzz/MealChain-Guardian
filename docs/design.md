@@ -1008,6 +1008,8 @@ pengawas nasional. Aturan yang dipegang:
   periksa petugas (kemasan/suhu/bau-warna/timbang ulang/lot), pemilih batch
   (default = kiriman yang sedang datang bila bisa dipasangkan dengan batch
   nyata), **isian "Lainnya"**, dan tombol "Catat hasil terima & hitung ulang".
+  Sejak 29 Okt 2026 isi itu hidup di **popup drawer kanan** (`ReceiptDrawer.tsx`,
+  kelas `.popup-receipt`), bukan lagi terbuka di dalam kartu — lihat §39.
 - **Opsi "Lainnya" (permintaan pemilik 2026-10-16, migrasi `016_batch_receipts`).**
   Petugas sering menghadapi keadaan yang tidak ada di daftar periksa, jadi ia
   bisa menuliskannya sendiri. Aturan yang dipegang:
@@ -2177,14 +2179,14 @@ menghasilkan berkas PDF yang bisa diunduh, dicetak, dan diserahkan ke bagian keu
    memang tidak memuatnya; pesan galat tidak membocorkan keberadaan PO lokasi lain.
 4. **Isi dokumen (satu halaman A4, satu halaman kecuali isi memanjang):** kop (nomor PO, status,
    tanggal terbit WIB), pihak & bahan (lokasi tujuan, pemasok, nama bahan, nomor bahan), rincian
-   pesanan + total, dasar persetujuan (ID, jenis, status, versi, jendela berlaku), jejak persetujuan
-   (peran, nama, setuju/menolak, waktu WIB, catatan) + kalimat "N persetujuan tercatat dari M yang
-   disyaratkan matriks persetujuan — syarat terpenuhi/belum", lalu catatan kaki. Setiap halaman
-   menyebut **"SAP simulasi"** (Rules.md §4) dan menuliskan bahwa sumbernya tabel mock di DB aplikasi,
-   bukan SAP S/4HANA produksi.
+   pesanan berkolom No–Uraian–Jumlah–Satuan–Harga satuan–Nilai (bahan, transportasi, penanganan) +
+   baris total, lalu blok **Pengesahan** "Disiapkan oleh / Disetujui oleh" (peran, nama,
+   setuju/menolak, waktu WIB, catatan). Setiap halaman menyebut **"SAP simulasi"** (Rules.md §4) —
+   sejak 29 Okt 2026 itu satu-satunya penanda asal data, karena catatan kaki `*`, kalimat arti
+   status, blok "Syarat & ketentuan", dan kalimat "Sumber angka" dihapus atas permintaan pemilik.
 5. **Satu aturan angka.** `total = harga × kuantitas` (rumus yang sama dengan endpoint daftar),
-   kuantitas/harga dibaca apa adanya, nilai tak diketahui ditulis "—". Status PO dijelaskan artinya
-   (`catatan_status`): "Terkonfirmasi" = baris impor SAP, bukan konfirmasi yang dikirim aplikasi.
+   kuantitas/harga dibaca apa adanya, nilai tak diketahui ditulis "—". Keterangan arti status di
+   bawah tabel (`catatan_status`) dihapus 29 Okt 2026; status tetap dicetak apa adanya di kop.
 6. **UI: aksi sekunder per baris.** Tombol "Unduh PDF" (ikon garis 12 px + label, 30 px tinggi;
    44 px di `(pointer: coarse)`) hanya pada baris yang memenuhi pagar; baris lain mendapat **kalimat
    sebabnya** — tombol yang hilang tanpa penjelasan terbaca sebagai fitur rusak, tombol yang selalu
@@ -2607,6 +2609,17 @@ waktu, serta tombol "Setujui & masukkan stok" / "Tolak". Setelah diputuskan, ite
 antrean dan stok/Overview diambil ulang dari server. Tanpa antrean ini, approval akan
 kehilangan pintu masuknya begitu filter "belum dinilai" diberlakukan.
 
+**Nilai pada antrean "Menunggu persetujuan" (Dok 05 §8.2–§8.3, 29 Okt 2026).** Kepala SPPG
+memutuskan setuju/tolak, dan yang dipertimbangkan bukan hanya kg tetapi nilai rupiah yang akan
+masuk stok. Karena itu `GET /receipts/menunggu` ikut mengirim `batch_quantity_kg`, `po_number`,
+`unit_price_idr`, dan `estimated_value_idr` (kg × harga satuan invoice PO, dihitung
+`app/services/receipt_value.py` — klien tidak pernah mengalikan rupiah). Tiap baris antrean
+mencetak satu baris `.approvalValue`: label "Nilai bila disetujui" + nominal (huruf data,
+`tabular-nums`) + asal harga `"180 kg × Rp 11.500 per kg dari PO MC-…"`. `accepted_value_idr`
+tetap `None` untuk baris menunggu: nilai pembukuan hanya lahir saat persetujuan, dan
+`estimated_value_idr` adalah perkiraan yang ditandai (`data-status="perkiraan"`). Batch tanpa
+ikatan PO menampilkan **"tidak tercatat"** + kalimat sebabnya — bukan Rp 0.
+
 **Data demo.** Seed `jakarta_lengkap.seed_batches` menambah tiga barang baru datang berstatus
 `pending` (ayam 90 kg, beras 300 kg, wortel 120 kg; log suhu ayam/wortel 4 °C, beras 27 °C).
 Status `pending` tidak lagi dibuat oleh rotasi batch kanonik, supaya kartu Penerimaan hanya
@@ -2747,6 +2760,25 @@ Kelas CSS baru: `.safety-deadline`, `.safety-deadline-label`, `.safety-deadline-
 `.safety-deadline-time`, `.safety-count.is-danger .safety-count-note` (di `app/theme-ext.css`) dan
 `.rowBadges`, `.coldChain` (di `TemperatureEvidenceCard.module.css`). Tidak ada kelas tes-sensitif
 yang diubah.
+
+**Baris "Bukti suhu" di ringkasan (29 Okt 2026, lanjutan kedua).** Ringkasan pengawasan menjawab
+"apakah pangan ini aman", dan status uji saja tidak cukup: batch yang LULUS uji tetap tidak boleh
+dialokasikan bila rantai dinginnya tidak terbukti — dulu angka itu hanya terbaca setelah menggulir
+ke kartu Bukti suhu. Sekarang ringkasan mencetak satu baris `.safety-temp`:
+`BUKTI SUHU · 12 dari 17 batch cukup bukti · 5 belum cukup · Rincian bukti suhu`, dengan tautan
+`href="#safety-bukti-suhu"` di ujung kanan (`margin-left: auto`, supaya baris tidak berhenti di
+tengah dan menyisakan setengah baris kosong). Angkanya `evidenceSummary` server — tidak ada
+perhitungan di layar; bila cakupan tidak punya batch, baris tidak dicetak sama sekali.
+Tinta angka "N belum cukup" memakai `--warn-ink` (bukan tint status), sesuai aturan nada yang
+sudah dipakai baris tenggat.
+
+**Perbaikan kebocoran (29 Okt 2026).** Dua cacat yang ikut diperbaiki di kartu yang sama:
+(a) kalimat putusan mencetak lokasi gagal berulang — `"Jakarta, Jakarta"` untuk dua batch gagal di
+lokasi yang sama; `safetySummaryOfRows` kini mendedupe `failedLocations` (`Array.from(new Set(...))`)
+dan angkanya tetap `failed` (dua batch), hanya NAMA lokasinya yang tidak diulang;
+(b) baris "Bukti suhu kiriman ini" di kartu Penerimaan mencetak ISO mentah
+(`diamati 2026-10-28T20:30:50.602837+00:00`); sekarang memakai `formatMomentWib` seperti kartu
+Bukti suhu.
 
 **Bukti terukur** (localhost:3010, peran Kepala SPPG Bandung, 1247 px): Ringkasan 947x233 dengan
 baris tenggat 911x20 (13 px, label 12 px kapital), Bukti suhu 947x447 dengan enam baris 454x76,
@@ -3504,3 +3536,1188 @@ Terukur (Kepala Bandung, 1247 px, putaran beras 29 Okt 2026 pukul 07.40 WIB):
 kartu **9 → 0** saat tombol ditekan, terminal **1**, baris **2 → 4 → 6 → 8**
 selama 13 detik, pil `LIVE`; setelah putaran ditutup kartu **9** kembali dan log
 turun ke `<details>` dengan **7 langkah**.
+
+### 37.5 Kartu DIHAPUS permanen — blok menjadi log saja (29 Okt 2026)
+
+Permintaan pemilik: *"demo control Bukti agent hapus saja ganti dengan Log Proses
+Pengambilan Data"* dan, saat ditanya bentuknya, *"yang terminal"*. Jadi §37.4
+(tempat kartu kembali setelah putaran ditutup) **diganti**: sembilan kartu tidak
+pernah dicetak lagi.
+
+Aturannya sekarang:
+1. **Judul blok 3 = "Log proses pengambilan data"** (`aria-label` sama). Kartu
+   sembilan agen, kartu Supervisor + narasinya, catatan audit Verifier, daftar
+   `dc-facts`, dan lipatan "Langkah pipeline" **dihapus** — `.dc-agent`,
+   `.dc-narration`, `.dc-steps-fold` = 0 di DOM, apa pun keadaannya.
+2. **Isi blok** = kesiapan kasus (bila ditahan: sebab + langkah) + terminal +
+   tiga tombol: **Buka keputusan**, **Buka Agent Log**, **Segarkan bukti**.
+   Tombol yang tidak punya handler dimatikan, bukan menipu.
+3. **Sumber baris log**, berurutan menurut kesegaran: (a) kanal SSE saat putaran
+   berjalan — punya jam WIB + ringkasan `k=v`; (b) jejak `agent_traces` setelah
+   putaran ditutup atau halaman dimuat ulang — hanya nama langkah + chip sumber
+   `tool_called`, dengan catatan *"Dibaca dari jejak putaran tersimpan (N
+   langkah). Jam dan ringkasan per langkah hanya tercatat selama putaran
+   berjalan."*
+4. **Selama putaran berjalan baris tersimpan tidak dipakai** walau kanal belum
+   mengirim satu baris pun: isinya hasil putaran **sebelumnya**, dan mencetaknya
+   di bawah pil `live` membuat operator membaca hasil lama sebagai proses yang
+   sedang jalan. Terminal menulis `menunggu langkah pertama…` sampai baris
+   pertama datang. (Ketahuan dari tes, bukan dari mata.)
+5. **Jam tidak dikarang.** `agent_traces` tidak menyimpan waktu per langkah; baris
+   dari jejak karena itu tidak mencetak kolom jam sama sekali — bukan `--.--.--`
+   berulang yang terbaca seperti log rusak.
+6. **Yang hilang dari layar, bukan dari sistem.** Narasi supervisor dan catatan
+   audit verifier tidak lagi tampil di Demo Control; keduanya tetap tersimpan dan
+   tetap terbaca di tab Agent Log / panel kualitas agen.
+
+Bukti uji (29 Okt 2026): 86 tes di 5 berkas (`demo-control-panel`,
+`demo-proof-live`, `agent-run-terminal`, `demo-agent`, `demo-control-interaction`)
+lulus; `next lint` bersih; `tsc --noEmit` tanpa galat baru dari berkas yang
+disentuh. Fungsi `demoAgentCards()` sengaja ditinggalkan (masih diuji
+`demo-agent.test.ts`) dan diberi catatan bahwa panel tidak lagi merendernya.
+
+## 38. KPI: kartu = satu bentuk yang bisa diklik, penjelasan informatif (29 Okt 2026)
+
+Dua permintaan pemilik di hari yang sama:
+1. *"ketika KPI di klik muncul penjelasan detail di bawah sub sub KPI, ada 1
+   shape informasi dari salah satu KPI yang diklik"*;
+2. *"segitiga dropdown di KPI dihapus semua. bagian klik lebih ke shape-nya yang
+   diklik aja. lalu penjelasannya KPI-nya dibuat hal yang informatif aja jangan
+   hal teknis"*.
+
+### 38.1 Bentuk akhir
+- **Tidak ada segitiga buka-tutup.** Lipatan `details/summary` ("Rincian angka")
+  dihapus dari kartu KPI. Halaman KPI kini nol `details` dan nol `summary`.
+- **Seluruh kartu yang bisa diklik** (`article.kpi-card` + `role="button"`,
+  `tabIndex=0`, `aria-expanded`, `aria-controls="kpi-detail"`). Enter dan Spasi
+  membuka/menutup. Kartu aktif diberi garis aksen + bilah kiri 3 px
+  (`data-aktif="true"`), supaya jelas panel di bawah milik kartu yang mana.
+- **Satu panel** (`section.kpi-detail`, `id="kpi-detail"`) di bawah grid, jarak
+  12 px. Klik kartu lain memindahkan isi; klik kartu yang sama menutupnya; X
+  menutup dan mengembalikan fokus ke kartu.
+
+### 38.2 Isi panel: informatif, bukan audit
+Empat jawaban, berurutan:
+1. **Angka** — nilai besar (28 px, tabular) + satuan, lalu keadaan
+   ("Angka tersedia" / "Belum ada data" / "Belum bisa dihitung") dan arah tren.
+2. **Apa artinya** — satu kalimat bahasa manusia per metrik (`KPI_PLAIN` di
+   `lib/kpi.ts`).
+3. **Cara membaca** — arah perbaikan ("Angka ini makin rendah makin baik.") dan
+   skala bila metrik memang berskala ("Skalanya 0 sampai 100.").
+4. **Kenapa belum ada angka** — hanya muncul bila server mengirim `reason`.
+   Ditutup dengan dua chip meta: **Periode** dan **Sumber data**.
+
+Yang **tidak** lagi ditampilkan: versi metode (`sdc-v2`, `kpi-1.4.0`), rumus,
+tingkat bukti berkode (`measured`), pembanding, jumlah sampel, cakupan persen,
+baris estimasi, dan daftar kolom tabel. Semua itu tetap ada di payload `GET /kpi`
+untuk keperluan audit — halaman ini hanya tidak memamerkannya.
+
+**Sumber data** ditulis sebagai nama yang bisa dibaca (`menu_plans` → "Rencana
+menu"). Bila server mengirim daftar kolom (`disposal_events.disposed_at, …`),
+chip itu **disembunyikan** — bahan audit tidak dicetak di panel penjelasan.
+
+### 38.3 Aturan yang dipegang
+1. Tidak ada panel sebelum ada klik.
+2. Satu panel pada satu waktu; klik kedua menutup.
+3. Angka tidak dihitung ulang: kartu dan panel memakai `fmtValue`/`unitLabel`
+   yang sama, jadi tidak bisa berbeda.
+4. Metrik tanpa angka menampilkan sebab dari server, bukan "0".
+5. Nama kartu tetap istilah kanonik Inggris (kontrak lama); terjemahan Indonesia
+   hidup di panel. Karena itu label Indonesia tidak boleh masuk `title` kartu —
+   tes lama menangkapnya, dan tesnya tidak dilonggarkan.
+6. Kalimat `KPI_PLAIN` tidak menambah klaim baru: isinya mengulang definisi
+   metrik (arti, arah, satuan). Metrik tak dikenal tidak diberi kalimat karangan.
+
+### 38.4 Batas pengukuran (29 Okt 2026)
+| Ukuran | 1247 px | 390 px |
+| --- | --- | --- |
+| Segitiga (`details`/`summary`) di halaman KPI | 0 | 0 |
+| Panel | 947 × 404 px (versi 1) | 346 × 810 px |
+| Tombol nama kartu → seluruh kartu | tombol 89 × 44 px dihapus | — |
+| Ubin fakta → blok penjelasan | — | — |
+| Tombol tutup | 32 × 32 px | 44 × 44 px |
+| Gulir mendatar halaman | tidak ada | tidak ada (390 = 390) |
+| Tinggi halaman | 3.669 px | 6.412 px |
+
+## 39. Popup penerimaan barang: tiga langkah di drawer kanan (29 Okt 2026)
+
+**Permintaan pemilik.** "design lagi halaman keamanan, tambahkan konsep dari
+`05-penerimaan-barang.md`: ringkasan pengawasan, suhu, penerimaan barang + pop up
+penerimaan barang, nilai di Menunggu persetujuan."
+
+**Masalah sebelum.** Seluruh ceklis terbuka di dalam kartu "Penerimaan barang"
+(terukur 796 px tinggi pada viewport 1262 px), sehingga halaman berubah watak
+menjadi formulir. Dua kartu bertindak — "Penerimaan barang" dan "Menunggu
+persetujuan" — berjauhan, padahal keduanya satu alur: periksa → nilai →
+putuskan. Dok 05 §1–§2 menyebut bentuknya tegas: popup **drawer kanan** dengan
+tiga langkah yang tidak boleh dilompati.
+
+**Bentuk akhir.**
+
+| Langkah | Isi | Sumber angka |
+|---|---|---|
+| 1. Periksa kondisi barang | keadaan batch + bukti suhu + lima titik periksa + "Lainnya" + kalimat kemajuan | `batches` (prop halaman) |
+| 2. Nilai dan putusan batch | kuantitas batch, putusan, nilai diterima + asal harga, daftar temuan, catatan tersimpan | `GET /receipts?batch_id=` (dibaca **ulang** sesudah simpan) + hasil `POST /safety|freshness/evaluate` |
+| 3. Tandai barang | "Setujui & masukkan stok" / "Tolak penerimaan" + alasan wajib | `batch_receipts.status = menunggu` + peran (`canApprove`) |
+
+**Pemetaan konsep Dok 05 ke repo ini — sengaja tidak 1:1.**
+
+- §3 tujuh butir berbobot → repo ini punya **lima titik periksa boolean**
+  (`RECEIVING_CHECKS`) tanpa skor. Mesin skor Dok 05 (`bobot × faktor`) tidak ada
+  di backend ini, jadi **bobot tidak dikarang**. Yang diambil dari §2 adalah
+  **gerbangnya**.
+- §2 "tombol simpan tetap mati selama ada butir kosong" → **dipasang**. Kalimat
+  `receivingSentence` yang dulu berbunyi "Boleh disimpan sebagian" (jujur saat
+  gerbangnya belum ada) diganti menjadi "Tombol simpan aktif setelah kelima titik
+  dijawab." Janji dan perilaku sekarang sama.
+- §2 "peran bukan penerima tidak bisa mengetik" → kotak centang & textarea
+  `disabled`; popup tetap bisa DIBUKA oleh peran lain supaya ia bisa membaca
+  keadaan batch, bukan melihat tombol mati tanpa penjelasan.
+- §4 putusan berjenjang → putusan datang dari evaluator server
+  (`safety_status` hasil hitung ulang), bukan dari skor ceklis.
+- §5/§8.3 nilai rupiah → `estimated_value_idr` + asal harga dari helper server;
+  layar tidak pernah mengalikan kg × harga sendiri.
+- §8.4 foto bukti & `acceptance_advice` → **tidak dibuat**: butuh kolom/skema
+  baru. Bukan keputusan desain; dicatat sebagai pekerjaan backend.
+
+**Dua cacat yang tertangkap saat verifikasi (bukan saat tes).**
+
+1. **Popup menutup sendiri sesudah simpan.** Kartu "Penerimaan barang" hilang
+   dari render begitu batch terakhir dicatat (`batchOpsi` → kosong) dan popup ada
+   di dalamnya → ikut dilepas dari pohon React, tepat sebelum langkah 2 tampil.
+   Perbaikan: `<Popup>` dipindah **keluar** kartu (sesudah kondisionalnya), jadi
+   ia bertahan terhadap perubahan daftar batch. Tes jsdom tidak menangkapnya
+   karena prop `batches` statis di sana — hanya verifikasi browser yang
+   menemukan; komentar penjaga ditulis di kode.
+2. **Isi drawer lebih tinggi dari layar.** Tiga langkah = 1083 px di jendela
+   480 px. Yang menggulir adalah `.popup-body` bawaan; menambah `overflow` di
+   panel membuat dua wadah bergulir bersarang. Diukur: `scrollTop = 603`
+   menaruh langkah 3 di y=413–553 (dalam 568 px).
+
+**Terukur (viewport 1262 px, SPPG Head / Kepala Bandung).**
+
+| Ukuran | Sebelum | Sesudah |
+|---|---|---|
+| Tinggi kartu "Penerimaan barang" | 796 px | 404 px |
+| Tinggi dokumen halaman | 4.938 px | 3.910 px |
+| Drawer | — | x=702, 560 × 568 px, tepi kanan 1262 (= tepi viewport) |
+| Langkah 1 di drawer | — | 5 kotak centang, tombol simpan `disabled` |
+| Langkah 2 sesudah simpan | — | 300 kg · Aman · nilai + asal harga · 1 catatan tersimpan |
+| Langkah 3 | — | dua tombol aktif hanya bila `status = menunggu` dan peran berhak |
+| Luapan horizontal | 0 | 0 |
+
+**Berkas.** `components/ReceiptDrawer.tsx` (+ `.module.css`), `FoodSafetyBoard.tsx`
+(memindahkan markup, snapshot batch sesudah simpan, `tutupDrawer`),
+`lib/food-safety.ts` (`receivingSentence`), `app/theme-ext.css` (`.popup-receipt`).
+Tes: `tests/receipt-drawer-open.test.tsx` (jsdom, popup benar-benar dibuka; 5 tes),
+`tests/food-safety-board.test.tsx` + `tests/receipt-quarantine.test.tsx` +
+`tests/food-safety.test.ts` disesuaikan ke bentuk baru.
+
+## 39. Baris tabel bisa diklik (29 Okt 2026)
+
+Permintaan pemilik: *"untuk tabel yang ada tombol tidak perlu menekan tombol —
+menekan baris tabelnya juga bisa ke-trigger"*.
+
+### 39.1 Aturan
+- Baris tabel yang punya **satu** aksi utama kini bisa diklik di mana saja: klik
+  sel biasa = aksi yang sama dengan tombolnya. Tombolnya **tetap ada** — ia
+  pemegang jalur papan ketik dan penanda aksi yang terlihat.
+- Klik pada kontrol **di dalam** baris (`button`, `a`, `input`, `select`,
+  `textarea`, `label`, `summary`, `role="button"`, `role="link"`,
+  `data-tanpa-klik-baris`) **tidak** dianggap klik baris. Tanpa aturan ini satu
+  klik pada tombol akan menjalankan aksi dua kali — untuk aksi tulis itu berarti
+  dua permintaan POST.
+- Saat ada **teks tersorot**, klik tidak dianggap klik baris: menyalin isi tabel
+  tidak boleh membuka panel.
+- Baris diberi `data-klik-baris="true"` (penanda + pengait CSS) dan
+  `cursor: pointer`; hover menandai baris dengan latar `--surface-sunken` dan
+  bilah kiri 3 px.
+- Baris **tidak** diberi `tabIndex`: fokus papan ketik tetap di tombol. Dua tab
+  stop untuk satu aksi akan membingungkan pembaca layar.
+
+Implementasi: `frontend/lib/baris-klik.ts` (`bolehKlikBaris`, `klikBaris`) —
+satu tempat, tiga tabel memakai.
+
+### 39.2 Tabel yang kini mendukung
+| Tabel | Aksi baris | Tombol tetap |
+| --- | --- | --- |
+| Location Network (`location-table`) | buka/tutup rincian lokasi | tombol nama lokasi (▾/▸) |
+| Decision & Evidence (`aa-table`) | pilih keputusan, jejak agent tampil di bawah | tombol pilih di kolom akhir |
+| Surplus per wilayah (`SurplusBoard`) | buka lokasi tujuan di peta | "Lihat di peta" |
+
+Tabel yang **tidak** diberi klik baris, beserta alasannya:
+- **Keamanan Pangan** (`safety table`) — satu baris memuat beberapa aksi berbeda
+  (periksa ulang, putus, karantina, lepas). Tidak ada satu aksi yang bisa
+  diwakili klik baris; memilih salah satunya berarti menebak maksud operator.
+- **Monitor harga, Supply & Demand, Batch evaluation, Pemasok, Penerimaan** —
+  barisnya tidak punya tombol aksi.
+- Tabel yang `onOpenLocation`-nya tidak dikirim induknya (mis. surplus di halaman
+  yang hanya informatif) tetap tidak bisa diklik: `data-klik-baris` hanya
+  dipasang bila aksinya benar-benar ada.
+
+### 39.3 Bukti (29 Okt 2026)
+- Unit + integrasi: `tests/klik-baris-tabel.test.tsx` **6 tes** — sel biasa
+  memicu `onSelect("dec-1")` tepat satu kali; klik tombol baris juga tepat satu
+  kali (bukan dua); kontrol dalam baris ditolak; teks tersorot ditolak.
+- Aplikasi hidup (BGN Monitor, Location Network): baris `cursor: pointer`; klik
+  sel "selisih pasokan" **menutup** rincian yang sedang terbuka, klik lagi
+  membukanya kembali — bukti klik baris menjalankan aksi yang sama dengan tombol
+  (buka/tutup), bukan aksi lain.
+
+## 40. Pemasok: kebersihan data demo — residu lokasi uji (29 Okt 2026)
+
+Audit halaman Pemasok menemukan satu baris yang membatalkan kredibilitas demo:
+lokasi `F9-tgt-d8ec4354` + pemasok `F9-sup-d8ec4354` + dua akun
+`f9.*@uji-f9.local` adalah residu `tests/test_approval_summary_receipt_gate.py`
+yang teardown-nya tidak sempat jalan (proses uji terhenti / container restart).
+Residu itu NAIK ke layar karena tiga hal:
+
+1. pembersih akun uji hanya mengenal `@test.local` dan `@uji-peran.local`,
+   sedangkan tes itu memakai `@uji-f9.local`;
+2. langkah penyemai demo menganggap "lokasi yang punya user" = kota SPPG, jadi
+   lokasi uji ikut disemai — 5 batch / 2.900 kg bertujuan hub yang tidak ada;
+3. tidak ada yang menyapu lokasi di luar snapshot kanonik.
+
+Akibat terukur: pemilih **Cakupan lokasi** menulis "Semua lokasi SPPG (11
+lokasi)", daftar pemasok 61 (bukan 60) dengan satu baris tanpa komoditas dan
+sertifikasi, papan kiriman nasional 130 (bukan 125).
+
+### 40.1 Perbaikan
+- `seed_data.nama_lokasi_kanonik()` — daftar lokasi dari snapshot kanonik,
+  di-cache; satu-satunya acuan "SPPG yang sah" (BUKAN `role_hint`, yang boleh
+  kosong pada instalasi lama).
+- `demo_template.pilih_kota_demo(lokasi, id_berakun, kanonik)` — dua saringan:
+  ada di snapshot **dan** punya akun. Dipakai `_pastikan_kebutuhan_demo`.
+- `demo_template._sapu_lokasi_asing()` — dipanggil dari `_bersihkan_sisa`,
+  sehingga ikut berjalan pada setiap build demo dan pada tombol "Siapkan data
+  demo". Aturannya: batch di lokasi asing dihapus **kecuali** id-nya disebut
+  `decision_evidence.payload` (rantai bukti tidak boleh putus); batch yang
+  dipertahankan juga menahan pemasok dan lokasinya, lalu dilaporkan.
+- `tests/conftest.py` — pola sapuan akun uji menjadi `%@test.local` **atau**
+  `%@uji-%.local`.
+- Deskripsi halaman Pemasok tidak lagi menjanjikan peta yang tidak ada
+  ("sebarannya di peta" → "jangkauan jarak ke SPPG Anda").
+
+### 40.2 Bukti (29 Okt 2026)
+| Keadaan | Sebelum | Sesudah |
+| --- | --- | --- |
+| Lokasi di pemilih cakupan | 11 (ada `F9-tgt-...`) | 10 |
+| Pemasok di daftar | 61 (satu baris tanpa komoditas) | 60 |
+| Kiriman (`batches`) | 138 baris / 130 layak | 126 baris / 125 layak |
+| Akun uji tersisa | 3 | 0 |
+
+Angka sesudah diukur 29 Okt 2026 03.38 UTC, tepat setelah builder demo
+dijalankan ulang: 10 lokasi, 60 pemasok, 126 batch (125 layak), 0 akun uji.
+
+Uji: `tests/test_demo_sapu_lokasi_asing.py` (4 tes — daftar kanonik, saringan
+kota demo, sapuan menghapus residu, batch ber-bukti dipertahankan); 79 tes
+backend (supplier + demo) lulus dengan 1 dilewati; 66 tes frontend Pemasok
+lulus. Angka kartu Ringkasan tetap sama dengan SQL: 60 pemasok, 82% rata-rata
+keandalan, 4 di bawah 60%, 6 tanpa stok layak.
+
+### 40.3 Yang TIDAK diisi dengan karangan
+`capacity_kg_per_week` dua pemasok (UD Tani Sayur Depok, UD Ogan Ilir Beras)
+tetap kosong: tidak ada sumber kapasitas di dataset, dan
+`app/seed/supplier_profile.py` melarang menurunkannya dari batch. Lebih baik
+kosong daripada angka karangan.
+
+
+## 40. Agent Activity Log: perbaikan audit menyeluruh (29 Okt 2026)
+
+Audit halaman **Agent Activity Log** menemukan sebelas cacat; semuanya
+diperbaiki di ronde ini, bukan didokumentasikan sebagai "diketahui".
+
+### 40.1 Waktu jejak sekarang menyebut tanggal
+`formatClockUtc` memotong ISO jadi `HH:MM:SS`, sehingga langkah yang terjadi
+KEMARIN tampil seolah hari ini. Di DB, **81 dari 109** baris trace bertanggal
+sebelum keputusannya dibuat — cacat itu tidak mungkin terlihat dengan jam saja.
+
+- Helper baru `formatTraceWib(iso, sekarang)` (`lib/datetime.ts`) → "28 Okt 08.41
+  WIB". Tahun hanya dicetak bila berbeda dari tahun berjalan (dibandingkan dalam
+  WIB, bukan zona mesin).
+- `AgentTraceViewer` menuliskannya di `<time dateTime title>`; ISO utuh tetap
+  tersedia di `title` untuk yang butuh presisi.
+- Bila sebuah langkah masih bertanggal sebelum `created_at`, halaman menulis
+  peringatan eksplisit (`jejakSebelumKeputusan`): "… bertanggal SEBELUM
+  keputusan ini dibuat (langkah pertama …, keputusan dibuat …). Waktunya berasal
+  dari data demo, jadi urutan ini bukan urutan kejadian sebenarnya."
+- Jejak yang tidak dimulai dari DETECT diberi catatan `catatanAwalJejak`
+  ("tahap awal tidak tercatat pada data demo") — 9 keputusan seperti ini.
+
+### 40.2 Data jejak dirapikan, bukan hanya dijelaskan
+`backend/app/seed/rapikan_jejak.py` (`rapikan_jejak`, `jadwal_ulang_jejak`):
+- langkah yang mendahului keputusan digeser ke `created_at + 2 menit × urutan`
+  (urutan dipertahankan, tanpa menghapus baris);
+- `expires_at < created_at` diperbaiki dengan memundurkan `created_at`
+  (`expires_at − 60 menit`), sehingga keadaan "sudah lewat" tetap benar.
+- Dipanggil di akhir `jakarta_lengkap.seed_all` dan `demo_template.build_into`,
+  jadi penyemaian berikutnya tidak mengulang cacatnya.
+- Sekali jalan pada data hidup: **81 langkah digeser, 6 keputusan diperbaiki,
+  0 pelanggaran tersisa**.
+
+### 40.3 Bukti kepatuhan tidak lagi selalu nol
+`GET /decisions/{id}/dossier` mengirim `evidence` (sebelumnya hanya
+`decision_id`, `content_address`, `signature`, `verify`). `build_dossier` sudah
+memuat evidence dan address/tanda tangan dihitung dari dossier penuh, jadi yang
+ditampilkan kini sama dengan yang ditandatangani. Diuji:
+`backend/tests/test_dossier_evidence.py`.
+
+`ComplianceEvidencePanel` juga menerjemahkan kunci backend: `human_inspection` →
+"Pemeriksaan manusia", `NEEDS_VERIFICATION` → "Perlu verifikasi", waktu ISO →
+`formatDateTime` WIB, `rule` → "Aturan".
+
+### 40.4 Status model tidak lagi berbohong dengan tiga baris merah
+Seluruh DB berisi **0 langkah SUPERVISE dan 0 TRACE**, jadi `providersFromTraces`
+selalu kosong dan panel menampilkan "Verifier/Forecast/Supervisor: tidak
+tersedia" untuk SETIAP keputusan. Sejak ronde ini `AgentRunSummary` hanya
+merender `ProviderPanel` bila `modelSteps > 0`; selain itu satu kalimat:
+"Tidak ada baris status provider yang bisa ditampilkan dari jejak ini."
+
+### 40.5 Jawaban supervisor menjumlah ke total
+Tool "Keputusan per status" dulu menghitung empat status saja (43 dari 49) tanpa
+menyebut tiga sisanya. Helper baru `ringkas_keputusan_per_status`
+(`app/services/supervisor_answers.py`) menghitung SEMUA status, menyebut total,
+dan tetap menghitung status tak dikenal. Diuji:
+`backend/tests/test_supervisor_status_answer.py`.
+
+### 40.6 Tampilan & kelengkapan lain
+- Kolom **Verifikasi** memakai `labelVerifikasi` → "Menunggu verifikasi",
+  "Terverifikasi", "Ditolak" (dulu mencetak kunci mentah "menunggu").
+- Penyaring komoditas menambah opsi **"Tanpa komoditas (n)"**
+  (`TANPA_KOMODITAS`), sehingga baris tanpa komoditas tidak lagi tak terjangkau
+  (dulu "Semua" 24 vs jumlah opsi 21).
+- Label panel integritas: **"Merkle Ledger (rantai global)"** vs **"Dossier
+  keputusan ini"** — angka rantai global tidak lagi terbaca sebagai milik satu
+  keputusan.
+- **CLI `demo_template` membuka sesi sendiri.** Baris hasil build adalah
+  `origin='demo'` tanpa stempel; selama tidak ada sesi `active`,
+  `sapu_tanpa_sesi()` menghapusnya pada pembacaan berikutnya (terukur: data CLI
+  hilang dalam hitungan detik, halaman berbunyi "Belum ada keputusan" padahal
+  build melaporkan 49). Build kini memanggil `demo_session.mulai` +
+  `tandai_sesi` dan melaporkannya sebagai `laporan["sesi"]`.
+- `tests/conftest.py`: pembersihan user fixture kini juga menghapus
+  `batch_receipts.recorded_by` dan `supplier_exclusions.proposed_by` (keduanya
+  NO ACTION) — penyemai demo bisa memilih sisa user fixture sebagai pencatat,
+  dan seluruh berkas tes yang memakai `auth_headers` gagal di setup.
+
+### 40.7 Bukti
+| Uji | Hasil |
+| --- | --- |
+| `tests/agent-log-waktu-nyata.test.ts` (baru) | 14 tes — format tanggal/WIB, kausalitas, label verifikasi, opsi tanpa komoditas |
+| `tests/compliance-evidence-bahasa.test.tsx` (baru) | 3 tes — jenis bukti & waktu diterjemahkan, tanpa enum/ISO mentah |
+| `tests/agent-run-summary-tanpa-model.test.tsx` (baru) | 3 tes — tidak ada baris provider saat `modelSteps = 0` |
+| `backend/tests/test_rapikan_jejak.py` (baru) | 5 tes — geser sesudah keputusan, urutan tetap, idempoten |
+| `backend/tests/test_supervisor_status_answer.py` (baru) | 3 tes — semua status + total |
+| `backend/tests/test_dossier_evidence.py` (baru) | 1 tes — dossier membawa baris bukti |
+| Aplikasi hidup | waktu `29 Okt 10.28 WIB`; 0 peringatan kausalitas; panel provider satu kalimat; opsi "Tanpa komoditas (2)"; panel bukti "Perlu verifikasi 1 · Pemeriksaan manusia · Waktu 8 Okt 2026 19.00 WIB" |
+
+---
+
+---
+
+## 41. Decision & Evidence — tahap 1: kepala kartu + navigasi bagian (2026-10-29)
+
+Rencana redesign dikerjakan bertahap; **tahap 1 hanya menyentuh kepala halaman,
+tempat pemilih keputusan, dan perendernya nav bagian**. Isi halaman (ringkasan,
+keputusan, bukti, jejak) belum berubah.
+
+1. **Kepala** memakai pola kartu Overview (`.overview-header`): judul `h1` + satu
+   kalimat penjelas di kiri; penanda keadaan di kanan dalam kolom rata kanan —
+   chip `Data simulasi`, pil status keputusan (`.evidence-header-status[data-status]`,
+   nada dari token `--warn/--ok/--danger`), nomor keputusan pendek.
+   Halaman ini karena itu **tidak lagi memakai `PageShell`/`PageHeader`**; kelas
+   pembungkus `.evidence-page` dipertahankan, section dinamai lewat
+   `aria-labelledby="judul-bukti"`.
+2. **Bilah kendali** (`.evidence-controls`): pemilih keputusan + saklar lewat
+   tenggat keluar dari kepala ke kartu sendiri (border `--line`, `--shadow-1`).
+3. **Nav bagian** dirender halaman sendiri (`SectionJump`), tujuan tetap empat dan
+   jangkar tidak berubah: `#ringkasan`, `#zona-keputusan`, `#bukti`, `#jejak`.
+   Nav menempel pada `top: 72px` dan target jangkar sudah memakai
+   `scroll-margin-top: 132px` (`.jump-target`), jadi judul tidak tertutup —
+   WCAG 2.2 SC 2.4.11 *Focus Not Obscured*.
+4. **Irama halaman** 14 px seperti Overview (dulu 18 px).
+
+### 41.1 Bukti
+| Uji | Hasil |
+| --- | --- |
+| `tests/evidence-tahap1-kepala.test.tsx` (baru) | 12 tes — kelas kepala Overview, `h1` + `aria-labelledby`, chip & status, pemilih di dalam bilah, 4 jangkar nav tetap, `nowrap` pil, nada token tanpa hex, irama 14 px |
+| `tests/navigation-shell.test.ts` | Decision & Evidence keluar dari daftar `PageShell`; tes baru menjaga kepala + `SectionJump` sendiri |
+| `tests/navigation-titles.test.ts` | judul dibaca sebagai isi `<h1>`, bukan prop `title` |
+| Suite penuh | 257 berkas / **2.807 tes** lulus; `tsc --noEmit` 0 error; `next lint` 0 peringatan |
+| Ukuran peramban (markup asli + CSS aplikasi, 1360 px) | kepala 1328×125 px (putih, border 1 px, `--shadow-1`); bilah 1328×116 px; nav sticky `top 72px`, tinggi 44 px, 4 tautan; ketiga chip `nowrap` (90/143/56 px, tinggi 24/22/18); `scroll-margin-top` 132 px |
+| Ukuran 375 px | kepala 343×281 px, bilah 343 px, chip tetap satu baris, tidak ada luapan halaman |
+
+---
+
+## 42. Decision & Evidence dikosongkan (2026-10-29)
+
+Pemilik memilih mengosongkan isi halaman sebelum membangunnya ulang:
+
+> "hapus seluruh isi halaman Decision & Evidence, sisakan kerangka kosong (pemilih
+> keputusan + kepala), lalu kita bangun ulang dari nol" — lalu "balikin design yang tadi".
+
+Keadaan sekarang:
+
+- **Kepala kartu (pola Overview) dan bilah kendali tetap** — desain "yang tadi" tidak berubah.
+- **Isi tidak dirender**: ringkasan keputusan, persetujuan, bukti, PO, jejak, integritas.
+  Penggantinya satu kartu jujur `data-testid="isi-dibangun-ulang"`.
+- **Nav bagian dimatikan** selama isi kosong (empat jangkarnya belum ada — tautan mati
+  lebih buruk daripada tanpa nav).
+- Kode isi lama tetap di berkas, di balik konstanta `ISI_DIBANGUN_ULANG`; salinan utuh
+  + langkah pemulihan ada di `docs/arsip/decision-evidence-20261029/`.
+
+### 42.1 Bukti
+| Uji | Hasil |
+| --- | --- |
+| `tests/evidence-tahap1-kepala.test.tsx` (diperbarui) | kepala & pemilih tetap; kartu "isi dibangun ulang" tampil; nav + `href="#ringkasan"` tidak ada |
+| Tes isi dipause (bukan dihapus) | 5 berkas `.pause` (28+6+4+3+2 tes) + 1 blok `describe.skip` di `evidence-rapi` |
+| Suite | 252 berkas / **2.727 lulus / 2 dilewati**; `tsc` 0 error; `next lint` 0 peringatan |
+
+---
+
+## 43. Decision & Evidence — tahap 2: blok Persetujuan (2026-10-29)
+
+Bangun ulang isi halaman dikerjakan bertahap. **Tahap 2 memasang satu bagian:
+persetujuan.** Bagian lain (ringkasan, bukti, jejak) belum ada — halaman
+menuliskan itu apa adanya.
+
+Bentuk (gaya *clean dashboard*: satu kartu rapat, tanpa hiasan):
+1. **Kepala blok**: `h2` "Persetujuan" + pil status (`.evidence-header-status`,
+   nada dari token status) + **satu** pemicu aksi (`DecisionActions` — seluruh
+   pilihan hidup di popup yang sudah ada).
+2. **Tiga jawaban berurutan**: kotak "Yang menahan" (kalimat server yang sudah
+   diterjemahkan), lalu baris label–nilai **Dibutuhkan** dan **Setelah ini**.
+3. **Satu tabel penyetuju**: Peran · Keadaan · Dicatat (nama + waktu, kolom
+   waktu rata kanan `tabular-nums`).
+
+Aturan kejujuran yang dipaku:
+- "Tidak ada yang menahan persetujuan" hanya muncul bila `governanceView().state`
+  ∈ {siap, lengkap, selesai}. Bila peran masih kurang tetapi server tidak mengirim
+  `blocking_reasons`, yang ditulis: "Tidak ada sebab tertulis dari server…"
+  — bukan klaim bahwa tidak ada penahan.
+- Ringkasan belum tiba → ditulis sebagai keadaan ("sedang dimuat"), bukan
+  disimpulkan "tidak ada persetujuan".
+
+Semua kalimat dan baris berasal dari `lib/approval-panel` dan `lib/governance`
+(sumber yang sama dengan panel lain); komponen tidak menghitung ulang.
+
+### 43.1 Bukti
+| Uji | Hasil |
+| --- | --- |
+| `tests/evidence-tahap2-persetujuan.test.tsx` (baru) | 12 tes — bentuk satu kartu, urutan tiga jawaban, tabel 3 kolom, tiga arah kalimat penahan, ringkasan belum tiba, tanpa enum (`sppg_nutritionist`), CSS token/tabular, tabel bertumpuk ≤640 px |
+| Suite | 253 berkas / **2.739 lulus / 2 dilewati**; `tsc` 0 error; `next lint` 0 peringatan |
+| Ukuran 1360 px | blok 1328×347 px; kolom waktu rata kanan di satu garis (1327); tidak ada teks terpotong |
+| Ukuran 375 px (media block diterapkan) | kepala menumpuk (`flex-direction: column`), tinggi 213 px; blok 343×568 px; `thead` `display: none`, baris `display: grid`; tidak ada luapan elemen |
+
+---
+
+## 44. Decision & Evidence — tahap 1: ringkasan keputusan (2026-10-29)
+
+Tahap 1 memasang blok **ringkasan** di atas blok persetujuan (tahap 2). Halaman
+kini terbaca: kepala → bilah pemilih → **ringkasan** → **persetujuan**. Bagian
+bukti dan jejak belum ada dan halaman mengatakan itu.
+
+Bentuk (clean dashboard):
+1. **Band keadaan**: jendela berlaku dalam kata ("Lewat 13 menit"), umur jendela
+   ("Jendela terpakai 68%", bertanda bahaya bila lewat), nomor & iterasi.
+   **Status tidak diulang** di band — pil status sudah ada di kepala halaman.
+2. **Judul** = kalimat keputusan itu sendiri (`decisionHeadline`), bukan label
+   seksi "Ringkasan keputusan".
+3. **Strip KPI** dari `decisionMetrics` (Kuantitas · Biaya aman terkirim ·
+   Selisih · Tenggat): label kapital `--fs-1`, nilai `--fs-6` `tabular-nums`,
+   `grid-auto-rows: 1fr` supaya tinggi kartu seragam walau label dua baris.
+4. **Triase** "Perlu diperhatikan (N)" hanya dirender bila N>0.
+
+Semua angka/kalimat dari `lib/evidence` + `lib/today` (sumber sama dengan feed);
+komponen tidak menghitung ulang. Nilai kosong tetap `—` dari helper, bukan Rp0.
+
+### 44.1 Bukti
+| Uji | Hasil |
+| --- | --- |
+| `tests/evidence-tahap1-ringkasan.test.tsx` (baru) | 15 tes — urutan baca, band keadaan, persen jendela, "—" tanpa jam, strip angka (Rp16.206.000 / 600 kg / bukan Rp0), triase bergerbang, CSS token + tabular, tinggi kartu seragam, aturan sempit |
+| Suite | 255 berkas / **2.758 lulus / 2 dilewati**; `tsc` 0 error; `next lint` 0 peringatan |
+| Ukuran 1360 px | blok ringkasan 1328×167; judul 18 px; tiga kartu KPI 425 px sejajar satu baris; nilai rata atas; tidak terpotong; persetujuan mulai di y=446 |
+| Ukuran 375 px (media block diterapkan) | kartu KPI 150×84, dua per baris, tinggi seragam, **nilai tidak terpotong** setelah turun ke `--fs-4`; tidak ada elemen melewati 375 |
+
+---
+
+## 45. Decision & Evidence — tahap 3: bukti biaya (2026-10-29)
+
+Tahap 3 memasang blok **Bukti biaya** di bawah persetujuan. Halaman kini:
+kepala → pemilih → ringkasan → persetujuan → **bukti biaya**. Bagian jejak belum
+ada dan halaman mengatakannya.
+
+Bentuk — dua tabel, bukan satu daftar fakta:
+- **Biaya PO** (yang ditagihkan): Bahan · Transportasi · Handling · Referensi
+  pasar · Harga satuan PO · **Total PO**.
+- **SDC analitis** (untuk membandingkan): Susut gudang · Risiko kesegaran ·
+  Penalti keamanan · **Total SDC** (+ per kg).
+- Label kiri `--ink-subtle`, nilai kanan `text-align: right` +
+  `font-variant-numeric: tabular-nums` supaya digit bisa ditumpuk mata; baris
+  `Total` tebal dengan garis atas lebih tegas.
+- Catatan pendek (≤18 huruf, mis. "per kg") menempel pada label lewat
+  `.cost-note.cost-note-inline`; catatan penjelas tetap di bawah label.
+- `<caption>` = nama blok (untuk pembaca layar), `th scope="row"` per baris.
+
+Sumber angka tidak berubah: `buildCostView()` di `lib/decision-economics` —
+komponen baru **tidak menghitung** biaya. Kontrak lama tetap dijaga: PO dan SDC
+terpisah, penalti risiko tidak masuk blok PO, referensi pasar = pembanding harga
+bahan, `null` ≠ Rp 0 (`tidak berlaku` / `tidak tercatat`, dengan alasannya).
+
+### 45.1 Bukti
+| Uji | Hasil |
+| --- | --- |
+| `tests/evidence-tahap3-biaya.test.tsx` (baru) | 13 tes — dua tabel, `th scope=row`, baris Total paling bawah, caption, satuan per kg, catatan pendek vs panjang, `null` per baris vs `null` total, tanpa biaya ≠ tabel kosong, larangan istilah internal, CSS rata kanan + tabular, tumpuk 1 kolom |
+| `tests/decision-evidence-cost-block.test.tsx` | **dihidupkan kembali** dari `.pause` — 5 tes lulus tanpa diubah (kontrak PO/SDC) |
+| Suite saat tahap ini | 263 berkas / **2.816 lulus / 2 dilewati**; `tsc` 0 error; `next lint` 0 peringatan. **4 tes gagal di luar halaman ini** (`agent-activity-panel` ModuleSearch, `shipment-board-mobile-css`) dari pekerjaan sesi lain yang sedang berjalan di working tree yang sama — bukan akibat tahap 3 |
+| Ukuran 1360 px | blok 1328×394; dua tabel 639 px sejajar (y=899); baris PO 34/35/35/35/35/34 px; nilai rata kanan; `tabular-nums`; Total PO tebal 650; tidak ada nilai terpotong |
+| Ukuran 375 px (media block diterapkan) | `.cost-grid` → `305px` satu kolom; blok PO 305×283, SDC 305×267 bertumpuk; nilai tidak terpotong; tidak ada elemen melewati 375 |
+
+### 45.2 Cacat yang tertangkap saat mengukur (bukan saat menulis)
+1. `.cost-note-inline` ditulis **sebelum** `.cost-note { display: block }` →
+   selektor tunggal kalah, "per kg" kembali ke baris sendiri (baris 53 px di
+   antara 35 px). Diperbaiki dengan selektor gabungan `.cost-note.cost-note-inline`.
+2. Catatan sebaris tanpa spasi teks membuat nama aksesibel terbaca
+   "Harga satuan POper kg". Diperbaiki dengan spasi nyata `{" "}` sebelum span —
+   margin tidak dibaca pembaca layar.
+
+---
+
+## 46. Decision & Evidence — tahap 4: keamanan & pemasok (2026-10-29)
+
+Tahap 4 memasang blok **Keamanan & pemasok** di bawah bukti biaya. Halaman
+kini: kepala → pemilih → ringkasan → persetujuan → bukti biaya → **keamanan &
+pemasok**. Bagian jejak belum ada dan halaman mengatakannya.
+
+Bentuk — dua pertanyaan, dua kolom:
+1. **Keamanan pangan**: lencana putusan (`board-badge board-badge-{ok|warn|
+   danger|muted}` — kelas lencana aplikasi, bukan lencana baru) berisi
+   "Gagal · 4 batch diperiksa", lalu tabel fakta: status keamanan terburuk,
+   diblokir keamanan, verifikator, nomor material, target eksekusi.
+2. **Pemasok**: nama + keandalan, jumlah pemasok dikecualikan, lalu daftar
+   pengecualian (nama pemasok · status · alasan).
+
+Aturan yang dipegang:
+- **Satu angka, satu tempat**: jumlah batch naik ke lencana, jadi baris
+  "Batch diperiksa" dibuang (`safetyFacts(..., { countInBadge: true })`).
+- **Nada hanya warna teks nilai**, tanpa latar berwarna — satu baris "Gagal"
+  tidak boleh membaca sekeras satu kartu peringatan. Token `--danger-ink`,
+  `--warn-ink`, `--ok-ink`; tanpa hex baru.
+- **Nama, bukan id**: pengecualian dicetak dengan nama pemasok dari
+  `context.suppliers`; id mentah hanya dipakai bila nama tidak ikut terkirim.
+- **Keadaan tidak diketahui dikatakan**: konteks pemasok `null` → "Daftar
+  pemasok untuk lokasi ini belum dimuat, jadi pengecualian belum bisa
+  dipastikan" — bukan "tidak ada pengecualian".
+
+### 46.1 Bukti
+| Uji | Hasil |
+| --- | --- |
+| `tests/evidence-tahap4-keamanan.test.tsx` (baru) | 14 tes — dua blok terpisah + jangkar `#keamanan`, lencana kelas aplikasi, jumlah batch tidak ganda, nada tanpa latar, lencana absen saat tak ada putusan, nama pemasok bukan id, kosong vs belum dimuat, alasan server, larangan istilah internal, token bukan hex, tumpuk satu kolom |
+| Tes halaman ini (5 berkas + kontrak biaya + nav) | **92 lulus**; `tsc` 0 error; `next lint` 0 peringatan |
+| Suite saat tahap ini | 266 berkas / **2.854 lulus / 2 dilewati**; **1 gagal di luar halaman ini** (`supplier-board.test.tsx`, bilah kontrol daftar) dari pekerjaan sesi lain di working tree yang sama |
+| Ukuran 1360 px | seksi 1328×319; dua blok 639 px sejajar (y=1355); lencana 148×22; daftar pengecualian 609 px; baris 34–35 px (satu baris 54 px karena punya catatan keandalan) |
+| Ukuran 375 px (media block diterapkan) | `.safety-grid` → `305px`; blok keamanan 305×265 di atas, pemasok 305×235 di bawah; lencana 148×22; nilai tidak terpotong; tidak ada elemen melewati 375 |
+
+### 46.2 Catatan terbuka
+`executionTargetLabel()` mengembalikan nilai mentah untuk target yang belum ada
+di `TARGET_ID` (kini hanya `mock` → "Simulasi", `local` → "Lokal (tanpa PO)").
+Target baru di masa depan akan tercetak sebagai kode. Tidak diubah di tahap ini
+karena helper itu dipakai halaman lain; perlu keputusan pemilik.
+
+---
+
+## 47. Decision & Evidence — tahap 5: identitas & evaluasi batch (2026-10-29)
+
+Tahap 5 memasang blok **Identitas & batch** di bawah keamanan & pemasok.
+Halaman kini: kepala → pemilih → ringkasan → persetujuan → bukti biaya →
+keamanan & pemasok → **identitas & batch**. Bagian jejak belum ada.
+
+Bentuk:
+1. **Identitas keputusan** — tabel dari `decisionFacts`: rute (atau
+   pemasok→SPPG untuk pengadaan), komoditas, iterasi, menggantikan, diusulkan
+   oleh. Jumlah & tenggat TIDAK diulang: keduanya sudah di strip metrik kepala.
+2. **Evaluasi batch** — label ringkas "3 batch · 2 perlu tindakan" lalu tabel
+   `.batch-eval-table` yang sudah ada (gerbang yang sama dengan dispatch).
+   Status gerbang tidak dihitung ulang di klien.
+
+Keadaan yang dikatakan, bukan dikarang:
+- tanpa token → "butuh sesi yang sudah masuk"; dengan token → "Memuat…";
+  paket gagal diambil → "Evaluasi batch belum bisa dimuat", tanpa tabel.
+
+### 47.1 Empat cacat yang tertangkap saat mengukur
+1. **Kolom "Gerbang" terpotong.** `ditahan — butuh bukti` tidak muat di 132 px
+   (sel `nowrap`, `table-layout: fixed`) → dilebarkan ke **176 px**.
+2. **Halaman melebar 410 px pada viewport 375.** Penyebabnya bukan blok baru:
+   satu butir pita ringkasan (`#id · iterasi v2 · memperbaiki keputusan…`)
+   ber-`nowrap` dengan min-content 410 px, dan grid halaman mengambil
+   min-content terbesar dari seluruh anaknya. Diperbaiki di media 640 px
+   (`.dash-summary-item { white-space: normal }`).
+3. **Nilai KPI "23 jam 46 menit lagi" terpotong** di kartu 124 px → nilai
+   dibiarkan membungkus di layar sempit (angka pendek tetap satu baris).
+4. **Caption tabel 560 px terpotong di tengah kalimat** → caption jadi
+   hanya-untuk-pembaca-layar di blok ini, diganti satu baris ringkas yang
+   terbaca; panelnya `overflow-x: auto` + `min-width: 0`.
+
+### 47.2 Kode gerbang tidak lagi bocor
+`BatchEvaluationTable` mencetak alasan gerbang apa adanya bila kuncinya belum
+dikenal — terukur tampil `safety_status_bukan_pass`. `BLOCKER_ID` ditambah
+kunci bergaya kode (`safety_status_bukan_pass`, `safety_status_fail_sumber`,
+`tidak_ada_batch_sumber`, `bukti_suhu_tidak_lengkap`). **Pelajaran:** kunci satu
+kata berbahasa Indonesia TIDAK boleh ditambahkan — penerjemah mencocokkan
+potongan kalimat, sehingga `kedaluwarsa` mengubah "batch kedaluwarsa" menjadi
+"batch batch sudah kedaluwarsa" (tertangkap tes tahap 2).
+
+### 47.3 Bukti
+| Uji | Hasil |
+| --- | --- |
+| `tests/evidence-tahap5-identitas.test.tsx` (baru) | 16 tes — identitas tanpa jumlah/tenggat, "—" saat lokasi tak diketahui, caption, keadaan tanpa token/memuat/gagal, pemakaian tabel bersama, kunci gerbang diterjemahkan, CSS panel & pembungkusan |
+| Tes halaman ini (9 berkas) | **108 lulus**; `tsc` 0 error; `next lint` 0 peringatan |
+| Suite saat tahap ini | 270 berkas / **2.899 lulus / 2 dilewati**; 2 gagal di luar halaman ini (`receipt-drawer-open`, `agent-log-redesign-kontrak`) dari sesi lain |
+| Ukuran 1360 px | identitas 1328×415; tabel identitas 1290, baris 34–35 px; tabel evaluasi mengisi kartu (1260 px), kolom Gerbang 176 px, tidak ada sel terpotong; baris 24/44/44 px |
+| Ukuran 375 px | halaman **375** (tidak melebar); blok identitas 305 px; tabel evaluasi di panel geser (275 px terlihat, 574 px isi, `min-width: 560`); label ringkas terbaca; KPI membungkus, tidak terpotong |
+
+---
+
+## 48. Decision & Evidence — tahap 6: jejak, PO, dan integritas (2026-10-29)
+
+Tahap 6 menutup halaman: **Jejak & integritas** di bawah identitas & batch.
+Urutan akhir: kepala → pemilih → ringkasan → persetujuan → bukti biaya →
+keamanan & pemasok → identitas & batch → **jejak, PO, integritas**.
+
+Tiga blok, satu cerita (komponen baru `components/DecisionTraceIntegrity.tsx`):
+1. **Jejak & riwayat** (penuh lebar) — `auditTimeline()` yang sudah ada merangkai
+   iterasi keluarga → pengajuan → verifikasi → tiap keputusan orang. Baris tanpa
+   keputusan biner tidak dicetak sebagai penolakan; waktu yang tidak tersimpan
+   dicetak "waktu tidak tercatat"; nomor iterasi yang tidak ada → "v?".
+2. **PO keputusan ini** — `DecisionPurchaseOrder` apa adanya, jadi hanya PO milik
+   keputusan yang dibuka yang tampil.
+3. **Integritas bukti** — `IntegrityPanel` apa adanya (rantai Merkle, alamat
+   konten, tanda tangan), dengan kartunya dilebur ke dalam blok.
+
+### 48.1 Tiga keadaan yang tidak boleh saling menipu
+- **"Belum termuat" ≠ "tidak ada".** `purchaseOrders` prop bisa `undefined`
+  selagi daftar PO diambil; mencetak "belum ada PO" saat itu adalah klaim palsu.
+  Blok menulis "Daftar PO belum termuat…" dan hanya memakai komponen PO ketika
+  datanya benar-benar tiba.
+- **Tanpa sesi, integritas tidak memanggil API.** `IntegrityPanel` diberi token
+  kosong akan gagal dan mencetak galat jaringan yang terbaca seperti bukti
+  rusak; blok menulis "butuh sesi yang sudah masuk" dan tidak merender panel.
+- **Kepala halaman berhenti mengaku.** Subjudul sejak tahap 1 menulis "bagian
+  jejak sedang dipasang ulang". Setelah tahap 6 bagian itu ada, jadi kalimatnya
+  diganti; tes memaku agar tidak kembali.
+
+### 48.2 Dua cacat yang tertangkap saat mengukur
+1. **`data-block="po"` dipakai dua blok.** Blok biaya (tahap 3) sudah memakai
+   nilai itu untuk tabel "Biaya PO" lewat atribut dinamis; kueri DOM lalu
+   menunjuk blok yang salah. Blok PO baru dinamai **`data-block="pesanan"`**.
+2. **Harness 375 px mengukur tata letak yang salah.** Berkas ukur menyetel
+   `body` 375 px, tetapi `@media (min-width: …)` dievaluasi terhadap lebar
+   **viewport** browser, jadi aturan layar-lebar tetap aktif dan dua blok
+   "berdampingan" di 375 px. Harness sekarang mematikan seluruh aturan
+   `min-width` sebelum mengukur. **Angka 375 px tahap 2–5 karena itu lebih
+   optimistis daripada kenyataan**; dengan harness terkoreksi, halaman penuh
+   masih muat di 375 px tanpa geseran mendatar, tetapi klaim per-baris lama
+   tidak boleh dipakai lagi sebagai bukti.
+
+### 48.3 Bukti
+| Uji | Hasil |
+| --- | --- |
+| `tests/evidence-tahap6-jejak.test.tsx` (baru) | **17 tes** — rangkaian jejak, jumlah catatan, "bertanda masalah" hanya bila ada, "v?"/"waktu tidak tercatat", belum-termuat vs belum-ada, PO keputusan lain tidak bocor, status PO bukan kode mentah, integritas tanpa sesi, urutan blok, kepala halaman, CSS pasangan 900 px & kartu bersarang |
+| Semua tes halaman ini (10 berkas) | **124 lulus**; `tsc` 0 error; `next lint` 0 peringatan |
+| Suite saat tahap ini | 273 berkas / **2.950 lulus / 2 dilewati**; 4 gagal di `location-network-kepala.test.tsx` — berkas sesi lain (19.10), **lulus 7/7 bila dijalankan sendiri**, gagal hanya di suite penuh (keadaan bersama) |
+| Ukuran 1360 px | seksi 1328×596; jejak 1290×246 (baris 59/39/60/39 px); PO 543×227; integritas 735×227; 0 elemen meluap |
+| Ukuran 375 px (harness terkoreksi) | seksi 343×857; jejak 305×322; PO 305×247; integritas 305×154 — **satu kolom**, 0 luapan, 0 teks terpotong, halaman 375 px |
+
+---
+
+## 49. Decision & Evidence — pemilih digabung ke kartu kepala (2026-10-29)
+
+Permintaan pemilik: *"tolong atur penempatan ini 'Keputusan yang diperiksa', bisa
+anda gabung kalo bisa"*. Tahap 1 dulu memindahkan pemilih keluar kepala ke bilah
+kartu sendiri (keputusan waktu itu: meniru bilah filter Overview). Hasilnya dua
+bingkai bertumpuk untuk satu hal — "halaman apa ini" lalu "yang mana yang
+dibuka" — dan mata harus melompati garis kartu untuk menyadari keduanya satu
+kesatuan. Sekarang **satu kartu, dua baris**:
+
+```
+┌ kartu kepala ───────────────────────────────────────────┐
+│ Decision & Evidence            [Data simulasi]           │
+│ Halaman bukti satu keputusan…  [menunggu persetujuan]    │
+│                                [#9e0cb1fb]               │
+│ ──────────────────────────────────────────────────────── │
+│ Keputusan yang diperiksa                                 │
+│ [ Penyeimbangan pasokan regional · 1 hari 13 jam lagi ]  │
+│ 1 menunggu tindakan · 1 keputusan tersedia               │
+└──────────────────────────────────────────────────────────┘
+```
+
+Yang berubah: `.overview-header` di halaman ini jadi `grid` dua kolom (judul kiri,
+penanda kanan) dengan baris kedua `grid-column: 1 / -1` berisi `.evidence-controls`;
+bilah itu kehilangan bingkai kartu (tanpa `border` penuh, tanpa `box-shadow`,
+`background: transparent`) dan hanya menyisakan `border-top: 1px solid var(--line)`.
+
+Yang TIDAK berubah: komponen `DecisionPicker` (opsi, pengelompokan, hitungan
+lewat-tenggat), id `pilih-keputusan`, dan seluruh propsnya. Tidak ada endpoint,
+data, atau aturan bisnis yang disentuh.
+
+### 49.1 Dua penyesuaian yang ikut perlu
+1. **`max-width: 340px` dilepas di dalam kepala.** Di kolom sempit batas itu
+   masuk akal; di dalam kepala selebar kartu ia menyisakan ±950 px kosong dan
+   memotong judul keputusan yang panjang. Sekarang pemilih memakai selebar
+   barisnya: **1294 px** di 1360 px, dan tombolnya **46 px** tinggi (di atas
+   ambang 44 px).
+2. **Aturan layar sempit lama memakai bahasa flex.** Kepala sekarang `grid`, jadi
+   `flex-direction: column` tidak berpengaruh; diganti `grid-template-columns:
+   minmax(0, 1fr)` (dan penanda rata kiri) supaya yang menumpuk benar-benar yang
+   dimaksud, bukan warisan yang kebetulan tidak merusak.
+
+### 49.2 Bukti
+| Uji | Hasil |
+| --- | --- |
+| `tests/evidence-tahap1-kepala.test.tsx` (diperbarui) | 13 tes — pemilih kini **di dalam** `<header>`, CSS kepala grid dua kolom, bilah tanpa bingkai kartu, kepala satu kolom di layar sempit |
+| Semua tes halaman ini (10 berkas) | **125 lulus**; `tsc` 0 error; `next lint` 0 peringatan; bundel 3010 memuat `pilih-keputusan` |
+| Ukuran 1360 px | kepala **1328×218** (dulu kepala 125 + bilah 116 + jarak 14 = 255); pemilih 1294×91; tombol 1294×46; ringkasan mulai `y=248`; 0 luapan |
+| Ukuran 375 px | kepala **343×343**; pemilih 309; tombol 309×46; halaman 375 tanpa geseran; 0 teks terpotong |
+| Suite penuh (dua kali) | 2.965 & 2.971 lulus, 2 dilewati; kegagalan **berbeda tiap kali** dan semuanya di berkas sesi lain (`design-tokens-kontrak`, `safety-css-gate`, `agent-log-redesign-kontrak`, `location-network-kepala`) — masing-masing **lulus bila dijalankan sendiri**. Bukan halaman ini |
+
+---
+
+## 50. Decision & Evidence — tahap 7: navigasi bagian & keadaan (2026-10-29)
+
+Halaman kini punya semua bagian (tahap 1–6) dan nav bagiannya hidup kembali.
+
+### 50.1 Nav lima tujuan, label = judul yang tercetak
+`lib/section-jump.ts` → `evidenceSections()`:
+
+| # | label | jangkar | dulu |
+| --- | --- | --- | --- |
+| 1 | Ringkasan | `#ringkasan` | Ringkasan |
+| 2 | Persetujuan | `#zona-keputusan` | Keputusan |
+| 3 | Bukti biaya | `#bukti` | Bukti |
+| 4 | Keamanan & pemasok | `#keamanan` | — (baru) |
+| 5 | Jejak & integritas | `#jejak` | Jejak & integritas |
+
+id jangkar **tidak berubah** supaya tautan lama tetap mendarat di tempat yang
+sama. Label disamakan dengan `h2` bagian: nav yang menyebut "Keputusan" lalu
+mendarat di blok berjudul "Persetujuan" membuat pembaca mengira lompatannya salah.
+
+**"Identitas & batch" sengaja bukan tujuan.** Aturan docs/design.md §24 membatasi
+lima tujuan; bagian itu pendek (dua tabel) dan langsung disusul "Jejak &
+integritas", jadi tautan ke jejak melewatinya. Bagiannya tetap dirender — hanya
+tidak diberi tautan.
+
+Gerbang `!ISI_DIBANGUN_ULANG` pada nav **dicabut**: dulu nav disembunyikan karena
+jangkar yang dituju belum dirender (tautan mati). Sekarang syaratnya kembali ke
+kenyataan: ada keputusan terpilih, daftar tidak sedang dimuat.
+
+### 50.2 Keadaan yang tidak boleh saling menyamar
+- **memuat ≠ kosong.** Sebelumnya, selagi daftar keputusan diambil, halaman
+  mencetak "Belum ada keputusan dipilih" — padahal keputusannya belum tentu tak
+  ada. Kini ada keadaan ketiga: "Memuat keputusan…" (`role="status"`).
+- **"bilah atas" → "pemilih di atas".** Pemilih sudah pindah ke dalam kartu kepala
+  (tahap 7 sebelumnya), jadi kalimat kosong menunjuk tempat yang benar.
+
+### 50.3 Tiga cacat yang tertangkap saat mengukur
+1. **Kaskade terbalik.** Aturan kepala dari blok "PEMILIH DIGABUNG" ditulis paling
+   akhir berkas, sehingga ia mengalahkan aturan layar sempit yang ada di baris
+   ~851 — walau viewport 375 px. Terukur: kepala tetap dua kolom `138 / 143 px`
+   dan chip status berdesakan di kanan judul. Penimpaan layar sempit sekarang
+   diletakkan SETELAH aturan dasarnya.
+2. **`#keamanan` bisa jadi tautan mati.** Halaman versi lama (`DecisionDetail`,
+   masih hidup di balik gerbang) tidak punya id itu. Jangkar ditambahkan di sana
+   juga, jadi mematikan gerbang kelak tidak memunculkan tautan mati.
+3. **Enam bagian, lima tautan, enam `scroll-margin-top`.** `#ringkasan` dan
+   `#zona-keputusan` belum punya jarak lompat; judulnya mendarat tertutup nav yang
+   menempel (`top: 72px`, tinggi 44 px). Keduanya diberi `scroll-margin-top: 132px`.
+
+### 50.4 Harness ukur: dari `body` semu ke iframe viewport nyata
+Sampai tahap 6, "375 px" diukur dengan menyetel `body` 375 px di berkas HTML.
+Itu **tidak benar**: `@media (max-width: …)` dievaluasi terhadap lebar *viewport*
+browser (1360), jadi aturan layar sempit tidak pernah aktif — angka 375 px tahap
+2–6 karena itu terlalu optimistis. Harness baru memuat halaman di dalam **iframe
+375 px** (dilayani `http.server` lokal, jadi sesama-origin): media query benar
+benar 375. Seluruh angka 375 px di §50 diukur dengan cara ini.
+
+### 50.5 Bukti
+| Uji | Hasil |
+| --- | --- |
+| `tests/evidence-tahap7-navigasi.test.tsx` (baru) | **9 tes** — lima tujuan & label, tiap `href` punya sasaran nyata (anti tautan mati), `aria-label`, identitas bukan tujuan nav tapi tetap dirender, nav absen saat kosong/memuat, "Memuat keputusan…" tidak menyamar jadi kosong, enam `scroll-margin-top` |
+| `tests/section-jump.test.tsx`, `tests/navigation-shell.test.ts`, `tests/evidence-tahap1-kepala.test.tsx` (diperbarui) | lima tujuan berurutan; jangkar dicari di semua komponen bagian, bukan hanya `DecisionDetail`; tes "nav disembunyikan" dibalik menjadi "nav dipasang kembali" |
+| 12 berkas tes halaman ini | **147 lulus**; `tsc` 0 error; `next lint` 0 peringatan; bundel 3010 memuat `section-jump` |
+| Ukuran 1360 px (iframe) | kepala 1313×218; nav 1313×44 `position: sticky; top: 72px`; lima tautan satu baris, tinggi 30 px (penunjuk presisi); `aria-current` awal = "Ringkasan"; halaman 1345 (15 px scrollbar) |
+| Ukuran 375 px (iframe) | kepala 328×353 satu kolom (294 px); nav 328×132 **dua baris**, lima tautan semua terlihat, tiap pil **44×44 px**, tanpa geseran mendatar; halaman 360 |
+| Suite penuh | 280 berkas / **3.011 lulus / 2 dilewati**; 1 gagal di `location-network-dossier.test.tsx` — berkas sesi lain yang sedang ditulis (19.30), gagal juga saat dijalankan sendiri |
+
+---
+
+## 51. Performance & Audit — tahap 4: audit performa (2026-10-29)
+
+Bagian kedua halaman (`id="pa-audit"`, `components/PerformanceAuditPanel.tsx`).
+Masalahnya kepadatan, bukan isi: enam jejak perhitungan ditulis sebagai
+`grid auto-fit minmax(180px, 1fr)` yang di lebar isi 1.106 px pecah jadi
+**5 + 1** sel (satu sel jatuh sendirian di baris kedua), dan tabel cakupan
+memakai kolom "Cakupan / alasan" yang mencampur dua pertanyaan berbeda.
+
+### 51.1 Bentuk baru
+1. **Satu strip enam sel** (`dl.perf-audit-strip`, `repeat(6, minmax(0, 1fr))`):
+   Metode agregasi · Versi rumus biaya kirim aman · Jendela simpan gudang ·
+   Periode laporan · Cakupan data · Dihitung. Enam fakta tetap enam; yang
+   berubah hanya bentuknya. ≤1.180 px → tiga kolom, ≤620 px → dua kolom.
+2. **Kolom tabel mengikuti pertanyaan auditor**: **Metrik · Keadaan · Sampel ·
+   Sebab**. "Sebab" memuat alasan backend (kenapa `no_data`) dan, bila ada,
+   kalimat cakupan — satu kolom, karena memisahkannya menyisakan kolom nyaris
+   kosong di tujuh baris. Angka sampel rata kanan + `tabular-nums`.
+3. **Baris bermasalah** (`state ≠ available`) diberi `data-state`, nada hangat,
+   dan garis tepi 3 px **pada sel pertama** (bukan pada `<tr>`: bayangan baris
+   tabel tidak dilukis peramban saat `border-collapse: collapse`). Penanda
+   utamanya tetap KATA ("Belum ada data"), warna hanya penguat.
+4. **Dilipat hanya bila tak ada yang perlu diperiksa**: `semuaTersedia` →
+   `<details class="perf-audit-fold">` ("Rincian N metrik — semuanya tersedia",
+   target sentuh 44 px). Kalau ada satu metrik bermasalah, tabel terbuka —
+   audit yang menyembunyikan masalah gagal tujuannya.
+5. **Layar sempit: dua baris per metrik** (`data-label`), bukan kartu tinggi dan
+   bukan gulir mendatar. Kartu per metrik sempat dicoba dan **ditolak karena
+   angka**: 191 px per metrik, total panel 1.637 px — lebih tinggi daripada versi
+   tabelnya sendiri. Dua baris = 61–79 px per metrik.
+
+### 51.2 Cacat yang tertangkap saat mengukur (bukan saat menulis kode)
+1. **Memaku lebar kolom justru menambah tinggi.** Percobaan pertama memasang
+   `width: 30/15/9 %` pada `thead th`: kalimat "Sebab" terpaksa membungkus dua
+   baris, baris 31 → 49 px, panel 85 px lebih tinggi daripada versi lama. Lebar
+   dibiarkan otomatis; angka tetap terbaca karena rata kanan.
+2. **Nav bagian lengket menutupi bagian yang dituju.** Setelah klik
+   "Audit perhitungan": judul bagian mendarat di y=0 dan strip di y=95, sementara
+   nav berakhir di y=116 (1440 px) / y=156 (390 px) — judul dan label strip
+   tertutup. `.pa-section` kini `scroll-margin-top: 128px` (≤720 px: `168px`);
+   sesudahnya judul mendarat di y=128 / y=168.
+
+### 51.3 Bukti
+| Uji / ukur | Hasil |
+| --- | --- |
+| `tests/perf-audit-redesign-kontrak.test.tsx` — Tahap 4 (todo → tes nyata) | **7 butir**: strip 6 sel satu baris (label berurutan), kolom tabel persis `Metrik · Keadaan · Sampel · Sebab`, keadaan teks + nada, satu baris bermasalah ditandai `data-state` + garis tepi, lipat hanya saat semua tersedia (isi tabel tetap di markup), tata letak dua baris ≤620 px + `data-label`, `scroll-margin-top` bagian |
+| `tests/performance-audit-panel.test.tsx` (tes lama) | 4 lulus tanpa perubahan — kalimat cakupan & alasan `no_data` tetap dari server |
+| 6 berkas (kontrak, panel, `kpi-dashboard`, `kpi-quality-board`, `kpi-detail-panel`, `section-jump`) | **62 lulus / 2 todo**; `tsc --noEmit` 0 galat; `next lint` "No ESLint warnings or errors" |
+| 1440 px (viewport, app hidup) | strip **68 px, 6 sel satu baris** (rekonstruksi versi lama: 85 px, 5 + 1); baris tabel 35 px; panel **446 px**; gulir tabel 1.106 = 1.106; luapan dokumen **0** |
+| 390 px (viewport, app hidup) | strip **183 px** (2 kolom × 3 baris); tiap metrik dua baris (61–79 px); panel **786 px**; gulir tabel 312 = 312 (tanpa geseran mendatar); luapan dokumen **0** |
+| Sesudah lompat "Audit perhitungan" | judul seksi y=128 (nav berakhir 116) di 1440 px; y=168 (nav berakhir 156) di 390 px — tidak tertutup |
+| Tangkapan | `ui-audit/t4-audit-1440.png`, `ui-audit/t4-audit-390.png` |
+
+Catatan metode: angka "versi lama" diukur dengan **merekonstruksi** markup lama di
+halaman hidup (CSS `.perf-audit-grid` dari HEAD, isi sama). Berkas komponen tidak
+dikembalikan sementara karena beberapa sesi Hermes lain sedang mengedit repo ini.
+
+### 51.4 Sisa
+- Todo yang masih terbuka: **Tahap 5** (mutu agen: dua sub-blok, rincian per run
+  44 px + header lengket) dan **Tahap 6** (keadaan kosong bersaran + ringkasan
+  metrik bermasalah).
+- Kalimat cakupan (~110 karakter per baris metrik) masih mendominasi tinggi tabel
+  di layar sempit; memendekkannya berarti mengubah kalimat yang juga dipakai kartu
+  KPI — keputusan pemilik, bukan keputusan redesign.
+
+---
+
+## 52. Performance & Audit — tahap 5: mutu agen jadi dua sub-blok (2026-10-29)
+
+Bagian ketiga halaman (`id="pa-mutu"`). Masalahnya bukan isi melainkan
+**kedudukan**: empat kartu ("Skor agregat", "Putusan verifikator", "Kualitas per
+agen", "Rincian per run") berdiri sejajar sebagai saudara, sehingga mata tidak
+punya tempat berhenti antara *"apa hasilnya"* dan *"run mana yang begitu"*.
+Judulnya juga melompat: `h2` "Mutu agen" memuat `h2` kedua ("Kualitas Agen") di
+dalamnya — dua judul setingkat, satu di dalam yang lain.
+
+### 52.1 Bentuk baru
+1. **Dua sub-blok bernama** (`section.quality-block` + `data-sub-block`):
+   **Skor agregat** (enam kartu metrik + cakupan sampel + putusan verifikator)
+   dan **Rincian** (kualitas per agen lalu rincian per run). Masing-masing
+   `aria-labelledby` ke judulnya sendiri, jadi keduanya wilayah yang bisa
+   disebut pembaca layar.
+2. **Hierarki judul diperbaiki**: kepala blok "Kualitas Agen" turun ke `h3`
+   (`PageHeader level={3}`, dukungan baru), judul kartu di dalam sub-blok jadi
+   `h4`. Urutan halaman kini `h1 → h2 → h3 → h4` tanpa lompatan dan tanpa `h2`
+   bersarang.
+3. **Rincian per run: baris 44 px.** Sebelumnya 39 px di 1440 px — di bawah
+   lantai sasaran sentuh, padahal tiap baris memuat tautan keputusan + tiga
+   lencana. Sekarang `height: 44px` (minimum; baris yang chip-nya membungkus
+   tetap lebih tinggi), dan tautan keputusan `min-height: 44px` di
+   `(pointer: coarse)`/≤720 px.
+4. **Kepala tabel lengket** (`position: sticky; top: 118px`) — hanya ≥1280 px,
+   sebab kepala tabel hanya bisa lengket bila wadahnya tidak menggulir; di
+   bawah itu tabel 8 kolom masih butuh gulir mendatar, jadi kepala dibiarkan
+   ikut tergulir daripada kolomnya terpotong (`overflow-x: clip` di ≥1280 px,
+   `auto` di bawahnya).
+
+### 52.2 Yang ditolak
+- **Melebarkan tabel per run agar 44 px tercapai tanpa aturan tinggi**: baris
+  sudah 39 px karena padding sel 7 px, bukan karena kurang lebar. Menambah
+  padding membuat 9 baris per agen ikut meninggi tanpa alasan (tabel itu tidak
+  memuat tombol).
+- **Kepala lengket di semua lebar**: di 390/760 px tabelnya 820/810 px di dalam
+  wadah 313/683 px. Memaksa `overflow: visible` di sana akan memotong kolom
+  "Durasi"/"Iterasi".
+
+### 52.3 Bukti
+| Uji / ukur | Hasil |
+| --- | --- |
+| `tests/perf-audit-redesign-kontrak.test.tsx` — Tahap 5 (todo → tes nyata) | **7 butir**: dua sub-blok berurutan + `aria-labelledby` masing-masing, `h3` blok & `h4` kartu tanpa `quality-section-head`, pembagian isi (skor+putusan di ringkasan; agen+run di rincian), penanda `data-table="per-agen"/"per-run"`, `height: 44px`, blok `@media (min-width: 1280px)` berisi `overflow-x: clip` + `position: sticky` + `top: 118px` |
+| 8 berkas (kontrak, `agent-quality`, `agent-quality-board`, `kpi-quality-board`, `kpi-dashboard`, `kpi-card-uniform`, `performance-audit-panel`, `section-jump`) | **84 lulus / 1 todo**; `tsc --noEmit` 0 galat; `next lint` "No ESLint warnings or errors" |
+| 1440 px (`_qa/preview/mutu-tahap5.html`) | baris per run **39 → 44 px**; tabel 1.363 = wadah 1.363 (tanpa gulir mendatar); sub-blok 535 / 758 px; luapan dokumen 0 |
+| 1280 px | baris 65 px (chip membungkus dua baris); tabel 1.203 = wadah 1.203; kepala lengket aktif |
+| 390 px | baris 151 → 149 px (isi membungkus; bukan efek aturan baru); tabel 820 di wadah 313 → gulir mendatar di dalam wadah, luapan dokumen 0; subtotal ringkasan 1.141 / rincian 1.379 |
+| 760 px | baris 149 px; tabel 810 di wadah 683; luapan dokumen 0 |
+| Kepala lengket (1440 px, digulir) | semua `th` berhenti di **y = 118**, nav bagian berakhir di y = 116 — kepala tabel tidak tertutup |
+
+Catatan metode: pratinjau memakai `renderToStaticMarkup` + `globals.css` +
+`theme-ext.css` di iframe 390/760/1280/1440 (bukan app hidup dengan sesi demo,
+supaya tidak perlu login dan tidak menyentuh DB). Angka "sebelum" diukur dengan
+mematikan aturan baru di iframe yang sama.
+
+---
+
+## 53. Performance & Audit — tahap 6: keadaan kosong bersaran + ringkasan metrik bermasalah (2026-10-29)
+
+Dua cacat yang tersisa setelah tahap 1–5, keduanya soal **kejujuran keadaan**,
+bukan soal bentuk:
+
+1. **KPI tanpa payload `return null`.** Bila `GET /kpi` belum tiba atau tidak
+   memuat `metrics`, `KPIDashboard` mengembalikan `null` — bagian berjudul
+   "Hasil KPI" tinggal kepala dan bilah kendali, tanpa satu kalimat pun yang
+   menjelaskan sebabnya. Pembaca menyimpulkan halaman rusak.
+2. **Metrik bermasalah hanya terlihat dengan memindai tabel.** Sejak tahap 4,
+   tabel audit terbuka bila ada yang bermasalah, tetapi jumlah dan nama metrik
+   bermasalah baru terbaca setelah membaca tujuh baris.
+
+### 53.1 Bentuk baru
+1. **`components/EmptyState.tsx`** — satu bentuk untuk keadaan kosong: **apa**
+   yang kosong (judul), **kenapa** (sebab), **apa yang bisa dilakukan**
+   (saran), dan **satu tindakan** (tombol, hanya bila handler-nya ada).
+   `role="status"` + `data-empty-state="<kode>"` supaya bisa diuji.
+   Garis putus-putus, bukan bingkai tebal: ini tempat yang belum berisi.
+2. **KPI kosong** → `data-empty-state="kpi"`: "Belum ada angka KPI" + sebab
+   (respons belum memuat metrik; tidak ada yang ditampilkan tanpa mengarang
+   angka) + saran (ganti periode · muat ulang) + tombol **Muat ulang**.
+3. **Mutu agen tanpa run** → `data-empty-state="mutu"`, menggantikan DUA kartu
+   kosong (tabel per agen + tabel per run) yang hanya mengulang kalimat yang
+   sama. Sebabnya disebut (jejak agen pada keputusan terakhir cakupan) dan
+   jalan keluarnya dua: muat ulang, atau periksa keputusan di Decision &
+   Evidence.
+4. **Ringkasan metrik bermasalah** (`data-testid="audit-ringkasan-bermasalah"`,
+   `role="status"`) di atas tabel audit: "N dari M metrik perlu perhatian —
+   <nama> (<keadaan>) · …". Yang dihitung **hanya jumlah baris payload** yang
+   keadaannya bukan `available` — bukan metrik turunan, bukan rata-rata, bukan
+   persentase (pagar tes tahap 3 melarang `Math.`, `.reduce(`, dan `* 100` di
+   panel ini).
+
+### 53.2 Yang ditolak
+- **Menyembunyikan tabel saat kosong**: audit yang kosong tetap harus bisa
+  diperiksa; yang ditambah adalah kalimat, bukan penghapusan.
+- **Tombol "Coba lagi" kedua di ringkasan**: bilah kendali sudah punya periode
+  dan cakupan; ringkasan hanya menunjuk, tidak menambah kontrol baru.
+
+### 53.3 Bukti
+| Uji / ukur | Hasil |
+| --- | --- |
+| `tests/perf-audit-redesign-kontrak.test.tsx` — Tahap 6 (todo → tes nyata) | **4 butir**: ringkasan bernada `role="status"` dengan teks persis "1 dari 2 metrik perlu perhatian — Delivery On Time (belum ada data)" dan berada sebelum `<thead>`; ringkasan **tidak** dirender saat semua metrik tersedia; keadaan kosong KPI (`data-empty-state="kpi"`, judul, saran "Coba periode lain", tombol `kpi-retry`); keadaan kosong mutu (`data-empty-state="mutu"`, sebab, saran "muat ulang") |
+| 6 berkas (kontrak, `kpi-dashboard`, `agent-quality-board`, `kpi-quality-board`, `kpi-wiring`, `performance-audit-panel`) | **57 lulus / 0 todo**; `tsc --noEmit` 0 galat; `next lint` "No ESLint warnings or errors" |
+| 1440 px & 1280 px (`_qa/preview/mutu-tahap6-bermasalah.html`) | ringkasan **36 px satu baris** (lebar 1.359 / 1.199), keadaan kosong mutu 194 px; luapan dokumen 0 |
+| 390 px | ringkasan **79 px dua baris** (lebar 309), keadaan kosong 270 px; luapan dokumen 0; teks lengkap tetap terbaca (tidak dipotong) |
+
+### 53.4 Satu tabrakan nama kelas yang tertangkap sebelum dilaporkan
+
+Kelas `.empty-state` **sudah dipakai lama** di repo ini sebagai paragraf kecil
+abu-abu miring (`page.tsx`, `PurchaseOrderList`, `AgentSwarmPanel`,
+`ApprovalModal`, `AgentTraceViewer` — didefinisikan di `globals.css:528`
+bersama `.read-only-note`). Versi pertama komponen ini memakai nama itu,
+sehingga menambahkan `display:flex` + bingkai putus-putus + padding 16 px ke
+semua tempat tersebut. Yang menangkapnya bukan tes, melainkan `grep` saat
+mengerjakan tahap berikutnya; kelasnya diganti **`.empty-panel`**
+(`.empty-panel-title` / `-note` / `-action`). Pelajaran yang ditulis di sini
+supaya tidak diulang: sebelum menambah kelas gaya baru, cari dulu namanya di
+`globals.css` — repo ini punya 15 ribu baris CSS tanpa prefiks otomatis.
+
+Catatan: pratinjau memakai `renderToStaticMarkup` + CSS asli di iframe,
+bukan sesi demo hidup — sama seperti tahap 5, supaya pengukuran tidak butuh
+login dan tidak menyentuh DB.
+
+---
+
+## 54. Recommendation Feed — tahap 5–7: keadaan kosong, kepadatan, konsolidasi
+
+### 54.1 Keadaan kosong = sebab + aksi utama + aksi sekunder
+
+Kotak "tidak ada hasil" dulu `border: 1px dashed var(--status-warning)` — kuning
+peringatan untuk keadaan yang bukan peringatan — dan isinya bergantung cabang:
+dengan filter aktif hanya satu kalimat tanpa tindakan. Sekarang
+`components/FeedEmptyState.tsx` selalu mencetak tiga bagian dan menerima angka
+apa adanya dari pemanggil (`totalInWindow`, `windowLabel`) alih-alih menghitung
+sendiri. Galat muat memakai `role="alert"`; keadaan kosong `role="status"`.
+
+### 54.2 Kepadatan & responsif
+
+Jarak kartu 8 → 10 px (`10 px` cukup untuk "satu daftar" tanpa menambah tinggi
+berarti). ≤720 px: pencarian selebar baris, pemilih urutan satu baris penuh,
+tombol Tinjau selebar kartu dengan tinggi 44 px. Gerak masuk tetap hanya enam
+baris pertama dan dimatikan `prefers-reduced-motion`.
+
+### 54.3 Konsolidasi & gerbang
+
+Dua aturan `.feed` (gap 12 lalu gap 8) menjadi satu; tujuh aturan mati dibuang.
+`tests/feed-css-gate.test.ts` menjaga: satu `.feed`, tidak ada kelas `feed-*`/
+`rec-*` tanpa pemakai atau tanpa aturan, selektor tidak dideklarasikan ganda, dan
+`.feed-empty` tidak kembali ke warna peringatan.
+
+---
+
+## 55. Kepala halaman (hero) seragam di semua tab (30 Okt 2026)
+
+**Permintaan pemilik:** "pada bagian hero pada semua page gunakan design yang sama".
+
+### 55.1 Dua pola yang hidup berdampingan
+
+| Pola | Kelas | Dipakai |
+|---|---|---|
+| Pita tanpa bingkai | `.page-header` (komponen `PageHeader`/`PageShell`) | Hari Ini, Performance & Audit, Kualitas Agen, Location Network, Pemasok, Keamanan Pangan, Surplus & Limbah |
+| Kartu | `.overview-header` (markup sendiri) | Overview, Decision & Evidence; Pengaturan punya `<h1>` sendiri |
+
+Dua-duanya berisi hal yang sama (judul · satu kalimat · penanda kanan) tetapi
+tampil berbeda: yang satu menempel di latar halaman, yang lain berkotak.
+
+### 55.2 Keputusan: satu komponen, kulit kartu
+
+`PageHeader` menjadi SATU-SATUNYA kepala halaman, dan kulitnya mengikuti pola
+kartu yang sudah disetujui untuk Overview/Evidence — `padding: 14px 16px`,
+`background: var(--surface)`, `border: 1px solid var(--line)`,
+`border-radius: var(--radius)`, `box-shadow: var(--shadow-1)`. Props baru:
+`id` (sasaran lompatan), `titleId` (untuk `aria-labelledby`), `ariaLabel`, dan
+`className` (mis. `jump-target`).
+
+Overview, Decision & Evidence, dan Pengaturan sekarang memakai komponen itu;
+delapan aturan `.overview-header*` dihapus karena tidak ada lagi pemakainya.
+Halaman yang punya baris kontrol (filter komoditas, pemilih keputusan) tetap
+menaruhnya di dalam kartu lewat slot `filters` — satu kartu, dua baris.
+
+### 55.3 Yang dijaga supaya tidak kembali
+
+- `tests/hero-seragam.test.tsx`: tidak ada `overview-header` di komponen/halaman;
+  setiap tab memasang `PageShell`/`PageHeader`; kulit `.page-header` memuat lima
+  properti kartu di atas.
+- Pagar tahap 2 Performance & Audit dipertegas, bukan dilemahkan: kepala tidak
+  boleh mengulang kontrol periode/cakupan (`kpi-period-pill`, teks "7 hari
+  terakhir"), tetapi boleh memuat pil JUMLAH (metrik, run) seperti tab lain.
+- `tests/radius-scale-css.test.ts` menangkap `border-radius: var(--radius-card)`
+  pada `.empty-panel` (token di luar skala) — diganti `var(--radius)`.
+
+### 55.4 Ukuran (pratinjau statis, Location Network)
+
+| Lebar | Tinggi kepala | Sebelum (tanpa kulit) | Selisih | Luapan |
+|---|---|---|---|---|
+| 1440 px | 123 px | 93 px | +30 px | 0 |
+| 760 px | 135 px | 105 px | +30 px | 0 |
+| 390 px | 191 px | 161 px | +30 px | 0 |
+
+Judul 20 px (`--fs-6`) di ketiga lebar, radius 12 px, garis `#E2E8F0`, bayangan
+`rgba(15,23,42,0.04)`, jarak kepala→nav 24 px. Tambahan 30 px per halaman adalah
+harga satu bingkai kartu yang sama di semua tab.
+
+---
+
+## 56. Location Network — upgrade visual: tenang & bersih (30 Okt 2026)
+
+**Permintaan pemilik:** "upgrade tampilan ui/ux page Location Network, buat
+tampilan yang enak dilihat, namun simple clean".
+
+### 56.1 Diagnosis (diukur, bukan dikira)
+
+| Temuan (1440 px) | Angka sebelum |
+|---|---|
+| Judul kartu hampir sebesar teks sel | `h2` 14 px vs sel 13 px |
+| Tiga penanda untuk satu baris | zebra `#F1F5F9` + garis rambut + badge berwarna |
+| Nilai "Selisih" melayang dari namanya | kolom 495 px (432 / 468 / 495) |
+| Baris tabel di bawah target sentuh | 41 px |
+| Penanda buka-tutup bergantung font | glyph `▸/▾`, duduk di baseline |
+
+### 56.2 Yang diubah (semua di-scope `.network-page`)
+
+1. **Napas**: jarak halaman 12 → 14 px, padding kartu 14 → 18 px.
+2. **Hierarki**: judul kartu 14 → 16 px (`--fs-4`, bobot 600, `--track-tight`),
+   jarak judul→isi 10 → 12 px.
+3. **Tabel**: zebra dihapus; baris dipisah `1px solid var(--line)`; hover netral
+   `--surface-sunken`; baris terbuka ikut bertanda `--surface-sunken`; tinggi
+   baris 41 → 47 px (padding 10 px) — sekaligus memenuhi target 44 px.
+4. **Kolom**: `Lokasi 30%` · `Wilayah` sisa · `Selisih 230 px` rata kanan.
+   Di ≤760 px tabel sudah menjadi kartu, jadi aturan ini dibatasi `min-width: 761px`.
+5. **Chevron**: `.row-chevron` digambar CSS (5×5 px, garis 1.5 px, rotate 45°
+   saat terbuka) — tidak lagi bergantung glyph font; transisi 0.16 s dimatikan
+   pada `prefers-reduced-motion`.
+6. `.board-page .location-table` milik tab lain tidak tersentuh karena setiap
+   aturan memakai kelas halaman `.network-page` yang hanya dipasang
+   `LocationNetworkBoard`.
+
+### 56.3 Sesudah (pratinjau statis, 3 lebar)
+
+| Lebar | Gap | Padding kartu | Judul kartu | Baris | Luapan |
+|---|---|---|---|---|---|
+| 1440 | 14 px | 18 px | 16 px | 47 px | 0 |
+| 760 | 14 px | 18 px | 16 px | kartu | 0 |
+| 390 | 14 px | 18 px | 17 px | kartu | 0 |
+
+Kolom pada 1440: 416 / 741 / 230 px. Zebra `rgba(0,0,0,0)` (hilang), garis baris
+`1px rgb(226,232,240)`, garis kepala tabel `--line-strong`.
+
+### 56.4 Catatan pratinjau
+
+`LocationNetworkBoard.module.css` tidak ikut dimuat di pratinjau statis (nama
+kelas di-hash), sehingga tombol nama lokasi tampil dengan gaya bawaan peramban
+dan pengukurannya menyesatkan. Pratinjau sekarang menyertakan salinan aturan
+modul itu sebagai shim — tanpa itu tombol terlihat seperti chip berkotak.
+
+---
+
+## 57. Mesin biaya — angkut per trip, laju susut per komoditas, kesegaran linear (2026-10-29b)
+
+Revisi rumus atas permintaan pemilik. Ruling lengkap:
+`docs/ruling-2026-10-29b-tarif-trip-laju-susut.md`.
+
+### 57.1 Tiga perubahan, satu perilaku yang dipertahankan
+
+| komponen | sekarang | modul |
+|---|---|---|
+| transport | `jumlah_trip × (250.000 + 4.000 × jarak_total)`, `jumlah_trip = ceil(kg ÷ 1.000)` | `app/core/trip_cost.py` |
+| expected_loss (susut gudang) | `purchase × laju_komoditas × (hari simpan ÷ umur simpan)` | `app/core/shrinkage.py` + `safe_delivered_cost.py` |
+| freshness_risk | `purchase × 0,50 × (0,60 − f) ÷ 0,60` untuk f < 0,60 | `safe_delivered_cost.py` |
+
+Yang dipertahankan: safety FAIL ditolak sebelum hitung, penalti risiko tidak
+masuk PO, HALF_UP 2dp per komponen, jumlah komponen = total, determinisme.
+
+Laju susut per umur simpan: beras 0,8% · telur 4% · wortel 15% · ayam 12%.
+Komoditas tak terdaftar memakai cadangan 20% **dan** melaporkan
+`shrinkage_rate_source = laju_default_0.2` — bukan menyamar sebagai angka tabel.
+
+### 57.2 Jejak yang harus terbaca di payload
+
+Setiap `cost_breakdown` sekarang membawa: `transport_total_km`,
+`transport_trips`, `transport_basis` (`tarif_per_trip_asumsi` /
+`jarak_tidak_diketahui`), `transport_allocation` (`proporsional_km` bila dua
+kaki), `shrinkage_rate`, `shrinkage_rate_source`, dan `formula_version`
+(`sdc-2026.10.29b`). Endpoint `POST /cost/safe-delivered` ikut mengembalikan
+`shrinkage_rate` + sumbernya.
+
+Alokasi rupiah ke kaki pemasok/linehaul bersifat proporsional km: tarif
+berangkat dibayar **sekali** per trip, dan jumlah kedua baris tetap sama persis
+dengan `transport`. Menjumlahkan dua perhitungan per kaki akan menagih dua kali
+biaya berangkat untuk satu pengiriman.
+
+### 57.3 Data lama dihitung ulang
+
+`backend/scripts/hitung_ulang_biaya.py` (pratinjau default, `--terapkan` untuk
+menulis) memakai `services.demo_cost.hitung_biaya_demo` — mesin yang sama dengan
+tombol "Hitung ulang biaya" — lalu menyinkronkan
+`agent_traces.output_summary["sdc"]`. Langkah sinkron itu wajib: tanpanya tab
+Agent Log menampilkan angka lama untuk keputusan yang sama (temuan audit 26 Okt
+2026). Cadangan nilai lama ditulis ke `_qa/hitung-ulang-biaya-<cap>.json`
+sebelum commit.
+
+### 57.4 Batas yang jujur
+
+Tarif 250.000 + 4.000/km dengan truk 1 ton adalah **asumsi**, dilabeli
+`tarif_per_trip_asumsi` di setiap breakdown. Ia belum berasal dari perusahaan
+logistik, sehingga tidak boleh disebut tarif nyata di dokumen juri.

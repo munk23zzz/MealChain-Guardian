@@ -1,5 +1,23 @@
 "use client";
 
+// ⚠️ BERKAS INI SUDAH TIDAK DIRENDER (29 Okt 2026, tahap 8).
+//
+// Halaman Decision & Evidence kini punya SATU jalur render: kepala + pemilih →
+// `DecisionSummary` → `DecisionApproval` → `DecisionCostEvidence` →
+// `DecisionSafetySupplier` → `DecisionIdentityBatch` → `DecisionTraceIntegrity`.
+// Gerbang `ISI_DIBANGUN_ULANG` yang dulu memilih berkas ini sudah dicabut, dan
+// tidak ada lagi yang mengimpornya.
+//
+// Berkas ini BELUM dihapus karena empat tes audit lama masih membaca TEKSNYA
+// lewat readFileSync (`chaos-telemetry`, `sidebar-wiring`,
+// `supplier-governance-ui`, `decision-bukti-tanpa-kalimat-teknis`). Tes-tes itu
+// karena itu memberi hijau palsu: ia memeriksa markah yang tidak pernah tampil
+// di layar. Memindahkannya ke komponen hidup sudah dicatat sebagai utang di
+// TODO.md — jangan menambah aturan baru ke berkas ini.
+//
+// Salinan utuh versi terakhir yang PERNAH dirender ada di
+// `docs/arsip/decision-evidence-20261029/`.
+//
 // DecisionDetail — ISI satu keputusan, tanpa cangkang halaman.
 //
 // Kenapa dipisah (28 Okt 2026): detail yang sama harus bisa muncul di DUA tempat —
@@ -23,9 +41,7 @@ import { caseLabelOf } from "./RecommendationCard";
 import DecisionAudit from "./DecisionAudit";
 import IntegrityPanel from "./IntegrityPanel";
 import DecisionPurchaseOrder from "./DecisionPurchaseOrder";
-import DecisionTraceList from "./DecisionTraceList";
 import { SupplierExclusionView } from "./SupplierExclusionPanel";
-import { CatatanTeknis } from "./CatatanTeknis";
 import GoodsReceiptDrawer from "./GoodsReceiptDrawer";
 import { statusWord } from "../lib/decision-picker";
 import { shortId } from "../lib/agent-quality";
@@ -45,7 +61,6 @@ import {
 import { downloadDossier } from "../lib/export";
 import FactList from "./FactList";
 import DecisionEconomics from "./DecisionEconomics";
-import HumanReviewPanel from "./HumanReviewPanel";
 import BatchEvaluationTable from "./BatchEvaluationTable";
 import { fetchDecisionPacket } from "../lib/api";
 import { dueLabel } from "../lib/today";
@@ -82,7 +97,6 @@ export default function DecisionDetail({
   now,
   onSupplierCreated,
   purchaseOrders,
-  traces,
   dalamPopup = false,
 }: {
   selected: any | null;
@@ -93,8 +107,6 @@ export default function DecisionDetail({
   token: string | null;
   now: Date | null;
   onSupplierCreated?: (decisionId: string) => void;
-  /** Jejak agen keputusan ini (dari GET /decisions/{id}/traces). */
-  traces?: unknown;
   /** Data PO jaringan; komponen hanya memakai baris milik keputusan ini. */
   purchaseOrders?: unknown;
   dalamPopup?: boolean;
@@ -330,7 +342,11 @@ export default function DecisionDetail({
                 (lihat `safetyFacts(..., { countInBadge: true })`) — kecuali
                 server tidak mengirim angka yang bermakna, maka barisnya tetap
                 tampil dengan "—". */}
-            <div className="board-card-head">
+            {/* Tahap 7 (29 Okt 2026): jangkar `#keamanan` dipasang juga di sini.
+                Nav bagian kini punya tujuan "Keamanan & pemasok"; tanpa id ini,
+                halaman versi lama (gerbang `ISI_DIBANGUN_ULANG` dimatikan) akan
+                punya satu tautan mati. */}
+            <div className="board-card-head" id="keamanan">
               <h2>Keamanan &amp; pemasok</h2>
               {badgeSafety ? (
                 <span
@@ -367,13 +383,13 @@ export default function DecisionDetail({
           <h2>Evaluasi batch</h2>
           <BatchEvaluationTable evaluations={paket?.batch_evaluations} />
         </article>
-        <HumanReviewPanel
-          decisionId={selected?.decision_id ?? null}
-          token={token}
-          role={role}
-          packet={paket}
-          tanpaCatatan
-        />
+        {/* Panel "Verifikasi bukti batch" (HumanReviewPanel) DIHAPUS 29 Okt 2026
+            atas permintaan pemilik: kartu itu meminta reviewer memilih batch dan
+            menambah catatan review dari halaman BUKTI, padahal keputusan sudah
+            diverifikasi verifikator dan datanya mengalir sendiri. Formulir yang
+            tidak dipakai membuat halaman bukti terlihat seperti antrean kerja
+            yang belum selesai. Komponennya masih ada di repo (dipakai tes
+            `human-review-null-packet`), hanya tidak lagi dirender di sini. */}
 
         {/* Penerimaan barang + governance pemasok: keduanya BUKTI pelaksanaan,
             jadi tinggal di blok Bukti yang sama (29 Okt 2026). Sebelumnya dua
@@ -414,13 +430,6 @@ export default function DecisionDetail({
           />
         </article>
 
-        <article className="card">
-          <h2>Jejak agen keputusan ini</h2>
-          {/* Jejak dirender DI SINI, bukan lewat lompatan ke tab Agent Log:
-              dossier harus lengkap tanpa berpindah halaman. */}
-          <DecisionTraceList traces={traces} />
-        </article>
-
         <article className="card evidence-audit-card">
           <h2>Jejak &amp; riwayat</h2>
           <DecisionAudit events={audit} />
@@ -433,8 +442,6 @@ export default function DecisionDetail({
           token={token ?? ""}
           decisionId={selected.decision_id}
         />
-
-        <CatatanTeknis />
       </section>
     </>
   );

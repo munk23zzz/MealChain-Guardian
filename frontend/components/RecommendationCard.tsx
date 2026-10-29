@@ -157,12 +157,16 @@ export default function RecommendationCard({
   return (
     <article className={`card recommendation-card rec-edge ${edge}`}>
       <div className="rec-head">
-        <p className="rec-title">
+        {/* Tahap 3 (30 Okt 2026): judul kartu adalah HEADING, bukan paragraf.
+            Pembaca layar bisa melompat antar kartu dengan tombol heading;
+            sebelumnya daftar 10 kartu hanya bisa ditelusuri berurutan. Urutan
+            tingkatannya h1 (PageHeader) → h2 (daerah daftar, sr-only) → h3. */}
+        <h3 className="rec-title">
           {typeLabel}
           {decision.iteration && decision.iteration > 1 && (
             <span className="badge version-badge">v{decision.iteration}</span>
           )}
-        </p>
+        </h3>
         <div className="rec-badges">
           <StatusBadge status={decision.status} />
           <span

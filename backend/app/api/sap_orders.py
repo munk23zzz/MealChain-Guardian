@@ -33,12 +33,13 @@ Modul ini menutup celah itu dengan tiga aturan:
 """
 
 import json
+import os
 import uuid
 from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Literal
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Response
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -344,6 +345,152 @@ _SELECT_PERSETUJUAN = (
 )
 
 
+async def _dokumen_po(db: AsyncSession, row) -> dict:
+    """Isi dokumen satu PO — satu sumber untuk PDF dan JSON detail (29 Okt 2026).
+
+    Sebelumnya dict dokumen hanya hidup di dalam rute PDF, jadi jembatan A2A
+    (yang hanya bicara JSON) tidak bisa menjawab "isi PO MC-…" selengkap
+    dokumennya. Dua pemakai, satu bentuk data: kalau PDF berubah, JSON ikut.
+    """
+    qty = float(row["ordered_quantity"])
+    harga = float(row["price"])
+    dokumen: dict = {
+        "po_number": row["po_number"],
+        "status": row["status"],
+        "created_at": row["created_at"],
+        "ordered_quantity": qty,
+        "price": harga,
+        # Satu aturan dengan endpoint daftar: total = harga × kuantitas.
+        "total": round(harga * qty, 2),
+        "material_number": row["material_number"],
+        "commodity_name": row["commodity_name"],
+        "location_name": row["location_name"],
+        "supplier_name": row["supplier_name"],
+        # Dua arti biaya dipisah: `commercial_cost` (bahan/transportasi/
+        # penanganan + SDC analitis) dan `cost_legacy` (harga tersimpan masih
+        # basis lama). `None` = tidak tercatat, bukan nol.
+        "commercial_cost": None,
+        "cost_legacy": cost_legacy_of(row),
+        "keputusan": None,
+        "persetujuan": [],
+        "syarat": {"min_approvals": None, "required_roles": [], "satisfied": False},
+        "boleh_pdf": False,
+    }
+    if row["decision_id"] is None:
+        return dokumen
+
+    keputusan = (
+        await db.execute(select(Decision).where(Decision.id == row["decision_id"]))
+    ).scalar_one_or_none()
+    if keputusan is None:
+        return dokumen
+
+    persetujuan = [
+        {
+            "role": r["role"],
+            "name": r["name"],
+            "approved": bool(r["approved"]),
+            "comment": r["comment"],
+            "approved_at": r["approved_at"],
+        }
+        for r in (await db.execute(text(_SELECT_PERSETUJUAN), {"keputusan": str(keputusan.id)}))
+        .mappings()
+        .all()
+    ]
+    syarat = syarat_persetujuan(keputusan)
+    hasil = evaluate_approvals(
+        syarat, [{"role": b["role"], "approved": b["approved"]} for b in persetujuan]
+    )
+    dokumen.update(
+        {
+            "commercial_cost": commercial_cost_payload(
+                keputusan.quantity_kg, keputusan.cost_breakdown
+            ),
+            "keputusan": {
+                "id": str(keputusan.id),
+                "jenis": keputusan.decision_type,
+                "status": keputusan.status,
+                "iteration": keputusan.iteration,
+                "proposed_by": keputusan.proposed_by,
+                "created_at": keputusan.created_at,
+                "expires_at": keputusan.expires_at,
+            },
+            "persetujuan": persetujuan,
+            "syarat": {
+                "min_approvals": syarat.get("min_approvals"),
+                "required_roles": syarat.get("required_roles"),
+                "satisfied": hasil["satisfied"],
+            },
+            "boleh_pdf": po_document.boleh_pdf(keputusan.status),
+        }
+    )
+    return dokumen
+
+
+def _basis_publik(request: Request) -> str:
+    """Basis URL absolut untuk tautan PDF yang dikirim ke Joule.
+
+    Di belakang tunnel, `request.base_url` sudah memuat host yang dijangkau
+    klien. `PUBLIC_BASE_URL` menimpanya untuk pemasangan di belakang proxy yang
+    menulis ulang skema/host (mis. Cloud Foundry + tunnel).
+    """
+    return (os.environ.get("PUBLIC_BASE_URL") or str(request.base_url)).rstrip("/")
+
+
+@router.get("/sap/purchase-orders/{po_number}/detail")
+async def detail_purchase_order(
+    po_number: str,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> dict:
+    """Isi satu purchase order sebagai JSON — bahan yang sama dengan PDF PO.
+
+    Dipakai jembatan A2A (Joule) yang hanya bisa membaca JSON: rincian biaya,
+    siapa menyetujui dan komentarnya, syarat persetujuan, serta keputusan asal.
+    Cakupan sama dengan daftar/PDF: PO lokasi lain dijawab 404, bukan 403.
+    """
+    lokasi = scope_location_id(user)
+    sql = _SELECT_SATU
+    params: dict = {"nomor": po_number}
+    if lokasi is not None:
+        sql += " AND d.target_location_id = :lokasi"
+        params["lokasi"] = str(lokasi)
+
+    row = (await db.execute(text(sql), params)).mappings().first()
+    if row is None:
+        raise HTTPException(status_code=404, detail="purchase order tidak ditemukan")
+
+    dokumen = await _dokumen_po(db, row)
+    return {
+        "po_number": dokumen["po_number"],
+        "status": dokumen["status"],
+        "created_at": dokumen["created_at"],
+        "material_number": dokumen["material_number"],
+        "commodity_name": dokumen["commodity_name"],
+        "location_name": dokumen["location_name"],
+        "supplier_name": dokumen["supplier_name"],
+        "ordered_quantity": dokumen["ordered_quantity"],
+        "price": dokumen["price"],
+        "total": dokumen["total"],
+        "commercial_cost": dokumen["commercial_cost"],
+        "keputusan": dokumen["keputusan"],
+        "persetujuan": dokumen["persetujuan"],
+        "syarat": dokumen["syarat"],
+        "boleh_pdf": dokumen["boleh_pdf"],
+        # Tautan berumur pendek supaya Joule bisa menyebut PDF yang sedang
+        # dibacanya (chat tidak membawa token login dan tidak bisa melampirkan
+        # berkas). `None` bila PO belum boleh punya PDF — jembatan lalu tidak
+        # menjanjikan tautan yang akan ditolak.
+        "pdf_url": (
+            po_document.link_pdf_publik(po_number, _basis_publik(request))
+            if dokumen["boleh_pdf"]
+            else None
+        ),
+        "source": SUMBER,
+    }
+
+
 @router.get("/sap/purchase-orders/{po_number}/pdf")
 async def unduh_purchase_order_pdf(
     po_number: str,
@@ -390,64 +537,11 @@ async def unduh_purchase_order_pdf(
             ),
         )
 
-    persetujuan = [
-        {
-            "role": r["role"],
-            "name": r["name"],
-            "approved": bool(r["approved"]),
-            "comment": r["comment"],
-            "approved_at": r["approved_at"],
-        }
-        for r in (await db.execute(text(_SELECT_PERSETUJUAN), {"keputusan": str(keputusan.id)}))
-        .mappings()
-        .all()
-    ]
-    syarat = syarat_persetujuan(keputusan)
-    hasil = evaluate_approvals(
-        syarat, [{"role": b["role"], "approved": b["approved"]} for b in persetujuan]
-    )
-
-    qty = float(row["ordered_quantity"])
-    harga = float(row["price"])
-    pdf = po_document.bangun_pdf(
-        {
-            "po_number": row["po_number"],
-            "status": row["status"],
-            "created_at": row["created_at"],
-            "ordered_quantity": qty,
-            "price": harga,
-            # Satu aturan dengan endpoint daftar: total = harga × kuantitas.
-            "total": round(harga * qty, 2),
-            "material_number": row["material_number"],
-            "commodity_name": row["commodity_name"],
-            "location_name": row["location_name"],
-            "supplier_name": row["supplier_name"],
-            # Dua arti biaya dikirim TERPISAH ke dokumen: `commercial_cost`
-            # (bahan/transportasi/penanganan + SDC analitis) dan `cost_legacy`
-            # (apakah harga tersimpan masih basis lama). `None` = tidak
-            # tercatat → dokumen tidak mencetak komponen karangan.
-            "commercial_cost": commercial_cost_payload(
-                keputusan.quantity_kg, keputusan.cost_breakdown
-            ),
-            "cost_legacy": cost_legacy_of(row),
-            "keputusan": {
-                "id": str(keputusan.id),
-                "jenis": keputusan.decision_type,
-                "status": keputusan.status,
-                "iteration": keputusan.iteration,
-                "proposed_by": keputusan.proposed_by,
-                "created_at": keputusan.created_at,
-                "expires_at": keputusan.expires_at,
-            },
-            "persetujuan": persetujuan,
-            "syarat": {
-                "min_approvals": syarat.get("min_approvals"),
-                "required_roles": syarat.get("required_roles"),
-                "satisfied": hasil["satisfied"],
-            },
-            "dibuat_pada": datetime.now(timezone.utc),
-        }
-    )
+    # Isi dokumen dibangun satu kali di `_dokumen_po` (dipakai juga oleh JSON
+    # detail), supaya PDF dan JSON tidak bisa berbeda isi.
+    dokumen = await _dokumen_po(db, row)
+    dokumen["dibuat_pada"] = datetime.now(timezone.utc)
+    pdf = po_document.bangun_pdf(dokumen)
     return Response(
         content=pdf,
         media_type="application/pdf",
@@ -458,5 +552,75 @@ async def unduh_purchase_order_pdf(
             # Dokumen dibuat per permintaan dari baris DB terbaru; cache bisa
             # menyajikan PDF lama setelah status PO/approval berubah.
             "Cache-Control": "no-store",
+        },
+    )
+
+
+@router.get("/public/purchase-orders/{po_number}/pdf")
+async def unduh_pdf_publik(
+    po_number: str,
+    t: str = Query("", description="token tautan berumur pendek dari Joule"),
+    db: AsyncSession = Depends(get_db),
+) -> Response:
+    """PDF PO lewat tautan bertanda tangan — tanpa token login.
+
+    Joule hanya bisa mengirim teks dan tidak membawa token pengguna, jadi tautan
+    berumur pendek adalah satu-satunya cara juri membuka dokumen yang sedang
+    dibacanya. Pagar yang dijaga tetap sama dengan rute ber-token:
+
+    * token harus menyebut nomor PO yang sama (bukan nomor lain),
+    * token kedaluwarsa → 401, bukan dokumen,
+    * PO harus lahir dari keputusan `approved`/`executed` → 409 bila belum,
+    * isi dokumen dibangun dari baris DB saat diminta (`no-store`).
+    """
+    nomor = po_document.nomor_dari_token_pdf(t)
+    if nomor is None or nomor != po_number:
+        raise HTTPException(
+            status_code=401,
+            detail="tautan PDF tidak sah atau sudah kedaluwarsa",
+        )
+
+    row = (
+        await db.execute(text(_SELECT_SATU), {"nomor": po_number})
+    ).mappings().first()
+    if row is None:
+        raise HTTPException(status_code=404, detail="purchase order tidak ditemukan")
+
+    if row["decision_id"] is None:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"PO {row['po_number']} tidak lahir dari keputusan — PDF hanya "
+                "diterbitkan untuk PO yang sudah disetujui"
+            ),
+        )
+
+    keputusan = (
+        await db.execute(select(Decision).where(Decision.id == row["decision_id"]))
+    ).scalar_one_or_none()
+    if keputusan is None:
+        raise HTTPException(status_code=404, detail="purchase order tidak ditemukan")
+    if not po_document.boleh_pdf(keputusan.status):
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"keputusan {po_document.status_keputusan_label(keputusan.status).lower()} "
+                "— PDF PO diterbitkan setelah keputusan disetujui"
+            ),
+        )
+
+    dokumen = await _dokumen_po(db, row)
+    dokumen["dibuat_pada"] = datetime.now(timezone.utc)
+    pdf = po_document.bangun_pdf(dokumen)
+    return Response(
+        content=pdf,
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": (
+                f'attachment; filename="{po_document.nama_berkas(row["po_number"])}"'
+            ),
+            "Cache-Control": "no-store",
+            # Tautan tidak boleh tertinggal di riwayat/proxy perantara.
+            "Referrer-Policy": "no-referrer",
         },
     )

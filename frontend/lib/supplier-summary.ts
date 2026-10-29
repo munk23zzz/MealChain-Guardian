@@ -8,12 +8,21 @@ import type { DirectoryMetrics } from "./suppliers-board";
 // punya tombol. Penyaring tetap satu — tombol "Hanya dalam jangkauan" di atas
 // kolom cari, yang memang sudah ada dan dekat dengan tabelnya.
 //
-// Isi strip, urut tetap:
-//   1. jumlah pemasok
+// S2 (29 Okt 2026) — EMPAT angka, satu di antaranya dipromosikan:
+//   1. [dipromosikan] pemasok dalam jangkauan (atau pemasok terdaftar bila
+//      peran tidak punya ambang jangkauan)
 //   2. rata-rata keandalan
 //   3. pemasok dengan keandalan di bawah 60%
 //   4. pemasok tanpa stok layak hari ini
-//   5. pemasok di luar jangkauan (hanya bila peran punya ambang jangkauan)
+//
+// Kenapa "jumlah pemasok" dan "di luar jangkauan" tidak lagi berdiri sendiri:
+//   - jumlah pemasok sudah jadi pil di kepala halaman (S1) — mengulanginya di
+//     strip membuat satu angka tampil di dua tempat;
+//   - "di luar jangkauan" sudah tertulis sebagai kalimat di baris penyaring
+//     jangkauan ("30 dari 60 pemasok berjarak di atas 120 km"), tepat di atas
+//     tabel yang ia saring.
+// Jadi strip hanya memuat angka yang tidak ada di tempat lain: berapa pemasok
+// yang bisa dipakai hari ini, dan seberapa bagus mutunya.
 //
 // Angka 0 tetap ditampilkan (bukan disembunyikan): pada strip KPI, "0" adalah
 // jawaban yang sah dan tidak lagi terbaca seperti data yang gagal dimuat.
@@ -23,6 +32,8 @@ export type Kpi = {
   value: string;
   /** `warn`/`danger` memberi warna pada angka yang perlu dilihat. */
   tone: "plain" | "warn" | "danger";
+  /** Angka yang dipromosikan — satu per strip, dibaca lebih dulu. */
+  lead?: boolean;
 };
 
 function angka(n: number): string {
@@ -34,8 +45,24 @@ export function kpiRingkasan(
   reachKm?: number | null
 ): Kpi[] {
   const tanpaStok = Math.max(0, metrics.suppliers - metrics.shipping);
-  const items: Kpi[] = [
-    { label: "Pemasok", value: angka(metrics.suppliers), tone: "plain" },
+  const punyaJangkauan =
+    reachKm !== null && reachKm !== undefined && Number.isFinite(reachKm);
+  const dalamJangkauan = Math.max(0, metrics.suppliers - metrics.outOfReach);
+  const utama: Kpi = punyaJangkauan
+    ? {
+        label: `Pemasok dalam jangkauan ${reachKm} km`,
+        value: angka(dalamJangkauan),
+        tone: "plain",
+        lead: true,
+      }
+    : {
+        label: "Pemasok terdaftar",
+        value: angka(metrics.suppliers),
+        tone: "plain",
+        lead: true,
+      };
+  return [
+    utama,
     {
       label: "Rata-rata keandalan",
       value: metrics.avgReliabilityLabel,
@@ -52,12 +79,4 @@ export function kpiRingkasan(
       tone: tanpaStok > 0 ? "warn" : "plain",
     },
   ];
-  if (reachKm !== null && reachKm !== undefined && Number.isFinite(reachKm)) {
-    items.push({
-      label: `Di luar jangkauan ${reachKm} km`,
-      value: angka(metrics.outOfReach),
-      tone: metrics.outOfReach > 0 ? "warn" : "plain",
-    });
-  }
-  return items;
 }

@@ -198,21 +198,30 @@ describe("pemilih periode KPI", () => {
     expect(html).toMatch(/data-window="1bulan"[^>]*aria-pressed="false"/);
   });
 
-  it("pil periode menamai jendela yang dipilih, bukan nama bulan rentangnya", () => {
+  it("jendela yang dipilih ditandai pada tombolnya (pil periode terpisah dihapus)", () => {
     // Audit 26 Okt 2026: dulu selalu "Periode Oktober 2026" — juga saat
     // jendelanya "Hari ini" — sehingga angka harian terbaca bulanan.
+    // Tahap 2 redesign (29 Okt 2026): pil teks periode DIHAPUS karena
+    // mengulang tombol di bawahnya; jendela aktif kini dibaca dari tombolnya.
     const hariIni = renderToStaticMarkup(<KPIDashboard kpi={ENVELOPE_AVAILABLE} />);
-    expect(hariIni).toContain("Hari ini ·");
+    expect(hariIni).toMatch(/data-window="today"[^>]*aria-pressed="true"[^>]*>Hari ini</);
     const sebulan = renderToStaticMarkup(
       <KPIDashboard kpi={ENVELOPE_AVAILABLE} windowKey="1bulan" />
     );
-    expect(sebulan).toContain("1 bulan ·");
+    expect(sebulan).toMatch(/data-window="1bulan"[^>]*aria-pressed="true"[^>]*>1 bulan</);
+    // Nama bulan dari rentang tidak boleh kembali menjadi label periode.
+    expect(hariIni).not.toContain("Oktober 2026 ·");
   });
 
-  it("cakupan (coverage) dicetak sebagai persen, bukan rasio mentah", () => {
+  it("baris cakupan tidak lagi dicetak di kartu (dihapus 29 Okt 2026)", () => {
+    // Dulu "cakupan 100%" hidup di dalam lipatan "Rincian angka". Pemilik
+    // meminta halaman KPI hanya memuat hal informatif, dan segitiga lipatan
+    // dihapus — jadi baris teknis ini tidak lagi dirender di kartu.
     const html = renderToStaticMarkup(<KPIDashboard kpi={ENVELOPE_AVAILABLE} />);
-    expect(html).toContain("cakupan 100%");
+    expect(html).not.toContain("cakupan 100%");
     expect(html).not.toContain("coverage 1");
+    expect(html).not.toContain("Rincian angka");
+    expect(html).not.toContain("<details");
   });
 
   it("mengikuti windowKey yang diberikan parent (bukan menyimpan sendiri)", () => {
@@ -291,3 +300,4 @@ describe("subjudul arti metrik di kartu KPI", () => {
     expect(html).not.toContain("kpi-card-desc");
   });
 });
+

@@ -170,7 +170,7 @@ def main() -> int:
         if batch_id.startswith("ERROR"):
             batch_id = ""
 
-        # --- sebelas skill ---------------------------------------------------------------
+        # --- empat belas skill -----------------------------------------------------------
         periksa("situasi pasokan SPPG", "Keseimbangan pasokan")
         periksa("indikator kinerja KPI", "Indikator kinerja")
         periksa("antrean usulan keputusan", "Antrean usulan")
@@ -189,6 +189,27 @@ def main() -> int:
             periksa(f"penerimaan barang batch {batch_id}", "Penerimaan barang")
         else:
             print("LEWAT penerimaan barang — tidak ada baris di batch_receipts (dataset kanonik)")
+
+        # --- rincian keamanan satu batch (skill `batch_detail`) ---------------------------
+        # Memakai id dari DB, bukan id karangan: yang diuji adalah jalur nyata
+        # `GET /batches/{id}` beserta kebijakan komoditasnya.
+        id_batch_db = sql("SELECT id FROM batches ORDER BY id LIMIT 1;")
+        if id_batch_db.startswith("ERROR") or not id_batch_db:
+            cek("rincian batch", False, "tidak ada batch di DB demo")
+        else:
+            laporan_batch = periksa(
+                f"batch {id_batch_db} aman atau tidak?", "Status keamanan (tersimpan)"
+            )
+            cek(
+                "rincian batch memuat kebijakan suhu",
+                "Suhu aman" in laporan_batch and "kebijakan simulasi" in laporan_batch,
+                laporan_batch.splitlines()[0] if laporan_batch else "laporan kosong",
+            )
+            cek(
+                "rincian batch TIDAK menyamakan status tersimpan dan evaluasi",
+                laporan_batch.count("Status keamanan") == 2,
+                f"baris status={laporan_batch.count('Status keamanan')}",
+            )
 
         # --- silang ke database: angka laporan == isi DB ----------------------------------
         db_batch = sql("SELECT count(*) FROM batches;")
@@ -246,7 +267,7 @@ def main() -> int:
     if gagal:
         print(f"ADA YANG GAGAL ({len(gagal)}): " + "; ".join(gagal))
         return 1
-    print("SEMUA OK — sebelas skill menjawab dari database yang sama.")
+    print("SEMUA OK — empat belas skill menjawab dari database yang sama.")
     return 0
 
 

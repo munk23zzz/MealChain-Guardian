@@ -192,7 +192,7 @@ class ReadOnlyWorker(StubWorker):
 
     Sejak 27 Okt 2026 kelas ini juga menjadi titik masuk **lapisan penalaran
     model**: `run()` menjalankan pemeriksaan deterministik lebih dulu
-    (`_run_deterministik`), lalu — hanya bila `WORKER_AGENT_MODE=advisory` —
+    (`_run_deterministik`), lalu — kecuali `WORKER_AGENT_MODE=off` —
     memperkaya ringkasannya lewat `terapkan_penalaran()`. Status, `blocking`,
     dan sitasi tetap milik pemeriksa deterministik.
 

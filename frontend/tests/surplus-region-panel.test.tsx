@@ -1,12 +1,14 @@
-// Panel "Surplus wilayah lain" — kontrak tampilan (28 Okt 2026).
+// Panel "Surplus wilayah lain" — kontrak tampilan (28 Okt 2026; kolom 29 Okt 2026).
 //
 // Yang dipaku di sini (bukan selera visual):
 // 1. Angka yang dibaca pengguna adalah angka SERVER, ditulis apa adanya.
 // 2. Panel kosong TIDAK menulis "0 kg" — ia menulis sebabnya.
 // 3. Tidak ada "NaN"/"undefined" yang lolos ke layar, termasuk saat payload
 //    separuh jadi.
-// 4. Setengah halaman: panel wajib memakai kartu grafik yang sama
-//    (`supply-adequacy`), bukan chrome grafik kedua.
+// 4. Setengah halaman: panel memakai KARTU & PLOT YANG SAMA dengan grafik
+//    kecukupan (`adequacy-columns` / `ac-*`), bukan chrome grafik kedua.
+// 5. Kolom = wilayah. Wilayah di bawah ambang tetap punya kolom (pucat), bukan
+//    dibuang ke satu kalimat yang menyembunyikan namanya.
 import { readFileSync } from "node:fs";
 import path from "node:path";
 
@@ -69,26 +71,52 @@ function render(props: Partial<React.ComponentProps<typeof SurplusRegionPanel>>)
   );
 }
 
+function teksTercetak(html: string): string {
+  return html.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
+}
+
 describe("panel surplus wilayah lain", () => {
-  it("memakai kartu grafik yang sama, bukan chrome kedua", () => {
+  it("memakai kartu & donat yang sama dengan grafik kecukupan, bukan chrome kedua", () => {
     const html = render({});
-    expect(html).toContain("supply-adequacy");
-    expect(html).toContain("sa-rows");
-    expect(html).toContain("sa-track-fill");
+    expect(html).toContain("adequacy-columns");
+    expect(html).toContain("cd-arc");
+    expect(html).toContain("cd-legend");
     expect(html).toContain("Surplus wilayah lain");
+    // Geometri lama sudah tidak dipakai: satu bahasa grafik untuk dua kartu.
+    expect(html).not.toContain("supply-adequacy");
+    expect(html).not.toContain("sa-rows");
+    expect(html).not.toContain("sr-row-btn");
+    expect(html).not.toContain("rc-arc");
   });
 
-  it("menulis total, wilayah, dan kg tiap wilayah apa adanya", () => {
+  it("satu irisan per komoditas, satu warna per komoditas, angka server apa adanya", () => {
     const html = render({});
-    expect(html).toContain("3.782,74 kg"); // id-ID, dua desimal dari server
+    // Total kartu (server, id-ID dua desimal) di tengah donat.
+    expect(html).toContain("3.782,74 kg");
+    expect(html).toMatch(/cd-total-angka/);
+    // Komoditas penyumbang muncul sebagai baris legenda dengan kg masing-masing.
+    expect(html).toMatch(/cd-name">beras</);
+    expect(html).toMatch(/cd-name">telur</);
     expect(html).toContain("Jawa Barat");
     expect(html).toContain("DKI Jakarta");
-    expect(html).toContain("3.547,89");
-    expect(html).toContain("215,4 kg");
     expect(html).toContain("2 wilayah");
-    expect(html).toContain("terbesar");
-    expect(html).toContain("Cianjur, Bogor");
+    // Warna = identitas komoditas (beras biru, telur amber), bukan warna status.
+    expect(html).toContain("sr-komod-blue");
+    expect(html).toContain("sr-komod-amber");
     expect(html).not.toMatch(/NaN|undefined|Infinity/);
+  });
+
+  it("busur proporsional terhadap kg komoditas, bukan selebar kartu", () => {
+    const html = render({});
+    const busur = [...html.matchAll(/class="cd-arc [^"]*"[^>]*stroke-dasharray="([\d.]+) /g)].map((m) =>
+      Number(m[1])
+    );
+    expect(busur.length).toBeGreaterThan(1);
+    // Irisan terbesar > irisan terkecil, dan semuanya positif.
+    expect(Math.max(...busur)).toBeGreaterThan(Math.min(...busur));
+    expect(busur.every((b) => b > 0)).toBe(true);
+    // Nama wilayah tetap disebut di baris kaki donat.
+    expect(html).toContain("cd-wilayah");
   });
 
   it("menyebut lokasi sendiri yang dilewati server", () => {
@@ -111,6 +139,8 @@ describe("panel surplus wilayah lain", () => {
     expect(html).toContain("Seluruh surplus komoditas ini ada di lokasi Anda sendiri");
     expect(html).not.toContain("0 kg");
     expect(html).toContain("—");
+    // Tanpa wilayah tidak ada plot kosong: sebabnya yang tampil.
+    expect(html).not.toContain("ac-plot");
   });
 
   it("payload belum tiba / rusak tidak merender angka palsu", () => {
@@ -124,7 +154,9 @@ describe("panel surplus wilayah lain", () => {
     const html = render({ loading: true, payload: null });
     expect(html).toContain('aria-busy="true"');
     expect(html).toContain("memuat wilayah");
-    expect(html).not.toContain("sa-rows");
+    // Kerangka memuat memakai kolom hantu yang sama dengan kartu kecukupan.
+    expect(html).toContain("ac-skeleton");
+    expect(html).not.toContain("ac-plot");
   });
 
   it("galat: pesan server + tombol coba lagi", () => {
@@ -134,31 +166,53 @@ describe("panel surplus wilayah lain", () => {
     expect(html).toContain('role="alert"');
   });
 
-  it("komoditas hanya disebut lewat chip 'Asal', tanpa baris legenda terpisah", () => {
+  it("nama komoditas hanya muncul di legenda donat, sekali per komoditas", () => {
     const html = render({ commodities: ["beras", "telur"] });
-    // 28 Okt 2026 (permintaan: "tampilan surplus lebih simple lagi"):
-    // baris legenda komoditas dihapus — chip "Asal" sudah menyebut nama +
-    // titik warnanya, jadi legenda hanya mengulang.
+    // Legenda donat menggantikan chip "Dari komoditas": satu daftar, satu baris
+    // per komoditas penyumbang, tanpa pengulangan di baris lain.
+    expect(html).not.toContain("sr-mix");
     expect(html).not.toContain("sr-legend");
-    const chip = html.slice(html.indexOf("sr-mix"));
-    expect(chip).toContain("beras");
-    expect(chip).toContain("telur");
-    expect(chip).not.toContain("wortel");
+    const nama = [...html.matchAll(/class="cd-name">([^<]+)</g)].map((m) => m[1].toLowerCase());
+    expect(nama).toContain("beras");
+    expect(nama).toContain("telur");
+    // Tidak ada komoditas yang tercetak dua kali.
+    expect(new Set(nama).size).toBe(nama.length);
+  });
+
+  it("satuan kg disebut sekali per baris legenda, bukan berulang di nama", () => {
+    const html = render({});
+    const awal = html.indexOf('class="cd-legend"');
+    const legenda = html.slice(awal, html.indexOf("</ul>", awal));
+    const baris = legenda.split("</li>").slice(0, -1);
+    expect(baris.length).toBeGreaterThan(1);
+    // Tiap baris: nama tanpa satuan, nilai di kolom kanan dengan satu "kg".
+    for (const satu of baris) {
+      const teks = teksTercetak(satu);
+      expect((teks.match(/kg/g) ?? []).length).toBe(1);
+      expect(teks).toMatch(/\d/);
+    }
+    expect(html).toContain("beras 1.572,41 kg");
   });
 
   it("teks panel: satu baris sub, tanpa catatan kaki", () => {
     const html = render({});
-    const tercetak = html.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ");
+    const tercetak = teksTercetak(html);
     // 29 Okt 2026: "dihitung server" adalah penjelasan mekanisme; kalimatnya
     // diganti bahasa pengguna yang tetap menyebut asal angkanya.
     expect(tercetak).toContain("dari data tercatat");
     expect(tercetak).not.toContain("dihitung server");
-    // Jam tidak lagi dicetak di sub panel (28 Okt 2026).
-    expect(tercetak).not.toMatch(/\d\d\.\d\d/);
+    // Jam tidak dicetak di sub panel (28 Okt 2026).
+    expect(tercetak).not.toMatch(/\d\d\.\d\d WIB/);
     // Catatan kaki dihapus; kalimat panjangnya hidup di `title` kartu (hover).
     expect(html).not.toContain("sa-foot");
-    expect(tercetak).not.toContain("peta akun SPPG hanya memuat lokasi sendiri");
-    expect(html).toMatch(/title="Angka = pasokan tercatat[^"]*peta akun SPPG hanya memuat lokasi sendiri/);
+    expect(html).not.toContain("peta akun SPPG");
+    expect(html).toMatch(/title="Angka = pasokan tercatat[^\"]*dijumlahkan per wilayah \(peta hanya memuat lokasi sendiri\)/);
+    expect(tercetak).not.toContain("oleh server");
+  });
+
+  it("kartu tetap ringkas: teks tercetak di bawah 300 karakter", () => {
+    const tercetak = teksTercetak(render({}));
+    expect(tercetak.length).toBeLessThan(300);
   });
 
   it("BGN nasional (tanpa exclude): judul & keterangan ikut cakupan", () => {
@@ -167,12 +221,12 @@ describe("panel surplus wilayah lain", () => {
       locationName: "seluruh jaringan",
     });
     expect(html).toContain("Surplus per wilayah");
-    expect(html).toContain("surplus seluruh jaringan");
+    expect(html).toContain("seluruh jaringan");
     expect(html).not.toContain("Surplus wilayah lain");
-    expect(html).toContain("seluruh jaringan · 4 komoditas");
+    expect(html).toContain("seluruh jaringan · dari data tercatat");
   });
 
-  it("surplus kecil tetap disebut, tetapi satu baris — bukan baris grafik", () => {
+  it("wilayah di bawah ambang tetap jadi kolom pucat, bukan baris teks terpisah", () => {
     const html = render({
       payload: {
         ...PAYLOAD,
@@ -187,16 +241,17 @@ describe("panel surplus wilayah lain", () => {
             sources: [{ location: "Semarang", surplus_kg: 10.06, by_commodity: [] }],
           },
         ],
-        totals: { ...PAYLOAD.totals, surplus_kg: 3792.8 },
+        totals: { ...PAYLOAD.totals, surplus_kg: 3792.8, regions: 3 },
       },
     });
-    expect(html).toContain("Surplus kecil");
-    expect(html).toContain("Jawa Tengah 10,06 kg");
-    // Wilayah kecil TIDAK punya baris grafik sendiri (hanya 2 baris wilayah).
-    expect(html.match(/sr-row-btn/g)?.length).toBe(2);
+    // Tiga wilayah tetap disebut semuanya di baris kaki donat, termasuk yang
+    // 10 kg — wilayah kecil tidak boleh hilang.
+    expect(teksTercetak(html)).toContain("Jawa Tengah");
+    expect(html).toContain("di bawah ambang");
+    expect(html).not.toContain("sr-tail");
   });
 
-  it("semua wilayah di bawah ambang: sebab ditulis, bukan daftar kosong", () => {
+  it("semua wilayah di bawah ambang: busur pucat + sebabnya tertulis", () => {
     const html = render({
       payload: {
         available: true,
@@ -215,10 +270,11 @@ describe("panel surplus wilayah lain", () => {
         totals: { surplus_kg: 90, layak_kg: 0, source_locations: 1, regions: 1 },
       },
     });
-    expect(html).toContain("di bawah ambang 150 kg");
-    expect(html).toContain("Surplus kecil");
-    expect(html).toContain("Bali 90 kg");
-    expect(html).not.toContain("sr-row-btn");
+    expect(html).toContain("di bawah ambang");
+    expect(html).toContain("cd-wilayah");
+    // Angka wilayah tertulis di baris kaki, bukan "0 kg layak dialihkan".
+    expect(teksTercetak(html)).toMatch(/90\s*kg/);
+    expect(html).toContain("Bali");
   });
 });
 
@@ -234,7 +290,8 @@ describe("tata letak setengah halaman", () => {
     expect(blok![1]).toMatch(
       /grid-template-columns:\s*minmax\(0,\s*1fr\)\s+minmax\(0,\s*1fr\)/
     );
-    expect(blok![1]).toContain("align-items: start");
+    // Dua kartu satu baris: tepi bawah harus rata.
+    expect(blok![1]).toContain("align-items: stretch");
   });
 
   it("menumpuk satu kolom di layar sempit", () => {
@@ -243,19 +300,21 @@ describe("tata letak setengah halaman", () => {
     );
   });
 
-  it("kartu sempit memakai query kontainer: batang penuh di baris sendiri", () => {
+  it("kartu sempit menurunkan ukuran angka (query kontainer), bukan mengganti bentuk", () => {
     expect(css).toContain("container-type: inline-size");
-    expect(css).toMatch(/@container \(max-width: 680px\)/);
-    // Batang memakai SELURUH lebar baris kedua; kolomnya dilepas dari baris atas.
-    expect(css).toContain('"track track track"');
-    expect(css).toMatch(/"name nilai1 nilai2"/);
+    expect(css).toMatch(/@container \(max-width: 520px\)[\s\S]*?ac-value strong/);
   });
 
-  it("warna komoditas tidak memakai token status", () => {
+  it("batang wilayah memakai aksen, bukan warna status", () => {
     // Hijau/merah/kuning tetap berarti aman/bahaya di seluruh aplikasi.
-    const segmen = css.slice(css.indexOf(".sr-komod-0"));
-    expect(segmen).not.toContain("--status-safe");
-    expect(segmen).not.toContain("--status-danger");
-    expect(segmen).not.toContain("--status-warning");
+    const kolom = css.slice(css.indexOf(".sr-col {"));
+    expect(kolom).toContain("--ac-bar: color-mix(in srgb, var(--accent)");
+    expect(css).not.toContain("--status-safe");
+    expect(css).not.toContain("--status-danger");
+    expect(css).not.toContain("--status-warning");
+  });
+
+  it("tanpa gradasi (permintaan pemilik 28 Okt 2026)", () => {
+    expect(css).not.toMatch(/gradient/);
   });
 });

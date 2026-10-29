@@ -25,6 +25,7 @@ import {
 } from "../lib/agent-quality";
 import { LoadingState } from "./LoadingState";
 import ScrollHint from "./ScrollHint";
+import EmptyState from "./EmptyState";
 import { toolLabel } from "../lib/bahasa";
 
 const DASH = "—";
@@ -225,7 +226,7 @@ export default function AgentQualityBoard({
   return (
     <section className="board-page" aria-busy={loading || undefined}>
       <PageHeader
-        level={2}
+        level={3}
         title="Kualitas Agen"
         description="Mutu kerja agen pada keputusan terakhir cakupan Anda: langkah, kesesuaian verifikator, dan yang diubah manusia."
         meta={
@@ -248,10 +249,16 @@ export default function AgentQualityBoard({
         </article>
       ) : null}
 
-      <section className="quality-section" aria-labelledby="quality-score-title">
-        <div className="quality-section-head">
-          <h3 id="quality-score-title">Skor agregat</h3>
-          <p className="quality-section-sub">
+      <section
+        className="quality-block"
+        data-sub-block="ringkasan"
+        aria-labelledby="mutu-ringkasan-judul"
+      >
+        <div className="quality-block-head">
+          <h3 className="quality-block-title" id="mutu-ringkasan-judul">
+            Skor agregat
+          </h3>
+          <p className="quality-block-sub">
             {metrics.runs} run ·{" "}
             {metrics.totalSteps === null ? DASH : metrics.totalSteps} langkah tercatat
           </p>
@@ -331,11 +338,10 @@ export default function AgentQualityBoard({
             seluruh riwayat.
           </span>
         </p>
-      </section>
 
-      <article className="card quality-verdict">
+        <article className="card quality-verdict">
         <div className="card-header">
-          <h3>Putusan verifikator</h3>
+          <h4>Putusan verifikator</h4>
           <span className={`board-badge board-badge-${metrics.judged ? "ok" : "muted"}`}>
             {metrics.judged} dari {metrics.runs} run dinilai
           </span>
@@ -380,13 +386,50 @@ export default function AgentQualityBoard({
             </li>
           ))}
         </ul>
-      </article>
+        </article>
+      </section>
+
+      <section
+        className="quality-block"
+        data-sub-block="rincian"
+        aria-labelledby="mutu-rincian-judul"
+      >
+        <div className="quality-block-head">
+          <h3 className="quality-block-title" id="mutu-rincian-judul">
+            Rincian
+          </h3>
+          <p className="quality-block-sub">
+            Per agen, lalu per run · {runs.length} run tercatat
+          </p>
+        </div>
+
+        {/* Tahap 6 (29 Okt 2026): tanpa satu pun run, dua kartu kosong (tabel
+            per agen + tabel per run) hanya mengulang kalimat yang sama. Diganti
+            SATU keadaan kosong yang menyebut sebab dan jalan keluar. */}
+        {waiting ? (
+          <LoadingState label="Memuat jejak agen…" />
+        ) : runs.length === 0 ? (
+          <EmptyState
+            kode="mutu"
+            judul="Belum ada run agen yang tercatat"
+            sebab="Mutu agen dinilai dari jejak agen pada keputusan terakhir dalam cakupan Anda — belum satu pun keputusan di cakupan ini punya jejak tersimpan."
+            saran="Kalau keputusan baru saja dibuat, jejaknya menyusul beberapa detik kemudian: muat ulang untuk mengambilnya, atau periksa keputusannya di tab Decision & Evidence."
+            aksi={
+              onRetry ? (
+                <button type="button" className="button" onClick={onRetry}>
+                  Muat ulang
+                </button>
+              ) : null
+            }
+          />
+        ) : (
+          <>
 
       {/* Kualitas per agen: supervisor & verifier ikut dihitung dari jejak nyata.
           Angka di sini adalah HITUNGAN run, bukan skor turunan. */}
       <article className="card quality-agents">
         <div className="card-header">
-          <h3>Kualitas per agen</h3>
+          <h4>Kualitas per agen</h4>
           {perAgent.length ? (
             <span className="board-badge board-badge-muted">{perAgent.length} agen</span>
           ) : null}
@@ -409,7 +452,7 @@ export default function AgentQualityBoard({
         ) : (
           <>
             <div className="board-table-wrap">
-              <table className="location-table quality-table">
+              <table className="location-table quality-table" data-table="per-agen">
                 <thead>
                   <tr>
                     <th scope="col">Agen</th>
@@ -454,9 +497,9 @@ export default function AgentQualityBoard({
         )}
       </article>
 
-      <article className="card">
+      <article className="card quality-runs-card">
         <div className="card-header">
-          <h3>Rincian per run</h3>
+          <h4>Rincian per run</h4>
           {runs.length ? (
             <span className="board-badge board-badge-muted">{runs.length} baris</span>
           ) : null}
@@ -471,8 +514,8 @@ export default function AgentQualityBoard({
           </p>
         ) : (
           <>
-            <div className="board-table-wrap">
-              <table className="location-table quality-table">
+            <div className="board-table-wrap quality-runs-wrap">
+              <table className="location-table quality-table quality-runs" data-table="per-run">
                 <thead>
                   <tr>
                     <th scope="col">Keputusan</th>
@@ -575,6 +618,9 @@ export default function AgentQualityBoard({
           </>
         )}
       </article>
+          </>
+        )}
+      </section>
     </section>
   );
 }

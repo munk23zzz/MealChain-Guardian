@@ -35,6 +35,10 @@ import {
 } from "../lib/supply-adequacy";
 import { sortAdequacyRows } from "../lib/supply-adequacy";
 import type { BalanceMapLocation } from "../lib/overview-format";
+import RadialRing from "./RadialRing";
+import CompositionDonut from "./CompositionDonut";
+import { komoditasToneClass } from "../lib/surplus-regions";
+import { formatKg } from "../lib/overview-format";
 
 type Props = {
   mode: "commodity" | "location";
@@ -170,6 +174,26 @@ export default function AdequacyColumns({
         ? { label: columns[0].label, gap: columns[0].gap, tone: columns[0].gapTone }
         : null;
 
+  // Donat dipakai bila kartu menampilkan KOMODITAS (4 irisan bernama) — satu
+  // diagram, satu warna per komoditas. Mode lokasi bisa berisi 10+ baris, dan
+  // donat 10 irisan tipis justru lebih sulit dibaca daripada cincin.
+  const donat = mode === "commodity" && columns.length >= 2 && columns.length <= 6;
+  const irisan = donat
+    ? columns.map((column, index) => ({
+        key: column.key,
+        label: column.label,
+        kg: column.numeratorKg,
+        toneClass: komoditasToneClass(column.label, index),
+        // Komoditas tanpa kebutuhan tetap dicatat di legenda — menghilangkannya
+        // akan membuat pembaca mengira komoditas itu tidak ada.
+        note: column.numeratorKg > 0 ? `${column.coverage} · ${column.gap}` : "belum tercatat",
+        aria: column.aria,
+      }))
+    : [];
+  const totalTanpaSatuan = formatKg(
+    irisan.reduce((jumlah, iris) => jumlah + iris.kg, 0)
+  ).replace(/\s*kg$/, "");
+
   return (
     <section
       className={`adequacy-columns${mounted ? " is-mounted" : ""}`}
@@ -191,9 +215,9 @@ export default function AdequacyColumns({
         <span className={`ac-count ${toneClass(terburuk?.tone ?? "muted")}`} aria-live="polite">
           <strong>{ringkasAngka}</strong> kurang
         </span>
-      </header>
-
-      <div className="ac-tools">
+        {/* Pil lensa duduk di KEPALA (bukan baris alat sendiri): tanpa baris
+            alat, kedua kartu punya urutan identik kepala → donat → kaki, jadi
+            donat kiri dan kanan sejajar. */}
         {mode === "commodity" ? (
           <div className="ac-toggle" role="group" aria-label="Sudut pandang kecukupan">
             {(["quantity", "freshness"] as const).map((pilihan) => (
@@ -208,14 +232,7 @@ export default function AdequacyColumns({
             ))}
           </div>
         ) : null}
-        {/* Satu keterangan saja: batang penuh = kebutuhan terpenuhi. Warna
-            batang mengikuti status (merah/kuning/hijau), jadi tidak perlu
-            legenda warna. */}
-        <span className="ac-key">
-          <i className="ac-key-track" aria-hidden="true" />
-          batang penuh = kebutuhan terpenuhi
-        </span>
-      </div>
+      </header>
 
       {columns.length === 0 ? (
         <p className="ac-empty">
@@ -223,68 +240,76 @@ export default function AdequacyColumns({
             ? "Belum ada komoditas yang bisa ditampilkan."
             : "Belum ada lokasi yang bisa ditampilkan untuk komoditas ini."}
         </p>
+      ) : donat ? (
+        // Satu donat, satu warna per komoditas: porsi terbaca sekali pandang,
+        // angka cakupan tiap komoditas tetap tercetak di baris legenda.
+        <div className="rc-plot">
+          <CompositionDonut
+            slices={irisan}
+            totalValue={totalTanpaSatuan}
+            totalUnit="kg"
+            aria={`Kecukupan pasokan: ${irisan.map((i) => i.aria).join("; ")}`}
+            caption="irisan = kg yang dihitung · warna = komoditas"
+            onPick={
+              onSelect && mode === "commodity" ? (label) => onSelect(label) : undefined
+            }
+          />
+          {/* Baris kaki yang sama dengan kartu surplus (di sana: daftar wilayah).
+              Tanpa baris ini donat kiri duduk lebih rendah dari donat kanan. */}
+          <p className="cd-wilayah">{subLengkap}</p>
+        </div>
       ) : (
-        <ol
-          className="ac-plot"
-          data-dense={columns.length > 6 ? "true" : "false"}
-          aria-label={`${judul} — ${columns.length} kolom`}
-        >
+        <div className="rc-plot">
+          <ol
+            className="rc-row"
+            data-count={columns.length}
+            data-dense={columns.length > 6 ? "true" : "false"}
+            aria-label={`${judul} — ${columns.length} cincin`}
+          >
           {columns.map((column, index) => {
-            const isi: CSSProperties = { "--i": index } as CSSProperties;
-            // SATU arti per batang: tinggi = yang dihitung lensa ÷ kebutuhan.
+            // SATU arti per cincin: busur = yang dihitung lensa ÷ kebutuhan.
             const isiTinggi = columnFillPct(column);
             const lebih = columnOverflow(column);
-            const bar = (
-              <>
-                <span className="ac-value" title={column.aria}>
-                  <strong>{column.coverage}</strong>
-                </span>
-                <span
-                  className={`ac-track${column.demandKg === null ? " ac-track-empty" : ""}`}
-                  title={column.aria}
-                >
-                  {/* Satu-satunya isi kotak: batang cakupan. Sisa kotak yang
-                      kosong = kekurangan, tanpa lapisan tambahan. */}
-                  {isiTinggi > 0 && (
-                    <span
-                      className={`ac-fill ${toneClass(column.gapTone)}`}
-                      style={{ height: `${isiTinggi}%` }}
-                    />
-                  )}
-                </span>
-                <span className="ac-label">
-                  <span className="ac-name">{column.label}</span>
-                  <span className={`ac-gap ${toneClass(column.gapTone)}`}>{column.gap}</span>
-                  {/* Catatan kg ("260,55 kg layak") tidak dicetak lagi — sudah
-                      ada di angka cakupan, pada hover, dan di aria-label. */}
-                </span>
-              </>
-            );
             return (
-              <li
+              <RadialRing
                 key={column.key}
-                className={`ac-col ${toneClass(column.gapTone)}${lebih ? " is-over" : ""}`}
-                style={isi}
-              >
-                {onSelect && mode === "commodity" ? (
-                  <button
-                    type="button"
-                    className="ac-col-btn"
-                    aria-label={`${column.aria}. Tampilkan di peta`}
-                    title={`Tampilkan ${column.label} di peta`}
-                    onClick={() => onSelect(column.label)}
-                  >
-                    {bar}
-                  </button>
-                ) : (
-                  <div className="ac-col-btn ac-col-static" role="group" aria-label={column.aria}>
-                    {bar}
-                  </div>
-                )}
-              </li>
+                index={index}
+                pct={isiTinggi}
+                tone={column.gapTone}
+                value={column.coverage}
+                label={column.label}
+                note={column.gap}
+                aria={column.aria}
+                over={lebih}
+                small={columns.length > 6}
+                action={
+                  onSelect && mode === "commodity"
+                    ? {
+                        label: "Tampilkan di peta",
+                        title: `Tampilkan ${column.label} di peta`,
+                        onClick: () => onSelect(column.label),
+                      }
+                    : undefined
+                }
+              />
             );
           })}
-        </ol>
+          </ol>
+        </div>
+      )}
+
+      {/* Keterangan duduk di DASAR kartu, bukan di baris alat. Dua kartu ini
+          berdampingan: dengan legenda di dasar, keduanya ditutup garis yang
+          sama tingginya, dan sisa ruang kartu kiri jadi napas di tengah —
+          bukan ekor kosong di bawah. Pada bentuk donat, keterangan itu sudah
+          dibawa caption donat (warna = komoditas), jadi kaki kartu kosong. */}
+      {donat ? null : (
+      <div className="ac-foot">
+        <span className="ac-key">
+          <i className="ac-key-track" aria-hidden="true" />
+          garis putus-putus = kebutuhan
+        </span>
+      </div>
       )}
 
     </section>

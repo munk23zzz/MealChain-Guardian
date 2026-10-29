@@ -45,12 +45,32 @@ from ..verifier_contracts import (
     VerifierOutputError,
     parse_verifier_output,
 )
-from ..verifier_facts import FaktaVerifier, VerifierFactsSource
+from ..verifier_facts import FaktaVerifier, VerifierFactsSource, _iter_angka
 from .base import StubWorker
 
 PROMPT_RELATIVE_PATH = Path("prompts") / "verifier_system_prompt.md"
 #: Batas panjang catatan model yang disimpan (bukan rahasia, hanya derau).
 MAKS_CATATAN = 600
+
+
+def _angka_dikenal_audit(fakta: FaktaVerifier | None, run: AgentRun) -> set[float]:
+    """Angka yang boleh disebut klaim: fakta server + fakta temuan run ini.
+
+    Kenapa temuan run ikut dihitung (terukur 29 Okt 2026): narasi supervisor
+    ditulis DARI fakta temuan review (`fakta_narasi`), sementara `/audit-facts`
+    menyimpan cuplikan pipeline yang belum memuat temuan review itu sendiri —
+    `forecast_confidence` 0,5395775… hanya ada di temuan `demand`. Akibatnya
+    narasi yang menyebut "0,54" dituduh `angka_bersitasi` tanpa sumber dan
+    verifier menandai SETIAP putaran, padahal angkanya berasal dari server.
+    Yang ditambahkan hanya angka yang benar-benar ada di `finding.facts`.
+    """
+    dikenal: set[float] = set(fakta.angka_dikenal()) if fakta is not None else set()
+    for temuan in run.findings:
+        # `facts.reasoning` memuat rationale/ringkasan MODEL — angka di dalamnya
+        # tidak boleh menjadi "sumber" bagi cek anti-karang; sisanya fakta server.
+        fakta_server = {k: v for k, v in temuan.facts.items() if k != "reasoning"}
+        dikenal.update(_iter_angka(fakta_server))
+    return dikenal
 
 
 def load_system_prompt() -> str:
@@ -268,7 +288,7 @@ class VerifierWorker(StubWorker):
         checks = periksa_klaim(
             klaim,
             data_fakta,
-            angka_dikenal=fakta_terbaca.angka_dikenal() if fakta_terbaca else (),
+            angka_dikenal=_angka_dikenal_audit(fakta_terbaca, run),
         )
 
         output, alasan_model = self._panggil_model(

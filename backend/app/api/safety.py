@@ -9,7 +9,7 @@ Respons membawa bukti yang dipakai (`temperature_observation`, `evidence_state`,
 `observed_at`) sehingga verdict bisa ditelusuri, bukan hanya dipercaya.
 """
 
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -37,12 +37,41 @@ class SafetyRequest(BaseModel):
     evaluation_time: datetime | None = None
 
 
+#: Toleransi jam untuk `evaluation_time` (selisih clock antar layanan).
+_SKEW_DETIK = 300
+
+
+def validasi_waktu_evaluasi(nilai: datetime | None, sekarang: datetime | None = None) -> None:
+    """Tolak `evaluation_time` yang tidak bisa dipertanggungjawabkan.
+
+    Audit 2026-10-29 (AUD-008). `None` SENGAJA dipertahankan: ia berarti "nilai
+    pada sampel terakhir", sehingga log historis tidak otomatis disebut stale
+    (perilaku terdokumentasi di `core/safety.py`). Yang tidak boleh: pemanggil
+    menggeser jam ke DEPAN — itu membuat observasi tua tampak segar dan
+    melumpuhkan gerbang staleness tanpa mengubah data apa pun.
+    """
+    if nilai is None:
+        return
+    if nilai.tzinfo is None:
+        raise HTTPException(
+            status_code=422,
+            detail="evaluation_time wajib menyertakan offset zona waktu (RFC3339)",
+        )
+    acuan = sekarang or datetime.now(timezone.utc)
+    if nilai > acuan + timedelta(seconds=_SKEW_DETIK):
+        raise HTTPException(
+            status_code=422,
+            detail="evaluation_time di masa depan tidak boleh dipakai menilai keselamatan",
+        )
+
+
 @router.post("/safety/evaluate")
 async def evaluate_safety_endpoint(
     payload: SafetyRequest,
     db: AsyncSession = Depends(get_db),
     _user: User = Depends(require_roles(*MUTATING_ROLES)),
 ) -> dict:
+    validasi_waktu_evaluasi(payload.evaluation_time)
     baris = (
         await db.execute(
             select(Batch, Commodity.name)

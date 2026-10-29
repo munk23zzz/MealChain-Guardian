@@ -52,6 +52,7 @@ export default function ShipmentBoard({
   hanya,
   note,
   empty,
+  tautan,
 }: {
   /** Payload `GET /supplier-routes` (amplop `{routes}` atau array). */
   routes: unknown;
@@ -62,6 +63,8 @@ export default function ShipmentBoard({
   note?: string;
   /** Pesan pengganti saat tidak ada kiriman; tanpanya papan tidak dirender. */
   empty?: string;
+  /** Tautan kecil di kepala papan (mis. "Ke daftar pemasok"). */
+  tautan?: { href: string; label: string };
 }) {
   const [cara, setCara] = useState<BoardSort>("mendesak");
   const semua = supplierRoutes(routes);
@@ -75,9 +78,17 @@ export default function ShipmentBoard({
 
   return (
     <section className="card shipment-board" aria-label={title}>
-      <div className="card-header">
+      <div className="card-header shipment-head">
         <h2>{title}</h2>
         {rows.length > 0 && <span className="shipment-count">{boardCounts(rows)}</span>}
+        {/* S3 (29 Okt 2026): papan berdiri di atas daftar pemasok, jadi kepala
+            kartunya menawarkan jalan ke sana — pembaca yang ingin melihat
+            pemasoknya tidak perlu menggulir sendiri. */}
+        {tautan ? (
+          <a className="shipment-head-link" href={tautan.href}>
+            {tautan.label}
+          </a>
+        ) : null}
       </div>
 
       {rows.length === 0 ? (
@@ -132,9 +143,9 @@ export default function ShipmentBoard({
                       <th scope="row" className="shipment-cell-name">
                         {row.supplierName}
                       </th>
-                      <td>{row.destinationName}</td>
-                      <td>{boardMuatan(row)}</td>
-                      <td className="route-cell">
+                      <td data-label="Tujuan">{row.destinationName}</td>
+                      <td data-label="Muatan">{boardMuatan(row)}</td>
+                      <td className="route-cell" data-label="Jalur">
                         {boardJalur(row)}
                         {/* Jejak sumber geometri tetap ditulis (angka jalur harus bisa
                             ditelusuri), tetapi rasio jalur↔garis lurus dibuang: 16 Okt 2026
@@ -142,7 +153,7 @@ export default function ShipmentBoard({
                         {sumber ? (
                           <span
                             className="cell-meta"
-                            title="Jarak & waktu tempuh jalur jalan dihitung OSRM saat sinkronisasi rute, bukan saat papan ini dibuka."
+                            title="Jarak & waktu tempuh dihitung dari jalur jalan yang tersimpan untuk kiriman ini."
                           >
                             {sumber}
                           </span>
@@ -150,19 +161,19 @@ export default function ShipmentBoard({
                       </td>
                       {/* Sel waktu memakai bentuk ringkas; waktu LENGKAP tetap
                           tersedia sebagai tooltip — tidak ada informasi hilang. */}
-                      <td title={boardBerangkatPenuh(row)}>{boardBerangkat(row)}</td>
-                      <td className="num" title={boardEtaPenuh(row)}>
+                      <td data-label="Berangkat" title={boardBerangkatPenuh(row)}>{boardBerangkat(row)}</td>
+                      <td className="num" data-label="Estimasi tiba" title={boardEtaPenuh(row)}>
                         {boardEta(row)}
                       </td>
-                      <td className="num">{boardSisa(row)}</td>
-                      <td>
+                      <td className="num" data-label="Sisa">{boardSisa(row)}</td>
+                      <td data-label="Masa layak">
                         {boardMasaLayak(row)}
                         {layak ? (
                           <span className={`cell-tone cell-tone-${layak.tone}`}>{layak.text}</span>
                         ) : null}
                       </td>
-                      <td>{boardMutu(row)}</td>
-                      <td>
+                      <td data-label="Mutu">{boardMutu(row)}</td>
+                      <td data-label="Keadaan">
                         <span className={`shipment-pill shipment-pill-${keadaan.tone}`}>
                           {keadaan.label}
                         </span>

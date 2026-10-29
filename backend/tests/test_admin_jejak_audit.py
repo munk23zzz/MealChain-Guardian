@@ -106,6 +106,8 @@ def skenario():
 
 
 def _client_sebagai(user: User) -> TestClient:
+    # Lihat test_admin_api._client_sebagai: identitas palsu = sesi manusia.
+    setattr(user, "_token_typ", "user")
     app.dependency_overrides[get_current_user] = lambda: user
     return TestClient(app)
 

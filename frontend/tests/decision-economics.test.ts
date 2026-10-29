@@ -66,7 +66,9 @@ describe("buildCostView — invoice vs SDC", () => {
     const po = view.blocks.find((b) => b.key === "po")!;
     const baris = po.rows.find((r) => r.label === "Referensi pasar")!;
     expect(baris.value).toBe("Rp 31.000 per kg");
-    expect((baris.note ?? "").toLowerCase()).toContain("bukan biaya po");
+    // Catatan "harga acuan PIHPS — pembanding bahan, bukan biaya PO" dihapus
+    // 29 Okt 2026; baris tetap ada tanpanya.
+    expect(baris.note ?? null).toBeNull();
   });
 
   it("penalti risiko hanya ada di blok SDC", () => {
@@ -75,13 +77,13 @@ describe("buildCostView — invoice vs SDC", () => {
     const sdc = view.blocks.find((b) => b.key === "sdc")!;
 
     const labelPo = po.rows.map((r) => r.label.toLowerCase()).join(" | ");
-    expect(labelPo).not.toContain("expected loss");
+    expect(labelPo).not.toContain("susut gudang");
     expect(labelPo).not.toContain("freshness");
     expect(labelPo).not.toContain("penalty");
     expect(labelPo).not.toContain("penalti");
 
     const labelSdc = sdc.rows.map((r) => r.label.toLowerCase()).join(" | ");
-    expect(labelSdc).toContain("expected loss");
+    expect(labelSdc).toContain("susut gudang");
     expect(labelSdc).toContain("risiko kesegaran");
     expect(labelSdc).toContain("penalti keamanan");
   });

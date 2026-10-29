@@ -154,7 +154,7 @@ describe("shipmentHeadline — pil status ramping", () => {
   it("tanpa blok journey: mengaku belum dilaporkan, tidak mengarang keadaan", () => {
     expect(shipmentHeadline(route({ journey: null }))).toEqual({
       tone: "unknown",
-      label: "Perjalanan belum dilaporkan server",
+      label: "Perjalanan belum dilaporkan",
     });
   });
 });

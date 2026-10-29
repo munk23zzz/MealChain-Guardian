@@ -2,8 +2,9 @@
 
 import uuid
 from datetime import datetime
+from decimal import Decimal
 
-from sqlalchemy import DateTime, ForeignKey, Index, Text, func
+from sqlalchemy import DateTime, ForeignKey, Index, Integer, Numeric, Text, func
 from sqlalchemy import text as sql_text
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
@@ -40,6 +41,9 @@ class BatchReceipt(Base):
             sql_text("recorded_at DESC"),
         ),
         Index("ix_batch_receipts_status_recorded", "status", "recorded_at"),
+        # Migrasi 052 membuat indeks ini; tanpa deklarasi di sini `alembic check`
+        # terus mengusulkan drop (drift terdeteksi audit 2026-10-29, AUD-023).
+        Index("ix_batch_receipts_verdict", "verdict"),
         # Invarian 026: satu batch paling banyak satu penerimaan disetujui.
         Index(
             "uq_batch_receipts_satu_disetujui",
@@ -63,6 +67,24 @@ class BatchReceipt(Base):
     )
     #: Isian "Lainnya" — keadaan yang tidak ada di daftar periksa. NULL = tidak ada.
     other_note: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    # ---- Skor ceklis & berat diterima (migrasi 044, Dok 05 §3–§5) ----------
+    #: Jawaban per butir: {"suhu": "sesuai", "kesegaran": "kurang", ...}.
+    #: NULL = baris lama sebelum skor ada ("belum dinilai", bukan 0).
+    answers: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    #: Rincian poin per butir dari server (bobot, faktor, poin, max_points).
+    points: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    #: Nilai 0–100 = jumlah poin (bobot total 100).
+    score: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    #: 'pass' | 'needs_verification' | 'fail' — disimpan, tidak dihitung ulang.
+    verdict: Mapped[str | None] = mapped_column(Text, nullable=True)
+    #: Kalimat alasan untuk layar (Dok 05 §7), disimpan bersama putusannya.
+    advice: Mapped[str | None] = mapped_column(Text, nullable=True)
+    #: Berat pesanan (dari batch) & berat yang BENAR-BENAR ditimbang.
+    ordered_kg: Mapped[Decimal | None] = mapped_column(Numeric(10, 2), nullable=True)
+    accepted_kg: Mapped[Decimal | None] = mapped_column(Numeric(10, 2), nullable=True)
+    #: Versi daftar butir & bobot yang dipakai saat menilai.
+    checklist_version: Mapped[str | None] = mapped_column(Text, nullable=True)
     recorded_by: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("users.id"), nullable=False
     )

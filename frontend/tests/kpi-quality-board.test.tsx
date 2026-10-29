@@ -80,8 +80,15 @@ describe("KpiQualityBoard (tab gabungan KPI & Kualitas Agen)", () => {
     expect(html.indexOf("kpi-dashboard")).toBeLessThan(html.indexOf("board-page"));
   });
 
-  it("ada pembatas antar-bagian", () => {
-    expect(render()).toContain("kpi-quality-divider");
+  it("pemisah bagian = tiga judul bertajuk, bukan garis ornamen", () => {
+    const html = render();
+    // Tahap 1 redesign (29 Okt 2026): <hr class="kpi-quality-divider"> dibuang.
+    expect(html).not.toContain("kpi-quality-divider");
+    expect(html).toContain('class="pa-section-title"');
+    expect(html.match(/class="pa-section-title"/g)?.length).toBe(3);
+    expect(html).toContain("Hasil KPI");
+    expect(html).toContain("Audit perhitungan");
+    expect(html).toContain("Mutu agen");
   });
 
   it("galat KPI tidak menyembunyikan mutu agen", () => {

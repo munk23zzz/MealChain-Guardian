@@ -156,10 +156,6 @@ export default function ApprovalOverview({
           <LangkahBaris langkah={langkah.terbitkanPo} />
           <LangkahBaris langkah={langkah.reviewPo} />
         </ol>
-        <p className="approval-steps-note">
-          Menyetujui tidak menjalankan apa pun. Menerbitkan PO hanya membuat dokumen
-          draft; pengiriman ke SAP terjadi setelah Kepala SPPG mereview PO itu.
-        </p>
       </div>
     </div>
   );

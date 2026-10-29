@@ -395,6 +395,54 @@ class MealchainClient:
             for row in self._rows(payload, "items")
         ]
 
+    def po_detail(self, po_number: str) -> dict[str, Any]:
+        """Isi satu PO seperti dokumen PDF-nya — `GET /sap/purchase-orders/{nomor}/detail`.
+
+        Endpoint ini baru (29 Okt 2026) dan mengembalikan bahan yang sama dengan
+        PDF PO: rincian biaya, daftar persetujuan (nama + komentar + waktu),
+        syarat persetujuan, keputusan asal, dan `boleh_pdf`. Jembatan TIDAK
+        menghitung apa pun di sini — total dan rincian datang dari backend.
+
+        `MealchainRejected` sengaja tidak ditelan: pemanggil (server.py) yang
+        memutuskan jatuh ke tampilan daftar bila backend belum punya rute ini.
+        """
+        nomor = quote(str(po_number).strip(), safe="-")
+        payload = self._get(f"/sap/purchase-orders/{nomor}/detail")
+        if not isinstance(payload, dict):
+            raise MealchainRejected(f"detail PO {nomor} bukan objek JSON")
+        keputusan = payload.get("keputusan")
+        return {
+            "poNumber": payload.get("po_number"),
+            "status": payload.get("status"),
+            "createdAt": payload.get("created_at"),
+            "materialNumber": payload.get("material_number"),
+            "commodityName": payload.get("commodity_name"),
+            "locationName": payload.get("location_name"),
+            "supplierName": payload.get("supplier_name"),
+            "quantityKg": payload.get("ordered_quantity"),
+            "pricePerKg": payload.get("price"),
+            "totalValue": payload.get("total"),
+            "commercialCost": payload.get("commercial_cost"),
+            "keputusan": keputusan if isinstance(keputusan, dict) else None,
+            "persetujuan": [
+                {
+                    "role": row.get("role"),
+                    "name": row.get("name"),
+                    "approved": bool(row.get("approved")),
+                    "comment": row.get("comment"),
+                    "approvedAt": row.get("approved_at"),
+                }
+                for row in (payload.get("persetujuan") or [])
+                if isinstance(row, dict)
+            ],
+            "syarat": payload.get("syarat") if isinstance(payload.get("syarat"), dict) else {},
+            "bolehPdf": bool(payload.get("boleh_pdf")),
+            # Tautan bertanda tangan berumur pendek dari backend (bukan karangan
+            # jembatan): chat tidak membawa token login, jadi ini satu-satunya
+            # cara juri membuka PDF yang sedang dibaca asisten.
+            "pdfUrl": payload.get("pdf_url") or None,
+        }
+
     def pending_decisions(self, limit: int | None = None) -> list[dict[str, Any]]:
         """Keputusan belum tuntas, dilengkapi asal→tujuan + komoditas dari approval-summary.
 
@@ -549,6 +597,20 @@ class MealchainClient:
             )
         summary = payload.get("summary") if isinstance(payload.get("summary"), dict) else {}
         return {"routes": hasil, "summary": summary}
+
+    # --- detail batch (keamanan pangan) ---------------------------------------------------
+
+    def batch_detail(self, batch_id: str) -> dict[str, Any]:
+        """Rincian satu batch (`GET /batches/{id}`): status keamanan tersimpan vs hasil
+        evaluasi, kelayakan pakai + langkah berikutnya, kebijakan komoditas (rentang suhu
+        aman, masa layak, versi), dan kecukupan bukti observasi suhu.
+
+        Dipakai skill `batch_detail`: pertanyaan "batch X aman atau tidak" harus dijawab
+        dari endpoint ini, bukan dari baris daftar `/batches` yang tidak membawa kebijakan
+        maupun status evaluasi.
+        """
+        payload = self._get(f"/batches/{quote(str(batch_id), safe='')}")
+        return payload if isinstance(payload, dict) else {}
 
     # --- bukti & jejak keputusan ----------------------------------------------------------
 

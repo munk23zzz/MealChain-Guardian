@@ -206,7 +206,7 @@ class AgentTrace(Base):
     __table_args__ = (
         CheckConstraint(
             "step_name IN ('DETECT','VERIFY','TRACE','PREDICT','OPTIMIZE',"
-            "'DECIDE','SUPERVISE','ACT','LEARN')",
+            "'ANALYZE','DECIDE','SUPERVISE','ACT','LEARN')",
             name="agent_traces_step_name_check",
         ),
         Index("ix_agent_traces_decision_id", "decision_id"),

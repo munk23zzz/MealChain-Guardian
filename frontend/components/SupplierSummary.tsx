@@ -31,7 +31,14 @@ export default function SupplierSummary({
 
       <ul className="summary-kpi">
         {kpi.map((item) => (
-          <li key={item.label} className="summary-kpi-item" data-tone={item.tone}>
+          <li
+            key={item.label}
+            className="summary-kpi-item"
+            data-tone={item.tone}
+            // S2 (29 Okt 2026): satu angka dipromosikan — dibaca lebih dulu,
+            // dicetak lebih besar lewat `[data-lead="true"]` di CSS.
+            data-lead={item.lead ? "true" : undefined}
+          >
             <b className="summary-kpi-value">{item.value}</b>
             <span className="summary-kpi-label">{item.label}</span>
           </li>

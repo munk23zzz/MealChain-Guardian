@@ -97,19 +97,22 @@ describe("bahasa galat aksi", () => {
   });
 });
 
-describe("kartu Governance saat ringkasan belum tiba", () => {
+describe("blok persetujuan saat ringkasan belum tiba", () => {
+  // Tahap 8: kartu "Governance & persetujuan" milik halaman lama sudah pensiun
+  // (hanya ada di `DecisionDetail`). Perilaku yang dijaga tetap sama dan kini
+  // hidup di `DecisionApproval`: jangan menyimpulkan status dari ringkasan yang
+  // belum datang — tulis bahwa ringkasan sedang dimuat.
   it("menyebut keadaan memuat, bukan 'Menunggu persetujuan'", () => {
     const html = render({ summary: null });
-    expect(html).toContain('data-testid="governance-pending"');
     expect(html).toContain("Ringkasan persetujuan sedang dimuat");
     // Chip state palsu tidak boleh muncul sebelum ringkasan ada.
     expect(html).not.toContain("Menunggu persetujuan");
   });
 
-  it("merender kartu governance normal saat ringkasan tersedia", () => {
+  it("blok persetujuan normal saat ringkasan tersedia", () => {
     const html = render();
-    expect(html).not.toContain('data-testid="governance-pending"');
-    expect(html).toContain("Governance &amp; persetujuan");
+    expect(html).not.toContain("Ringkasan persetujuan sedang dimuat");
+    expect(html).toContain("Persetujuan");
   });
 });
 

@@ -82,6 +82,53 @@ export function dossierState(
     : { tone: "danger", label: "segel tidak cocok" };
 }
 
+/**
+ * Satu baris status integritas (Tahap 6 redesign, 29 Okt 2026).
+ *
+ * Sebelumnya dua kartu besar (rantai global + dossier) memakan hampir satu layar
+ * sebelum pembaca tahu keadaan sesungguhnya. Ringkasan ini menyebut KEADAAN lebih
+ * dulu — SAH / PERINGATAN / GAGAL — lalu angkanya (blok, blok yatim) dan keadaan
+ * dossier. Rinciannya tidak hilang: seluruh kartu lama pindah ke balik lipatan.
+ *
+ * Urutan nada tidak boleh "aman" lebih cepat dari bukti:
+ * - rantai putus            → GAGAL
+ * - checkpoint berbeda      → GAGAL (riwayat bisa ditulis ulang di luar DB)
+ * - blok yatim / cakupan    → PERINGATAN (rantai valid ≠ bukti lengkap)
+ * - segel tidak cocok       → GAGAL
+ * - belum ditandatangani    → PERINGATAN
+ */
+export function ringkasIntegritas(
+  ledger: LedgerResult | null,
+  dossier: DossierResult | null,
+  decisionId: string | null
+): { tone: ProofTone; label: string; detail: string } {
+  const berkas = dossierState(decisionId, dossier);
+
+  if (ledger === null) {
+    return { tone: "plain", label: "Memeriksa…", detail: "rantai audit dan dossier sedang dimuat." };
+  }
+
+  const yatim = ledger.orphan_blocks ?? 0;
+  const angka = (n: number) => new Intl.NumberFormat("id-ID").format(n);
+  const bagian = [
+    `${angka(ledger.blocks)} blok`,
+    `${angka(yatim)} blok yatim`,
+    `dossier ${berkas.label}`,
+  ];
+  const detail = bagian.join(" · ");
+
+  if (!ledger.valid) return { tone: "danger", label: "GAGAL", detail };
+  if (ledger.anchor?.match === false) return { tone: "danger", label: "GAGAL", detail };
+  if (berkas.tone === "danger") return { tone: "danger", label: "GAGAL", detail };
+
+  const cakupanKurang = Boolean(ledger.coverage_warning) || yatim > 0;
+  if (cakupanKurang || berkas.tone === "warn") {
+    return { tone: "warn", label: "PERINGATAN", detail };
+  }
+
+  return { tone: "ok", label: "SAH", detail };
+}
+
 export default function IntegrityPanel({
   token,
   decisionId,
@@ -134,6 +181,7 @@ export default function IntegrityPanel({
 
   const rantai = ledgerState(ledger);
   const berkas = dossierState(decisionId, dossier);
+  const ringkas = ringkasIntegritas(ledger, dossier, decisionId);
   // Audit A4: rantai valid ≠ bukti lengkap — blok yatim tetap disebut.
   const sisaBukti = ledger === null ? null : coverageNote(ledger);
   // Fase 11 butir 2: rantai valid di dalam DB ≠ riwayat tidak ditulis ulang.
@@ -142,8 +190,30 @@ export default function IntegrityPanel({
 
   return (
     <section className="integrity-panel card" data-testid="integrity-panel">
-      <h3>Integritas Bukti</h3>
-      <p className="integrity-sub">Hash append-only, alamat konten, dan tanda tangan — dibaca dari API.</p>
+      {/* Satu baris status (Tahap 6 redesign, 29 Okt 2026): keadaan dulu —
+          SAH/PERINGATAN/GAGAL — lalu blok, blok yatim, dan keadaan dossier.
+          Kalimat penjelas teknis ("Hash append-only, alamat konten, dan tanda
+          tangan — dibaca dari API") dibuang: pembaca tidak perlu tahu jalurnya
+          untuk memutuskan. */}
+      <header className="integrity-head">
+        <h3>Integritas Bukti</h3>
+        <p
+          className={`integrity-status integrity-tone-${ringkas.tone}`}
+          role="status"
+          aria-atomic="true"
+          data-testid="integrity-summary"
+          data-tone={ringkas.tone}
+        >
+          <span className="integrity-status-dot" aria-hidden="true" />
+          <strong>{ringkas.label}</strong>
+          <span className="integrity-status-detail">{ringkas.detail}</span>
+        </p>
+      </header>
+
+      {/* Rincian tidak dibuang, hanya dilipat: dua kartu bukti + daftar
+          pengukuran + ekspor tetap utuh di dalam sini. */}
+      <details className="integrity-fold" data-testid="integrity-detail">
+        <summary>Buka rincian integritas</summary>
 
       {/* Bukti kriptografis (rantai Merkle + alamat konten + tanda tangan ECDSA)
           kini bertinta TERANG seperti sisa konsol: warna di sini membawa
@@ -158,7 +228,11 @@ export default function IntegrityPanel({
     >
       <div className="integrity-proof-head">
         <span className="integrity-proof-titles">
-          <span className="integrity-proof-name">Merkle Ledger</span>
+          {/* Label menyebut cakupannya (audit 29 Okt 2026): angka di kartu ini
+              milik rantai GLOBAL, bukan bukti keputusan yang sedang dipilih.
+              Tanpa kata "global", pembaca wajar mengira 3128 blok itu milik
+              satu keputusan. */}
+          <span className="integrity-proof-name">Merkle Ledger (rantai global)</span>
           <span className="integrity-proof-kind">append-only</span>
         </span>
         <span className={`integrity-chip integrity-chip-${rantai.tone}`}>{rantai.label}</span>
@@ -235,7 +309,7 @@ export default function IntegrityPanel({
       >
         <div className="integrity-proof-head">
           <span className="integrity-proof-titles">
-            <span className="integrity-proof-name">Dossier Keputusan</span>
+            <span className="integrity-proof-name">Dossier keputusan ini</span>
             <span className="integrity-proof-kind">alamat konten + tanda tangan</span>
           </span>
           <span className={`integrity-chip integrity-chip-${berkas.tone}`}>{berkas.label}</span>
@@ -279,6 +353,8 @@ export default function IntegrityPanel({
           </div>
         </details>
       )}
+
+      </details>
 
       {error && <p className="integrity-error">{error}</p>}
     </section>

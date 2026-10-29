@@ -38,13 +38,17 @@ describe("wasteRingkas", () => {
     expect(wasteRingkas({ recorded: { available: false } })).toEqual([]);
   });
 
-  it("sebagian tersedia: baris yang tidak ada menulis '—' tanpa hint karangan", () => {
+  it("sebagian tersedia: baris yang tidak ada menulis '—' dengan kata, bukan angka", () => {
+    // L5 (29 Okt 2026): tanda pisah dibiarkan tanpa keterangan terbaca seperti
+    // kolom yang lupa diisi. Petunjuknya sekarang kata "belum tercatat" — tetap
+    // bukan angka, jadi tidak ada 0 kg dan tidak ada 0 peristiwa karangan.
     const rows = wasteRingkas({
       recorded: { available: true, kg: 10, events: 2 },
       diverted: { available: false },
       unassigned: { available: false },
     });
     expect(rows.map((r) => r.value)).toEqual(["10 kg", "—", "—"]);
-    expect(rows[1].hint).toBeNull();
+    expect(rows[1].hint).toBe("belum tercatat");
+    expect(rows[1].hint).not.toMatch(/0/);
   });
 });

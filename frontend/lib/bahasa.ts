@@ -65,6 +65,18 @@ const BLOCKER_ID: Record<string, string> = {
   expired_before_arrival: "batch kedaluwarsa sebelum tiba",
   delivery_window_exceeded: "waktu tiba melewati tenggat kebutuhan",
   quarantined: "batch masih dikarantina",
+  // Kode gerbang keamanan yang dulu lolos mentah ke tabel evaluasi batch
+  // ("safety_status_bukan_pass" tercetak apa adanya). Semua kode di
+  // `core/safety_gate` + beberapa varian Indonesia di `core/batch_eligibility`
+  // diberi kalimat, bukan dibiarkan tampil sebagai kunci.
+  safety_status_bukan_pass: "status keamanan batch sumber belum lolos",
+  safety_status_fail_sumber: "batch sumber gagal uji keamanan",
+  tidak_ada_batch_sumber: "keputusan tidak menunjuk batch sumber",
+  bukti_suhu_tidak_lengkap: "bukti suhu penerimaan belum lengkap",
+  // CATATAN: kunci satu kata berbahasa Indonesia ("kedaluwarsa", "dikarantina")
+  // TIDAK boleh ditambahkan di sini. Penerjemah mencocokkan potongan kalimat,
+  // jadi kata biasa akan merusak kalimat yang sudah benar ("batch kedaluwarsa"
+  // → "batch batch sudah kedaluwarsa"). Yang aman: kunci bergaya kode.
 };
 
 // Urutan penting: frasa terpanjang dulu supaya tidak terpotong oleh yang pendek.

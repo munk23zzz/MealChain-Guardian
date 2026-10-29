@@ -40,6 +40,15 @@ from app.api.auth import MUTATING_ROLES, get_current_user, require_roles
 from app.api.demo_session import butuh_sesi_aktif
 from app.api.dependencies import get_db
 from app.core.batch_eligibility import USABLE
+from app.core.receipt_scoring import (
+    CHECKLIST_VERSION,
+    checklist_untuk,
+    opsi_jumlah,
+    putusan,
+    saran,
+    skor,
+    validasi_berat,
+)
 from app.core.scope import assert_in_scope
 from app.models import (
     Batch,
@@ -68,6 +77,25 @@ MAX_KEY_LENGTH = 40
 NOTE_MAX = 500
 REJECT_MIN = 3
 
+#: Label putusan ceklis untuk layar (Dok 05 §4). Diterjemahkan di SERVER supaya
+#: UI tidak pernah menampilkan enum mentah (`pass`, `needs_verification`) dan
+#: tidak bisa menebak artinya sendiri-sendiri.
+VERDICT_LABEL = {
+    "pass": "Layak diterima",
+    "needs_verification": "Perlu keputusan manual",
+    "fail": "Tidak boleh diterima",
+}
+
+#: Pesan galat berat yang tidak wajar (kode → kalimat).
+BERAT_PESAN = {
+    "berat_nol": "berat diterima harus lebih dari 0 kg — timbang dulu barangnya",
+    "berat_minus": "berat diterima tidak boleh negatif",
+    "berat_lebih": (
+        "berat diterima lebih dari 110% berat pesanan — periksa ulang timbangan "
+        "atau jumlah yang dikirim"
+    ),
+}
+
 
 class ReceiptRequest(BaseModel):
     batch_id: uuid.UUID
@@ -75,6 +103,25 @@ class ReceiptRequest(BaseModel):
     checked: dict[str, bool] = Field(default_factory=dict)
     #: Isian "Lainnya" — keadaan yang tidak ada di daftar periksa.
     other_note: str | None = Field(default=None, max_length=NOTE_MAX)
+    #: Jawaban tujuh butir berbobot (Dok 05 §3): {"suhu": "sesuai", ...}.
+    #: Bila diisi, server MENILAI dan menyimpan skor + putusan. Bila kosong,
+    #: jalur lama (cek boolean) tetap jalan — baris lama tidak dipaksa berubah.
+    answers: dict[str, str] | None = Field(default=None)
+    #: Berat yang benar-benar ditimbang saat barang tiba (kg). Wajib bersama
+    #: `answers`: angka ini yang dipakai menilai butir "kesesuaian jumlah" dan
+    #: menghitung nilai rupiah (Dok 05 §5.1), bukan berat batch.
+    accepted_kg: float | None = Field(default=None, ge=0, le=1_000_000)
+
+    @field_validator("answers")
+    @classmethod
+    def _batas_jawaban(cls, nilai: dict[str, str] | None) -> dict[str, str] | None:
+        if nilai is None:
+            return None
+        if len(nilai) > MAX_CHECKED_KEYS:
+            raise ValueError(f"terlalu banyak butir (maks {MAX_CHECKED_KEYS})")
+        if any(not kunci.strip() or len(kunci) > MAX_KEY_LENGTH for kunci in nilai):
+            raise ValueError("nama butir tidak boleh kosong atau terlalu panjang")
+        return nilai
 
     @field_validator("checked")
     @classmethod
@@ -102,9 +149,19 @@ def _row(
     nilai: float | None = None,
     po_number: str | None = None,
     unit_price: float | None = None,
+    nilai_diterima: float | None = None,
 ) -> dict:
     """Bentuk balasan yang stabil untuk UI (jumlah titik dihitung SERVER)."""
     dicek = receipt.checked or {}
+    # Berat yang dipakai menghitung nilai: hasil timbangan bila ada, kalau tidak
+    # berat batch (perilaku baris lama). Dok 05 §5.1: nilai = kg DITERIMA × harga.
+    kg_terima = (
+        float(receipt.accepted_kg)
+        if receipt.accepted_kg is not None
+        else kg
+    )
+    if nilai_diterima is None and kg_terima is not None and unit_price is not None:
+        nilai_diterima = round(kg_terima * unit_price, 2)
     return {
         "id": str(receipt.id),
         "batch_id": str(receipt.batch_id),
@@ -125,9 +182,15 @@ def _row(
         ),
         #: Nilai rupiah barang yang diterima menurut HARGA INVOICE PO (Fase 5).
         #: None = batch tanpa ikatan bukti/PO ("tidak tercatat"), beda dari 0.
-        "accepted_value_idr": nilai if receipt.status == "disetujui" else None,
+        #: Sejak migrasi 044 angkanya memakai kg DITERIMA (Dok 05 §5.1), bukan
+        #: berat batch: susut sortir langsung mengurangi nilai.
+        "accepted_value_idr": (
+            (nilai_diterima if nilai_diterima is not None else nilai)
+            if receipt.status == "disetujui"
+            else None
+        ),
         #: Kg yang masuk stok karena persetujuan ini (None bila belum disetujui).
-        "stock_kg": kg if receipt.status == "disetujui" else None,
+        "stock_kg": kg_terima if receipt.status == "disetujui" else None,
         # ---- konteks nilai (Dok 05 §8.2–§8.3) ------------------------------
         # Ketiganya dikirim juga untuk catatan 'menunggu', supaya layar bisa
         # menampilkan tiga angka dan asal harganya SEBELUM keputusan diambil.
@@ -140,6 +203,25 @@ def _row(
         #: Perkiraan nilai bila disetujui (kg × harga satuan). BUKAN nilai
         #: tersimpan: `accepted_value_idr` tetap satu-satunya angka pembukuan.
         "estimated_value_idr": nilai,
+        # ---- skor ceklis (migrasi 044, Dok 05 §3–§5) -----------------------
+        #: Nilai 0–100 dari tujuh butir berbobot. None = baris lama/belum dinilai.
+        "score": receipt.score,
+        #: 'pass' | 'needs_verification' | 'fail' — putusan SERVER, bukan UI.
+        "verdict": receipt.verdict,
+        "verdict_label": VERDICT_LABEL.get(receipt.verdict or "", None),
+        #: Kalimat alasan (Dok 05 §7). Wajib tampil di rentang 65–85.
+        "advice": receipt.advice,
+        #: Rincian poin per butir: [{kunci,label,opsi_label,bobot,faktor,poin,…}].
+        "points": (receipt.points or {}).get("per_butir"),
+        #: Jawaban apa adanya: {"suhu": "sesuai", ...}.
+        "answers": receipt.answers,
+        #: Berat pesanan (batch) & berat yang benar-benar ditimbang.
+        "ordered_kg": float(receipt.ordered_kg) if receipt.ordered_kg is not None else kg,
+        "accepted_kg": kg_terima,
+        #: Nilai rupiah dari kg DITERIMA (bukan kg batch) — beda dari
+        #: `estimated_value_idr` yang memakai berat batch.
+        "nilai_diterima_idr": nilai_diterima,
+        "checklist_version": receipt.checklist_version,
     }
 
 
@@ -210,9 +292,59 @@ async def create_receipt(
     # UI harus bisa membedakan "tidak menulis apa-apa" dari "menulis spasi".
     catatan = (payload.other_note or "").strip()
 
+    # ---- Penilaian ceklis (migrasi 044, Dok 05 §3–§4) ----------------------
+    # Jawaban tujuh butir dinilai SERVER di sini dan hasilnya disimpan; layar
+    # hanya menampilkan `score`/`points`/`verdict` apa adanya.
+    dinilai: dict = {}
+    kg_pesan = float(batch.quantity_kg)
+    if payload.answers is not None:
+        if payload.accepted_kg is None:
+            raise HTTPException(
+                status_code=422,
+                detail="berat diterima wajib diisi bersama jawaban ceklis",
+            )
+        kg_terima = float(payload.accepted_kg)
+        kode_berat = validasi_berat(kg_pesan, kg_terima)
+        if kode_berat is not None:
+            raise HTTPException(
+                status_code=422,
+                detail=f"{BERAT_PESAN[kode_berat]} (kode: {kode_berat})",
+            )
+        jawaban = {str(k): str(v) for k, v in payload.answers.items()}
+        # Butir "kesesuaian jumlah" TIDAK dijawab petugas: nilainya diturunkan
+        # dari timbangan (§5.1) supaya jawaban tidak bisa bertentangan dengan kg
+        # yang benar-benar masuk. Jawaban kiriman klien untuk butir ini dibuang.
+        jawaban["jumlah"] = opsi_jumlah(kg_pesan, kg_terima)
+        try:
+            hasil = skor(jawaban)
+        except KeyError as exc:
+            raise HTTPException(
+                status_code=422,
+                detail=(
+                    "jawaban ceklis belum lengkap atau pilihannya tidak dikenal: "
+                    f"{exc.args[0] if exc.args else ''}"
+                ),
+            ) from exc
+        keputusan = putusan(hasil, kg_pesan, kg_terima)
+        dinilai = {
+            "answers": jawaban,
+            "points": {"per_butir": list(hasil.per_butir)},
+            "score": hasil.score,
+            "verdict": keputusan,
+            "advice": saran(hasil, keputusan, kg_pesan, kg_terima),
+            "ordered_kg": kg_pesan,
+            "accepted_kg": kg_terima,
+            "checklist_version": CHECKLIST_VERSION,
+            # Snapshot boolean lama tetap diisi (butir yang dijawab dengan
+            # pilihan penuh) supaya pembaca lama tidak melihat ceklis kosong.
+            "checked": {
+                b["kunci"]: b["faktor"] == 100 for b in hasil.per_butir
+            },
+        }
+
     receipt = BatchReceipt(
         batch_id=batch.id,
-        checked=dict(payload.checked),
+        checked=dict(dinilai.pop("checked", payload.checked)),
         other_note=catatan or None,
         recorded_by=user.id,
         status="menunggu",
@@ -221,6 +353,7 @@ async def create_receipt(
         # sesi kedua begitu operator membuka sesi baru, dan reset sesi pertama
         # tidak lagi bisa menemukan catatannya sendiri.
         demo_session_id=batch.demo_session_id,
+        **dinilai,
     )
     db.add(receipt)
     await db.commit()
@@ -230,6 +363,13 @@ async def create_receipt(
     # tiga angka tanpa menunggu keputusan — dan tanpa menghitung sendiri.
     kg_batch = float(batch.quantity_kg)
     po_number, harga = await receipt_value.po_dan_harga(db, batch.id)
+    # §5.1: putusan `fail` membuat jumlah efektif 0 — barangnya ada di truk,
+    # tetapi tidak boleh masuk dapur, jadi tidak ada nilai yang dibukukan.
+    kg_efektif = (
+        0.0
+        if receipt.verdict == "fail"
+        else (float(receipt.accepted_kg) if receipt.accepted_kg is not None else kg_batch)
+    )
     return _row(
         receipt,
         nama=user.name,
@@ -237,6 +377,7 @@ async def create_receipt(
         nilai=receipt_value.nilai_dari(kg_batch, harga),
         po_number=po_number,
         unit_price=float(harga) if harga is not None else None,
+        nilai_diterima=receipt_value.nilai_dari(kg_efektif, harga),
     )
 
 
@@ -268,15 +409,19 @@ async def approve_receipt(
     if receipt.status == "disetujui":
         nama = await _nama(db, receipt.reviewed_by)
         kg = float(batch.quantity_kg)
+        kg_terima = (
+            float(receipt.accepted_kg) if receipt.accepted_kg is not None else kg
+        )
         po_number, harga = await receipt_value.po_dan_harga(db, batch.id)
         return {
             **_row(
                 receipt,
                 pemeriksa=nama,
                 kg=kg,
-                nilai=receipt_value.nilai_dari(kg, harga),
+                nilai=receipt_value.nilai_dari(kg_terima, harga),
                 po_number=po_number,
                 unit_price=float(harga) if harga is not None else None,
+                nilai_diterima=receipt_value.nilai_dari(kg_terima, harga),
             ),
             "sudah": True,
         }
@@ -286,6 +431,19 @@ async def approve_receipt(
             detail=(
                 "penerimaan ini sudah ditolak — catat penerimaan baru bila"
                 " barang diperiksa ulang"
+            ),
+        )
+    # Gerbang putusan ceklis (Dok 05 §6): nilai di bawah ambang atau ada butir
+    # kritis berarti barang tidak boleh masuk dapur, sebesar apa pun jumlah
+    # fisiknya. Kalau hanya UI yang menyembunyikan tombolnya, panggilan langsung
+    # ke endpoint ini tetap menambah stok — jadi gerbangnya di sini.
+    if receipt.verdict == "fail":
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                "putusan ceklis penerimaan: tidak boleh diterima"
+                + (f" — {receipt.advice}" if receipt.advice else "")
+                + " (kode: receipt_verdict_fail)"
             ),
         )
     # Hanya batch `usable` yang boleh menjadi stok. Evaluator yang sama dengan
@@ -341,7 +499,15 @@ async def approve_receipt(
         )
     ).scalar_one_or_none()
     dasar = Decimal(str(stok_terakhir.quantity_kg)) if stok_terakhir else Decimal("0")
-    jumlah_baru = dasar + Decimal(str(batch.quantity_kg))
+    # Dok 05 §5.1: yang masuk stok adalah BERAT DITERIMA (timbangan), bukan
+    # berat batch. Selisihnya susut sortir — kalau memakai berat batch, stok
+    # bertambah dari barang yang tidak pernah sampai di dapur.
+    kg_masuk = (
+        Decimal(str(receipt.accepted_kg))
+        if receipt.accepted_kg is not None
+        else Decimal(str(batch.quantity_kg))
+    )
+    jumlah_baru = dasar + kg_masuk
     stok = SupplyRecord(
         location_id=batch.location_id,
         commodity_id=batch.commodity_id,
@@ -375,14 +541,16 @@ async def approve_receipt(
         ) from exc
     await db.refresh(receipt)
     kg = float(batch.quantity_kg)
+    kg_terima = float(receipt.accepted_kg) if receipt.accepted_kg is not None else kg
     po_number, harga = await receipt_value.po_dan_harga(db, batch.id)
     return _row(
         receipt,
         pemeriksa=user.name,
         kg=kg,
-        nilai=receipt_value.nilai_dari(kg, harga),
+        nilai=receipt_value.nilai_dari(kg_terima, harga),
         po_number=po_number,
         unit_price=float(harga) if harga is not None else None,
+        nilai_diterima=receipt_value.nilai_dari(kg_terima, harga),
     )
 
 
@@ -448,6 +616,34 @@ async def reject_receipt(
     )
 
 
+@router.get("/receipts/checklist")
+async def receipt_checklist(
+    commodity: str | None = Query(default=None, max_length=60),
+    db: AsyncSession = Depends(get_db),
+    _user: User = Depends(get_current_user),
+) -> dict:
+    """Daftar butir ceklis + bobot + tiga pilihan untuk satu komoditas.
+
+    Dok 05 §3: bobot dan faktor hidup di SERVER. Layar tidak menyimpan salinan
+    angka itu, supaya perubahan bobot tidak membuat layar lama menghitung
+    berbeda. Petunjuk suhu diambil dari profil komoditas (`commodity_limits`),
+    jadi telur/ayam/wortel (rantai dingin) dan beras (suhu ruang) tidak
+    dipaksa memakai satu rentang yang sama.
+
+    `commodity` dicocokkan lewat nama komoditas di tabel `commodities`; nama
+    yang tidak dikenal tetap mengembalikan daftar butir tanpa petunjuk suhu
+    (bukan galat — layar masih bisa menilai butir lain).
+    """
+    nama = (commodity or "").strip() or None
+    if nama:
+        ada = (
+            await db.execute(select(Commodity.name).where(Commodity.name == nama))
+        ).scalar_one_or_none()
+        if ada is None:
+            nama = None
+    return checklist_untuk(nama)
+
+
 @router.get("/receipts/menunggu")
 async def list_receipts_menunggu(
     db: AsyncSession = Depends(get_db),
@@ -462,21 +658,24 @@ async def list_receipts_menunggu(
 
     Satu baris per batch (catatan terbaru), di-scope ke lokasi pengguna bila
     pengguna punya lokasi; pemantau tanpa lokasi melihat seluruh jaringan.
+
+    Antrean ini hanya memuat batch yang SUDAH AMAN secukupnya untuk diputuskan
+    (evaluator `usable`) dan yang masa layaknya belum lewat (29 Okt 2026).
+    Kepala SPPG tinggal menyetujui atau menolak; barang yang buktinya belum
+    lengkap tetap terlihat di kartu "Batch perlu perhatian" — bukan di sini.
     """
     pemeriksa = aliased(User)
     batas = []
     if user.location_id is not None:
         batas.append(Batch.location_id == user.location_id)
-
     baris = (
         await db.execute(
             select(
                 BatchReceipt,
                 User.name,
-                Batch.quantity_kg,
+                Batch,
                 Commodity.name,
                 Location.name,
-                Batch.safety_status,
             )
             .join(User, User.id == BatchReceipt.recorded_by)
             .join(Batch, Batch.id == BatchReceipt.batch_id)
@@ -488,13 +687,29 @@ async def list_receipts_menunggu(
         )
     ).all()
 
+    # Hanya batch yang SUDAH dinyatakan aman (permintaan pemilik, 29 Okt 2026):
+    # antrean ini adalah tempat memutuskan, bukan tempat menindaklanjuti bukti
+    # yang belum lengkap. Kriterianya memakai evaluator yang SAMA dengan
+    # `/approve` — kalau baris muncul di sini, tombol Setujui pasti diterima
+    # server; batch `on_hold`/`rejected`/`quarantined` tidak ditawarkan.
+    baris = [b for b in baris if evaluasi_batch(b[2]).status == USABLE]
+
     terlihat: set[uuid.UUID] = set()
+    # Konteks nilai (Dok 05 §8.2–§8.3): antrean harus bisa menulis tiga angka
+    # dan asal harganya SEBELUM kepala SPPG memutuskan. Satu kueri peta untuk
+    # semua batch di antrean — bukan satu kueri harga per baris.
+    peta_po = await receipt_value.peta_po_dan_harga(
+        db, {str(baris_[0].batch_id) for baris_ in baris if baris_}
+    )
     items: list[dict] = []
-    for receipt, nama, kg, komoditas, lokasi, safety in baris:
+    for receipt, nama, batch, komoditas, lokasi in baris:
         if receipt.batch_id in terlihat:
             continue
         terlihat.add(receipt.batch_id)
+        kg = float(batch.quantity_kg)
+        safety = batch.safety_status
         dicek = receipt.checked or {}
+        po_number, harga = peta_po.get(str(receipt.batch_id), (None, None))
         items.append(
             {
                 "id": str(receipt.id),
@@ -507,9 +722,17 @@ async def list_receipts_menunggu(
                 "recorded_by_name": nama,
                 "recorded_at": receipt.recorded_at.isoformat(),
                 # Antrean ini hanya berisi catatan yang BELUM disetujui, jadi
-                # nilai rupiah belum ada — kuncinya tetap dikirim (None) supaya
-                # UI membaca satu bentuk payload saja.
+                # nilai pembukuan belum ada — kuncinya tetap dikirim (None)
+                # supaya UI membaca satu bentuk payload saja.
                 "accepted_value_idr": None,
+                # ---- konteks nilai (Dok 05 §8.2–§8.3) ----
+                # Dikirim untuk catatan 'menunggu' supaya baris antrean bisa
+                # menampilkan "bila disetujui" + asal harga, tanpa layar
+                # mengalikan kg x harga sendiri.
+                "batch_quantity_kg": float(kg),
+                "po_number": po_number,
+                "unit_price_idr": float(harga) if harga is not None else None,
+                "estimated_value_idr": receipt_value.nilai_dari(float(kg), harga),
             }
         )
     return {"items": items, "total": len(items)}
@@ -646,6 +869,18 @@ async def list_receipts_riwayat(
         lokasi,
     ) in baris:
         kg_float = float(kg) if kg is not None else None
+        # Dok 05 §5.1 (perbaikan 29 Okt 2026): kolom "diterima" adalah hasil
+        # TIMBANGAN. Dulu dua kolom ini sama-sama memakai `batches.quantity_kg`,
+        # sehingga ringkasan Pemasok menulis "kg diterima 900" padahal yang
+        # masuk stok (dan yang dibayar) 855 kg — berbeda dari KPI "Effective
+        # Price per Accepted Kg" yang sudah memakai timbangan. Baris lama tanpa
+        # timbangan tetap sah: jatuh ke berat batch.
+        pesanan = (
+            float(receipt.ordered_kg) if receipt.ordered_kg is not None else kg_float
+        )
+        timbangan = (
+            float(receipt.accepted_kg) if receipt.accepted_kg is not None else kg_float
+        )
         po_number, harga_satuan = peta.get(str(batch_id), (None, None))
         row = _row(
             receipt,
@@ -666,8 +901,8 @@ async def list_receipts_riwayat(
                 # Dok 05 §8.2: dua angka kg berdiri sendiri. `received_kg`
                 # kosong selama catatan belum disetujui — barang yang belum
                 # masuk stok tidak boleh terbaca sebagai sudah diterima.
-                "ordered_kg": kg_float,
-                "received_kg": kg_float if receipt.status == "disetujui" else None,
+                "ordered_kg": pesanan,
+                "received_kg": timbangan if receipt.status == "disetujui" else None,
             }
         )
         items.append(row)

@@ -25,6 +25,8 @@ export type DecisionRow = {
   quantity_kg: number | null;
   safe_delivered_cost: number | null;
   expires_at: string;
+  /** Waktu keputusan dibuat (dikirim backend) — dipakai memeriksa urutan jejak. */
+  created_at?: string;
   valid: boolean;
   /** P4: true bila keputusan ini punya jejak 7 worker (dihitung backend). */
   has_agent_review?: boolean;

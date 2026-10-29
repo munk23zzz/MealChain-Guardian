@@ -7,6 +7,8 @@ import {
   AKUN_DEMO_CADANGAN,
   kelompokkanAkun,
   muatAkunDemo,
+  passwordDemoUntuk,
+  sandiDemoTersedia,
 } from "../lib/demo-accounts";
 
 const akar = join(__dirname, "..");
@@ -104,5 +106,33 @@ describe("akun demo di layar login", () => {
 
     expect(utama.map((a) => a.label)).toEqual(["A", "C"]);
     expect(kota.map((a) => a.label)).toEqual(["B"]);
+  });
+});
+
+// 29 Okt 2026 — dua kali login demo gagal karena tombol demo ditekan SEBELUM
+// `GET /auth/demo-login` menjawab: kolom sandi kosong, "Masuk" 401/500, dan
+// pembaca menyimpulkan aplikasinya rusak. Dua helper ini yang membuat layar
+// login bisa (a) mengisi sandi susulan dan (b) berterus terang bila server
+// memang tidak mengirim sandi.
+describe("sandi demo: susulan dan kejujuran", () => {
+  it("mengisi sandi begitu daftar bersandi tiba", () => {
+    const berSandi = AKUN_DEMO_CADANGAN.map((akun) =>
+      akun.email === "sppg.head@demo.local" ? { ...akun, password: "rahasia-demo" } : akun,
+    );
+
+    expect(passwordDemoUntuk(AKUN_DEMO_CADANGAN, "sppg.head@demo.local")).toBeNull();
+    expect(passwordDemoUntuk(berSandi, "sppg.head@demo.local")).toBe("rahasia-demo");
+    // Email yang tidak ada di daftar tidak menghasilkan sandi karangan.
+    expect(passwordDemoUntuk(berSandi, "orang@luar.local")).toBeNull();
+  });
+
+  it("tahu kapan server tidak mengirim sandi sama sekali", () => {
+    expect(sandiDemoTersedia(AKUN_DEMO_CADANGAN)).toBe(false);
+    expect(sandiDemoTersedia([])).toBe(false);
+    expect(
+      sandiDemoTersedia([
+        { label: "A", email: "a@demo.local", role: "sppg_head", password: "x" },
+      ]),
+    ).toBe(true);
   });
 });

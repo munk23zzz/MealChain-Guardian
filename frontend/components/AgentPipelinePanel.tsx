@@ -14,8 +14,6 @@ import { useId, useState } from "react";
 import {
   buildPipeline,
   jamWib,
-  pipelineCaveat,
-  pipelineSummary,
   provenanceLine,
   stageMeta,
   stageStateLabel,
@@ -37,18 +35,21 @@ export default function AgentPipelinePanel({
   steps,
   ledger,
   onOpenEvidence = null,
+  stageFilter = null,
+  onStageFilter = null,
 }: {
   decisionId?: string | null;
   steps: TraceStep[] | null;
   ledger: LedgerBlockView[] | null;
   onOpenEvidence?: (() => void) | null;
+  /** Tahap yang sedang menyaring langkah rinci; `null` = tanpa saringan. */
+  stageFilter?: string | null;
+  onStageFilter?: ((code: string | null) => void) | null;
 }) {
   const id = useId();
   const [terbuka, setTerbuka] = useState<string | null>(null);
   const banner = traceBanner(decisionId, steps);
   const stages = buildPipeline({ steps, ledger });
-  const ringkas = pipelineSummary(stages);
-  const caveat = pipelineCaveat(stages);
   const provenance = provenanceLine(steps);
   const lambat = stages.filter((s) => s.slow);
   const aktif = stages.find((s) => s.code === terbuka) ?? null;
@@ -73,17 +74,26 @@ export default function AgentPipelinePanel({
       {banner.state === "no_decision" ? null : (
         <>
           <div className="aa-strip-head">
-            <p className="aa-summary" title={caveat}>
-              {ringkas}
-            </p>
             {lambat.length > 0 ? (
               <p className="aa-slow-note">
                 {lambat.length} tahap lebih lambat dari biasanya
               </p>
             ) : null}
+            {stageFilter ? (
+              <button
+                type="button"
+                className="aa-link"
+                onClick={() => {
+                  setTerbuka(null);
+                  onStageFilter?.(null);
+                }}
+              >
+                Hapus saringan tahap {stageFilter}
+              </button>
+            ) : null}
           </div>
 
-          <ol className="aa-strip" aria-label="Sembilan tahap pipeline">
+          <ol className="aa-strip" aria-label={`${stages.length} tahap pipeline`}>
             {stages.map((tahap, i) => {
               const jam = jamWib(tahap.at);
               const buka = terbuka === tahap.code;
@@ -95,8 +105,15 @@ export default function AgentPipelinePanel({
                       buka ? " aa-stage-open" : ""
                     }`}
                     aria-expanded={buka}
+                    aria-pressed={stageFilter === tahap.code}
                     aria-controls={`${id}-rincian`}
-                    onClick={() => setTerbuka(buka ? null : tahap.code)}
+                    onClick={() => {
+                      // Klik chip = dua hal sekaligus (Tahap 4): buka catatan
+                      // tahap itu DAN saring langkah rinci di bawah ke tahap
+                      // yang sama. Klik kedua menutup keduanya.
+                      setTerbuka(buka ? null : tahap.code);
+                      onStageFilter?.(buka ? null : tahap.code);
+                    }}
                     title={`${tahap.code} · ${tahap.label} — ${stageStateLabel(
                       tahap.state
                     )}${jam ? ` · ${jam} WIB` : ""}${

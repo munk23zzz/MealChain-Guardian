@@ -198,7 +198,7 @@ describe("papan kiriman — isi sel (tanpa angka karangan)", () => {
   it("ringkasan jumlah menyebut keadaan yang benar-benar ada", () => {
     expect(boardCounts([])).toBe("Tidak ada kiriman");
     expect(boardCounts([route(), sudahTiba])).toBe("2 kiriman · 1 di jalan · 1 sudah tiba");
-    expect(boardCounts([route(), tanpaJourney])).toBe("2 kiriman · 1 di jalan · 1 tanpa laporan server");
+    expect(boardCounts([route(), tanpaJourney])).toBe("2 kiriman · 1 di jalan · 1 tanpa laporan");
   });
 });
 

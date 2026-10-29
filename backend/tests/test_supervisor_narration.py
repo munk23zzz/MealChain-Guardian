@@ -80,6 +80,28 @@ def client():
         yield c
 
 
+def _trace_rows(decision_id: str) -> list[dict]:
+    """Baris jejak keputusan ini (untuk memeriksa isi tahap SUPERVISE)."""
+    engine = create_engine(DB_URL)
+    try:
+        with engine.begin() as conn:
+            rows = (
+                conn.execute(
+                    text(
+                        "SELECT step_name, tool_called, output_summary "
+                        "FROM agent_traces WHERE decision_id = CAST(:d AS uuid) "
+                        "ORDER BY step_at ASC, id ASC"
+                    ),
+                    {"d": decision_id},
+                )
+                .mappings()
+                .all()
+            )
+            return [dict(r) for r in rows]
+    finally:
+        engine.dispose()
+
+
 def test_supervise_step_narrates_with_honest_labels(client, monkeypatch):
     from app.services.event1_orchestrator import run_event1
 
@@ -135,7 +157,14 @@ def test_supervise_unavailable_recorded_honestly(client):
         sup = outcome["supervisor"]
         assert sup["status"] == "unavailable"
         assert sup["attempts"] == []
-        assert "SUPERVISE" not in outcome["trace_steps"]
+        # 29 Okt 2026: tahap SUPERVISE SELALU meninggalkan baris — kegagalan
+        # narasi adalah fakta yang harus terbaca di panel 10 tahap, bukan
+        # tahap yang lenyap (dulu: `"SUPERVISE" not in trace_steps`).
+        assert "SUPERVISE" in outcome["trace_steps"]
+        rows = _trace_rows(outcome["decision_id"])
+        supervise = next(r for r in rows if r["step_name"] == "SUPERVISE")
+        assert supervise["tool_called"] == "supervisor.unavailable"
+        assert (supervise["output_summary"] or {})["status"] == "unavailable"
         assert outcome["decision_snapshot"]["status"] in {
             "proposed",
             "pending_approval",

@@ -10,6 +10,7 @@ from fastapi.responses import JSONResponse
 from app.api.actions import router as actions_router
 from app.api.admin import router as admin_router
 from app.api.agenda import router as agenda_router
+from app.api.agent import router as agent_router
 from app.api.auth import router as auth_router
 from app.api.balance import router as balance_router
 from app.api.batches import router as batches_router
@@ -27,7 +28,6 @@ from app.api.evidence import router as evidence_router
 from app.api.freshness import router as freshness_router
 from app.api.integrations import router as integrations_router
 from app.api.kpi import router as kpi_router
-from app.api.agent import router as agent_router
 from app.api.ledger import router as ledger_router
 from app.api.logistics import router as logistics_router
 from app.api.price import router as price_router
@@ -169,6 +169,15 @@ _JALUR_TANPA_SESI = frozenset(
 )
 _METODE_MUTASI = frozenset({"POST", "PUT", "PATCH", "DELETE"})
 
+#: Endpoint KOMPUTASI MURNI: metodonya POST, tetapi tidak menulis apa pun ke DB
+#: (`agent/api_client.py::COMPUTE_ALLOWLIST` adalah daftar yang sama dari sisi
+#: worker). Gerbang sesi demo ada untuk melindungi MUTASI; menolak endpoint ini
+#: membuat worker Price selalu `degraded` -- "deviasi harga tidak dapat dihitung:
+#: HTTP 409 ... aksi tulis ditolak" -- setiap kali putaran berjalan tanpa sesi
+#: aktif, lalu verdict verifier ikut turun. Terukur 29 Okt 2026 pada putaran
+#: beras Bandung: 1 dari 8 cek gagal, kartu Price "Terbatas", verifier "Ditinjau".
+_JALUR_KOMPUTASI = frozenset({"/price/deviation", "/logistics/estimate"})
+
 
 @app.middleware("http")
 async def _konteks_sesi_demo(request, call_next):
@@ -194,6 +203,7 @@ async def _konteks_sesi_demo(request, call_next):
             aktif is None
             and request.method in _METODE_MUTASI
             and request.url.path not in _JALUR_TANPA_SESI
+            and request.url.path not in _JALUR_KOMPUTASI
         ):
             return JSONResponse(
                 status_code=409,
@@ -287,5 +297,24 @@ app.include_router(integrations_router)
 
 @app.get("/health")
 async def health_check() -> dict:
-    """Health check endpoint backend."""
-    return {"status": "healthy", "service": "mealchain-backend"}
+    """Health check endpoint backend.
+
+    `forecast` menampilkan penghitung peramalan in-process (jumlah panggilan
+    model, berapa kali cadangan dipakai, apakah SAP-RPT terkonfigurasi). Tidak
+    ada nilai rahasia di sini — hanya angka dan boolean.
+    """
+    from app.core.config import settings
+    from app.services.forecast_service import statistik as forecast_statistik
+
+    return {
+        "status": "healthy",
+        "service": "mealchain-backend",
+        "forecast": forecast_statistik(),
+        # Status kait review agent: apakah setiap keputusan baru ikut direview,
+        # lewat jalur mana, dan berapa anggaran waktunya. Tanpa rahasia.
+        "agent_review": {
+            "enabled": settings.multi_agent_review,
+            "mode": settings.agent_review_mode,
+            "timeout_seconds": settings.agent_review_timeout_seconds,
+        },
+    }

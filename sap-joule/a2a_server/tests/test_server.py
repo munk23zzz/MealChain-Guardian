@@ -524,7 +524,7 @@ def test_routing_direktori_pemasok_tetapi_antrean_tetap_menang():
 # --- kartu agen & /health -----------------------------------------------------------------
 
 
-def test_agent_card_di_well_known_berisi_tiga_belas_skill():
+def test_agent_card_di_well_known_berisi_empat_belas_skill():
     with TestClient(_app(FakeClient())) as client:
         card = client.get("/.well-known/agent-card.json").json()
 
@@ -535,6 +535,7 @@ def test_agent_card_di_well_known_berisi_tiga_belas_skill():
         "approval_queue",
         "receipts_queue",
         "quarantine_status",
+        "batch_detail",
         "purchase_order",
         "supplier_directory",
         "price_intelligence",

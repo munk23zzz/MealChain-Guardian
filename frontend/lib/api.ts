@@ -445,6 +445,71 @@ export async function triggerSafetyDisruption(
 // isian manual petugas, termasuk opsi "Lainnya" (keadaan yang tidak ada di
 // daftar periksa). Server menyimpan snapshot titik periksa apa adanya, mencatat
 // siapa & kapan, dan MENGHITUNG sendiri jumlah titik yang benar-benar dicentang.
+/** Satu butir ceklis yang sudah dinilai server (Dok 05 §3). */
+export type ReceiptPoint = {
+  kunci: string;
+  label: string;
+  opsi: string;
+  opsi_label: string;
+  bobot: number;
+  faktor: number;
+  poin: number;
+  max_points: number;
+  kritis: boolean;
+  perlu_cek: boolean;
+};
+
+/** Satu pilihan jawaban — bobot & faktor datang dari server, tidak disalin. */
+export type ReceiptChecklistOption = {
+  kunci: string;
+  label: string;
+  faktor: number;
+  kritis: boolean;
+  perlu_cek: boolean;
+};
+
+export type ReceiptChecklistItem = {
+  kunci: string;
+  label: string;
+  bobot: number;
+  /** Butir ini dijawab dari timbangan, bukan dipilih petugas. */
+  dari_timbangan: boolean;
+  /** Petunjuk per komoditas (mis. rentang suhu telur vs beras). */
+  petunjuk: string | null;
+  opsi: ReceiptChecklistOption[];
+};
+
+/**
+ * Daftar butir ceklis dari `GET /receipts/checklist` (Dok 05 §3).
+ *
+ * Bobot dan faktor TIDAK disalin ke layar: kalau bobot berubah di server, layar
+ * lama tidak boleh menghitung dengan angka lama. Bentuk ini dipakai apa adanya.
+ */
+export type ReceiptChecklist = {
+  version: string;
+  komoditas: string | null;
+  total_bobot: number;
+  ambang: {
+    fail_max_score: number;
+    ambiguous_max_score: number;
+    accepted_ratio_min: number;
+    berat_lebih_maks_persen: number;
+  };
+  butir: ReceiptChecklistItem[];
+  nama_putusan: Record<string, string>;
+};
+
+export async function fetchReceiptChecklist(
+  commodity: string | null,
+  token: string
+): Promise<ReceiptChecklist> {
+  const q = new URLSearchParams();
+  if (commodity) q.set("commodity", commodity);
+  return request(`/receipts/checklist?${q.toString()}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+}
+
 export type ReceiptRow = {
   id: string;
   batch_id: string;
@@ -471,15 +536,44 @@ export type ReceiptRow = {
   po_number?: string | null;
   /** Harga satuan invoice PO (Rp/kg) — dasar kalimat "kg × Rp/kg dari PO …". */
   unit_price_idr?: number | null;
+  // ---- skor ceklis (migrasi 044, Dok 05 §3–§5) ----
+  /** Nilai 0–100 dari tujuh butir berbobot. null = baris lama / belum dinilai. */
+  score?: number | null;
+  /** Putusan server: 'pass' | 'needs_verification' | 'fail'. */
+  verdict?: string | null;
+  /** Label putusan yang sudah diterjemahkan server. */
+  verdict_label?: string | null;
+  /** Kalimat alasan (Dok 05 §7) — wajib tampil untuk rentang 65–85. */
+  advice?: string | null;
+  /** Rincian poin per butir dari server. */
+  points?: ReceiptPoint[] | null;
+  /** Jawaban apa adanya: {"suhu": "sesuai", ...}. */
+  answers?: Record<string, string> | null;
+  /** Berat pesanan (batch) dan berat yang benar-benar ditimbang. */
+  ordered_kg?: number | null;
+  accepted_kg?: number | null;
+  /** Nilai rupiah dari kg DITERIMA (bukan kg batch). */
+  nilai_diterima_idr?: number | null;
+  checklist_version?: string | null;
   /** Perkiraan nilai (kg × harga satuan) sebelum keputusan. Bukan angka pembukuan. */
   estimated_value_idr?: number | null;
 };
 
+/**
+ * Catat penerimaan barang.
+ *
+ * Dua bentuk yang sah:
+ * - `opsi` kosong → jalur lama (cek boolean). Tetap didukung supaya pemanggil
+ *   lain dan data lama tidak berubah perilaku.
+ * - `opsi.answers` + `opsi.acceptedKg` → server menilai tujuh butir berbobot
+ *   (Dok 05 §3–§4) dan menyimpan skor, putusan, dan berat timbangan.
+ */
 export async function recordReceipt(
   batchId: string,
   checked: Record<string, boolean>,
   otherNote: string,
-  token: string
+  token: string,
+  opsi: { answers?: Record<string, string>; acceptedKg?: number } = {}
 ): Promise<ReceiptRow> {
   return request("/receipts", {
     method: "POST",
@@ -487,7 +581,12 @@ export async function recordReceipt(
       "Content-Type": "application/json",
       Authorization: `Bearer ${token}`,
     },
-    body: JSON.stringify({ batch_id: batchId, checked, other_note: otherNote }),
+    body: JSON.stringify({
+      batch_id: batchId,
+      checked,
+      other_note: otherNote,
+      ...(opsi.answers ? { answers: opsi.answers, accepted_kg: opsi.acceptedKg } : {}),
+    }),
  });
 }
 
@@ -511,6 +610,12 @@ export type PendingReceiptRow = {
   checked_count: number;
   recorded_by_name: string | null;
   recorded_at: string;
+  /** Konteks nilai (Dok 05 §8.2–§8.3). Opsional: payload lama tidak punya ini. */
+  batch_quantity_kg?: number | null;
+  po_number?: string | null;
+  unit_price_idr?: number | null;
+  /** kg × harga satuan PO — perkiraan bila disetujui, bukan nilai pembukuan. */
+  estimated_value_idr?: number | null;
 };
 
 /** Catatan penerimaan yang sudah dibuat tetapi belum diputuskan (antrean approval). */
@@ -1026,10 +1131,25 @@ export async function fetchAgenda(token: string, start: string, end: string) {
 // S4-06 polish (arah Roy 2026-10-08): kondisi SEMUA lokasi untuk peta +
 // grafik stok — satu panggilan GET /balance/map (read-only, data REAL,
 // formula gap = panel snapshot, koordinat dari DB).
+// Permintaan yang sama dipakai beberapa bagian halaman sekaligus (peta,
+// kecukupan, surplus): 4 komoditas menjadi 8 panggilan setiap kali halaman
+// dibuka (terukur 29 Okt 2026). Cache di bawah hanya berlaku SELAMA permintaan
+// berjalan — begitu selesai kuncinya dihapus, jadi tidak ada data basi setelah
+// aksi tulis (mis. persetujuan penerimaan).
+const balanceMapBerjalan = new Map<string, Promise<unknown>>();
+
 export async function fetchBalanceMap(commodity: string, token: string) {
-  return request(`/balance/map?commodity=${encodeURIComponent(commodity)}`, {
+  const kunci = `${commodity}\u0000${token}`;
+  const berjalan = balanceMapBerjalan.get(kunci);
+  if (berjalan) return berjalan;
+
+  const permintaan = request(`/balance/map?commodity=${encodeURIComponent(commodity)}`, {
     headers: { Authorization: `Bearer ${token}` },
+  }).finally(() => {
+    balanceMapBerjalan.delete(kunci);
   });
+  balanceMapBerjalan.set(kunci, permintaan);
+  return permintaan;
 }
 
 // Detail satu lokasi untuk pop-up Supply & Demand (dokumen 03 §3): catatan

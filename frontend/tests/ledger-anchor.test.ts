@@ -46,7 +46,7 @@ describe("anchorNote", () => {
       valid: true,
       anchor: { configured: false, match: null, reason: null },
     });
-    expect(note).toContain("dimatikan");
+    expect(note).toContain("Anchor eksternal belum dipasang");
   });
 
   it("tanpa field anchor tidak mengarang kalimat", () => {

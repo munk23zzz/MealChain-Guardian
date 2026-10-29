@@ -1,21 +1,27 @@
-"""S4-00 O-DATA-2: alignment CHECK ORM AgentTrace ↔ migration 007.
+"""S4-00 O-DATA-2: alignment CHECK ORM AgentTrace ↔ migration terakhir.
 
 Drift terverifikasi (plan §12): migration `007_supervise_step` memuat
 SUPERVISE di whitelist `agent_traces_step_name_check` DB, dan
 `trace_persistence._VALID_STEPS` juga menerimanya — tetapi CHECK di ORM
 `AgentTrace` tidak. Akibatnya fresh DB via `create_all()` menolak langkah
-SUPERVISE (mismatch fresh-vs-migrated). Kontrak: whitelist ORM = migration.
+SUPERVISE (mismatch fresh-vs-migrated). Kontrak: whitelist ORM = migration
+TERAKHIR yang menyentuh constraint ini (kini `045_analyze_step`, yang menyusulkan
+ANALYZE di sebelah langkah 007).
 """
 
 from app.db import Base
 from app.models.decisions import AgentTrace
 
-MIGRATION_007_STEPS = (
+#: Whitelist gabungan migration 007 (SUPERVISE) + 045 (ANALYZE). Menambah langkah
+#: baru WAJIB lewat migration baru dan memperbarui daftar ini — kalau tidak, tes ini
+#: menangkap drift fresh-DB (`create_all`) vs DB termigrasi.
+MIGRATION_WHITELIST_STEPS = (
     "DETECT",
     "VERIFY",
     "TRACE",
     "PREDICT",
     "OPTIMIZE",
+    "ANALYZE",
     "DECIDE",
     "SUPERVISE",
     "ACT",
@@ -31,21 +37,21 @@ def _check_text(model) -> str | None:
     return None
 
 
-def test_orm_agent_trace_check_menyertakan_semua_langkah_migration_007():
+def test_orm_agent_trace_check_menyertakan_semua_langkah_migration():
     text = _check_text(AgentTrace)
     assert text is not None, "CHECK agent_traces_step_name_check tidak ditemukan"
-    for step in MIGRATION_007_STEPS:
+    for step in MIGRATION_WHITELIST_STEPS:
         assert f"'{step}'" in text, f"langkah {step} absen di CHECK ORM: {text}"
 
 
 def test_orm_agent_trace_check_tanpa_langkah_di_luar_whitelist():
-    """Whitelist ORM TIDAK melebar melebihi migration 007 (anti-drift dua arah)."""
+    """Whitelist ORM TIDAK melebar melebihi migration (anti-drift dua arah)."""
     text = _check_text(AgentTrace)
     assert text is not None
     for raw in text.split("'"):
         token = raw.strip().strip(",")
         if token and token.isalpha():
-            assert token in MIGRATION_007_STEPS, f"langkah liar {token} di CHECK ORM"
+            assert token in MIGRATION_WHITELIST_STEPS, f"langkah liar {token} di CHECK ORM"
 
 
 def test_semua_langkah_whitelist_diterima_metadata_metadata_check():

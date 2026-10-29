@@ -77,7 +77,7 @@ export function shipmentHeadline(
 ): ShipmentHeadline {
   const journey = row.journey;
   if (!journey) {
-    return { tone: "unknown", label: "Perjalanan belum dilaporkan server" };
+    return { tone: "unknown", label: "Perjalanan belum dilaporkan" };
   }
   const tone = journeyTone(journey.state);
   switch (journey.state) {
@@ -174,7 +174,7 @@ export function shipmentVerdict(
 ): string {
   const journey = row.journey;
   if (!journey) {
-    return "Perjalanan belum dilaporkan server — waktu berangkat dan estimasi tiba belum bisa dipastikan.";
+    return "Perjalanan belum dilaporkan — waktu berangkat dan estimasi tiba belum bisa dipastikan.";
   }
   if (!row.road) {
     return `Jalur jalan ${alasanJalur(row)} — jarak tempuh & estimasi tiba belum bisa dipastikan.`;

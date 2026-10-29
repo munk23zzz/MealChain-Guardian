@@ -19,7 +19,7 @@ Diperbarui: 22 Okt 2026 (versi capability `1.4.0`).
 
 ## 1. Ringkasan audit: skill jembatan vs scenario Joule
 
-Jembatan mendefinisikan **14 konstanta** skill, tetapi hanya **13** yang masuk tuple `SKILLS`
+Jembatan mendefinisikan **15 konstanta** skill, tetapi hanya **14** yang masuk tuple `SKILLS`
 dan ditawarkan di agent card (`/.well-known/agent-card.json`). `unsupported_domain` sengaja
 tidak ditawarkan: jawabannya "domain ini belum tersedia", bukan data.
 
@@ -38,11 +38,14 @@ tidak ditawarkan: jawabannya "domain ini belum tersedia", bukan data.
 | 11 | `quarantine_status` | **tidak ada** | `status_karantina.yaml` | **baru** |
 | 12 | `decision_evidence` | `bukti_keputusan.yaml` | `bukti_keputusan.yaml` | ada |
 | 13 | `system_status` | `status_sistem.yaml` | `status_sistem.yaml` | ada |
+| 14 | `batch_detail` (29 Okt 2026) | **tidak ada** | `detail_batch.yaml` | **baru** |
 | — | `unsupported_domain` (tidak di `SKILLS`) | tidak ada | tidak ada (sengaja) | di luar cakupan Joule |
 
 Sebelum: **10 scenario / 13 skill** → tiga skill (`supplier_directory`, `receipts_queue`,
 `quarantine_status`) punya kode dan laporan lengkap di jembatan, tetapi **tidak bisa dipicu
-dari chat Joule sama sekali** karena Joule hanya melihat scenario. Setelah: **13 / 13**.
+dari chat Joule sama sekali** karena Joule hanya melihat scenario. Setelah 22 Okt: **13 / 13**.
+Sesudah 29 Okt: **14 / 14** — `batch_detail` menambahkan rincian keamanan satu batch
+(`GET /batches/{id}`) yang sebelumnya tidak bisa dijangkau chat.
 
 Tidak ada scenario yang menunjuk skill yang tidak ada: kesepuluh scenario lama memetakan satu
 ke satu ke skill nyata (dikunci `test_semua_scenario_menargetkan_fungsi_yang_sama` dan kini
@@ -318,6 +321,36 @@ Kolom "data minimal" ditulis sebagai syarat yang bisa diperiksa dengan satu quer
   Bukti; ringkasan ledger (valid/ jumlah blok / rasio keterkaitan); ringkasan PO per status;
   daftar `Jaringan SPPG (n lokasi)`. Komponen yang belum menyala dilaporkan "belum menyala",
   tidak pernah dinaikkan jadi hijau.
+
+---
+
+### 2.14 `batch_detail` — rincian keamanan satu batch **(scenario baru, 29 Okt 2026)**
+
+- **Scenario**: `detail_batch.yaml` · **Laporan**: `report.batch_detail_report`
+- **Endpoint**: `GET /batches/{id}` (satu-satunya endpoint yang membawa kebijakan komoditas
+  dan status evaluasi). Tanpa id batch, laporan memakai `GET /batches` hanya untuk daftar
+  kandidat — bukan untuk menyimpulkan keamanan.
+- **Tabel/kolom**: `batches` (`quantity_kg`, `safety_status`, `freshness_score`, `usable_until`,
+  `receipt_status`, `quarantine_status`), `commodity_policies` (`safe_temp_min_c`,
+  `safe_temp_max_c`, `cold_chain_required`, `shelf_life_days`, `min_temperature_samples`,
+  `max_observation_age_minutes`, `max_excursion_minutes`, `policy_version`, `policy_basis`,
+  `policy_kind`), `temperature_log` (diringkas backend menjadi `temperature_observation`,
+  `sample_count`, `observed_at`, `evidence_state`, `evaluated_safety_status`).
+- **Data minimal**: ≥1 batch dengan profil komoditas lengkap di `commodity_policies` dan
+  ≥`min_temperature_samples` baris `temperature_log`. Tanpa profil, rentang suhu tampil `—`
+  (bukan tebakan); tanpa log, `evidence_state` akan `insufficient` beserta alasannya.
+- **Contoh pertanyaan**: "Batch `<id>` aman atau tidak?", "Suhu batch mana yang menyimpang?",
+  "Kapan batch ini kedaluwarsa?", "Bukti suhu batch `<id>` cukup?"
+- **Bentuk jawaban**: judul `Batch <id8> · <komoditas> · <lokasi>`, baris `Kelayakan pakai:
+  **…**` + penghalang + langkah berikutnya, tabel `Aspek batch | Nilai` (status keamanan
+  **tersimpan** dan **hasil evaluasi** sebagai dua baris terpisah), tabel `Kebijakan | Nilai`
+  (suhu aman, rantai dingin, masa layak, sampel minimum, batas usia observasi, toleransi
+  penyimpangan, **jenis kebijakan**, versi), lalu satu baris bukti suhu.
+- **Batas yang ditampilkan, bukan disembunyikan**: `policy_kind: simulated_policy` dirender
+  sebagai "kebijakan simulasi (belum divalidasi pemilik domain)"; sampel suhu mentah belum
+  diekspos backend sehingga yang tampil hanya ringkasannya (`sample_count` + status observasi).
+- **Sekarang**: batch telur Bandung 300 kg — lolos/lolos, skor 0,95, layak sampai 28 Nov 2026,
+  7 sampel, bukti cukup, kebijakan `sim-2026-10-27.v1` (0–8 °C, masa layak 28 hari).
 
 ---
 

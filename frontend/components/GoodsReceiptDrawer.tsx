@@ -235,7 +235,7 @@ export function GoodsReceiptSheet({
         no={2}
         title="Nilai dan putusan batch"
         testId="receipt-step-nilai"
-        note="Kg dari batch, harga satuan dari PO invoice, dan nilainya dihitung server. Layar tidak mengalikan rupiah sendiri."
+        note="Kg dari batch dan harga satuan dari PO invoice; nilai rupiahnya dihitung dari keduanya."
       >
         <ReceiptFigures catatan={catatan} />
         <div className={own.figureRow}>
@@ -265,7 +265,7 @@ export function GoodsReceiptSheet({
         no={3}
         title="Tandai barang"
         testId="receipt-step-marking"
-        note="Arah penandaan ditentukan server: tombol yang tidak diizinkan tidak dirender, bukan hanya dinonaktifkan."
+        note="Tombol yang tidak diizinkan tidak ditampilkan, bukan hanya dinonaktifkan."
       >
         {bolehPutuskan || baris.canQuarantine ? (
           <div className={own.actions}>
@@ -440,13 +440,13 @@ export default function GoodsReceiptDrawer({
       setPesan(
         balasan?.sudah
           ? "Penerimaan ini sudah disetujui sebelumnya — stok tidak digandakan."
-          : "Barang ditandai diterima; stok bertambah di server."
+          : "Barang ditandai diterima; stok bertambah."
       );
       await muat();
       onChanged?.();
     } catch (e) {
       // Butir 4: 409 wajib menyebut detail server (alasan bisa diperbaiki).
-      setGalat(serverDetail(e) || "Penerimaan ditolak server tanpa keterangan.");
+      setGalat(serverDetail(e) || "Penerimaan ditolak tanpa keterangan.");
     } finally {
       setBusy(false);
     }
@@ -472,7 +472,7 @@ export default function GoodsReceiptDrawer({
       await muat();
       onChanged?.();
     } catch (e) {
-      setGalat(serverDetail(e) || "Penolakan gagal tanpa keterangan server.");
+      setGalat(serverDetail(e) || "Penolakan gagal tanpa keterangan.");
     } finally {
       setBusy(false);
     }
@@ -559,7 +559,7 @@ export default function GoodsReceiptDrawer({
             </span>
           ) : null
         }
-        description="Tiga langkah berurutan: periksa kondisi barang, baca nilai dan putusan dari server, lalu tandai barang."
+        description="Tiga langkah berurutan: periksa kondisi barang, baca nilai dan putusan, lalu tandai barang."
         labelledBy="popup-penerimaan-judul"
         className="popup-penerimaan"
         returnFocusRef={pemicuRef}

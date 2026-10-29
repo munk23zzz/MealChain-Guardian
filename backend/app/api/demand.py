@@ -13,9 +13,9 @@ from app.api.auth import get_current_user
 from app.api.balance import _batas_waktu
 from app.api.dependencies import get_db
 from app.api.supply import _resolve_commodity, _resolve_location
-from app.core.forecasting_fallback import statistical_forecast
 from app.core.scope import assert_in_scope
 from app.models import DemandRecord, User
+from app.services.forecast_service import forecast_kebutuhan
 
 router = APIRouter()
 forecast_router = APIRouter()
@@ -27,9 +27,17 @@ class DemandResponse(BaseModel):
 
 
 class ForecastResponse(BaseModel):
-    forecast_qty_kg: float
+    forecast_qty_kg: float | None = None
     method: str
-    confidence: float
+    confidence: float | None = None
+    #: Sumber angka, eksplisit untuk juri: "SAP-RPT-1.6" atau "statistical_fallback".
+    source: str = "statistical_fallback"
+    #: True bila provider utama gagal/tak terbaca dan rantai turun ke statistik.
+    fallback_used: bool = True
+    #: Alasan bila cadangan dipakai (riwayat tipis, breaker, batas panggilan, …).
+    reason: str | None = None
+    sample_count: int = 0
+    cache_hit: bool = False
 
 
 @forecast_router.get("/demand/forecast/{location}/{commodity}")
@@ -44,34 +52,21 @@ async def get_demand_forecast(
     assert_in_scope(user, loc.id, what="lokasi")
     com = await _resolve_commodity(db, commodity)
     # Perkiraan hanya boleh dibentuk dari catatan yang SUDAH TERJADI: baris
-    # bertanggal masa depan (deret demo menjangkau 5 Nov) bukan riwayat, dan
-    # batasnya sama dengan /balance supaya angkanya sejalan.
-    batas = _batas_waktu(None)
-    rows = (
-        (
-            await db.execute(
-                select(DemandRecord)
-                .where(
-                    DemandRecord.location_id == loc.id,
-                    DemandRecord.commodity_id == com.id,
-                    DemandRecord.recorded_at <= batas,
-                )
-                .order_by(DemandRecord.recorded_at.desc())
-                .limit(3)
-            )
+    # bertanggal masa depan bukan riwayat, dan batasnya sama dengan /balance
+    # supaya angkanya sejalan. Jendela riwayat + ambang minimum + cache ada di
+    # `services/forecast_service` — satu-satunya tempat yang memanggil model.
+    hasil = await forecast_kebutuhan(
+        db,
+        location_id=loc.id,
+        commodity_id=com.id,
+        horizon_days=horizon_days,
+        batas=_batas_waktu(None),
+    )
+    if hasil.qty_kg is None:
+        raise HTTPException(
+            status_code=404, detail=hasil.reason or "demand history tidak ditemukan"
         )
-        .scalars()
-        .all()
-    )
-    if not rows:
-        raise HTTPException(status_code=404, detail="demand history tidak ditemukan")
-    daily_kg = [float(r.quantity_kg) for r in reversed(rows)]
-    result = statistical_forecast(daily_kg, horizon_days=horizon_days)
-    return ForecastResponse(
-        forecast_qty_kg=float(result["forecast_qty_kg"]),
-        method=str(result["method"]),
-        confidence=float(result["confidence"]),
-    )
+    return ForecastResponse(**hasil.as_dict(), reason=hasil.reason)
 
 
 @router.get("/demand/{location}/{commodity}")

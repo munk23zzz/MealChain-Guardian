@@ -53,16 +53,24 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.kpi import quantize2, resolve_root
+from app.core.safe_delivered_cost import FORMULA_VERSION
+from app.core.storage_window import BASIS_ASUMSI, DEFAULT_STORAGE_DAYS
 
-METRIC_NAMES = (
-    "Meal Continuity Rate",
-    "Avoidable Food Loss",
-    "Regional Imbalance Resolution Rate",
-    "Safe Delivered Cost",
-    "Procurement Price Deviation",
-    "Decision Time",
-    "Evidence Completeness",
-)
+
+def _daftar_metrik() -> tuple[str, ...]:
+    """Satu-satunya daftar nama metrik yang dipakai API, tes, dan UI."""
+    return (
+        "Meal Continuity Rate",
+        "Avoidable Food Loss",
+        "Regional Imbalance Resolution Rate",
+        "Safe Delivered Cost",
+        "Procurement Price Deviation",
+        "Decision Time",
+        "Evidence Completeness",
+    )
+
+
+METRIC_NAMES = _daftar_metrik()
 
 #: Versi metode agregasi. Naikkan bila rumus/definisi metrik berubah, ATAU bila
 #: shape provenance berubah sehingga angka lama tidak bisa dibandingkan langsung
@@ -197,12 +205,25 @@ def _scope(alias: str, include_demo: bool) -> str:
     """Predikat pemisah fakta demo vs operasional untuk satu alias tabel.
 
     `include_demo=False` → `alias.demo_session_id IS NULL` (fakta operasional).
-    `include_demo=True`  → `alias.demo_session_id = :demo_session_id` (SATU sesi
-    eksplisit). Tidak ada cabang "sesi terbaru": itu akan mencampur data sesi
-    lain yang kebetulan dibuka belakangan.
+
+    `include_demo=True` → fakta sesi yang diminta **DITAMBAH template cetakan**.
+    Kenapa cetakan ikut (demo 29 Okt 2026): template demo disimpan berstempel
+    sesi sentinel `cetakan` supaya "Akhiri sesi" tidak menghapusnya. Sebelum ini
+    cakupan simulasi hanya membaca id sesi OPERATOR — yang tidak memiliki satu
+    pun fakta template — sehingga tombol "Simulasi" di halaman KPI menjawab
+    0/7 metrik di ketiga jendela sesaat setelah "Siapkan data demo", padahal
+    43 keputusan demo ada di DB. Isolasi antar-sesi operator tetap: sesi
+    operator LAIN tidak ikut terbaca.
     """
     if include_demo:
-        return f" AND {alias}.demo_session_id = :demo_session_id "
+        # Impor di dalam fungsi: `demo_session` juga mengimpor layanan lain,
+        # dan kpi_service dipakai sangat awal saat aplikasi dimuat.
+        from app.services.demo_session import CETAKAN_ID
+
+        return (
+            f" AND ({alias}.demo_session_id = :demo_session_id "
+            f"OR {alias}.demo_session_id = '{CETAKAN_ID}'::uuid) "
+        )
     return f" AND {alias}.demo_session_id IS NULL "
 
 
@@ -269,10 +290,22 @@ async def _proyeksi_porsi_penerimaan(
     (`settings.menu_grams_*`). Hasilnya hanya boleh muncul sebagai `estimate`;
     ia tidak pernah menambah nilai Meal Continuity — itu persis klaim yang
     dilarang gate Fase 8.
+
+    Dua koreksi kontrak (demo "kasus pengiriman", 29 Okt 2026):
+
+    - **Kg yang dihitung adalah TIMBANGAN** (`batch_receipts.accepted_kg`), bukan
+      berat pesanan batch. Baris lama tanpa timbangan jatuh ke
+      `batches.quantity_kg`. Memakai berat pesanan berarti mengklaim bahan yang
+      tidak pernah sampai di dapur (Dok 05 §5.1).
+    - **Cakupan ditentukan baris PENERIMAAN saja.** Dulu batch ikut disyaratkan
+      cocok cakupan; karena penerimaan berstempel sesi sementara batch-nya
+      sering baris kanonik tanpa stempel, baris itu hilang dari cakupan
+      operasional (dia berstempel) maupun demo (batch tidak berstempel) —
+      terukur: menyetujui penerimaan tidak menggerakkan satu pun KPI.
     """
     rows = await _rows(
         db,
-        "SELECT c.name, SUM(b.quantity_kg) "
+        "SELECT c.name, SUM(COALESCE(r.accepted_kg, b.quantity_kg)) "
         "FROM batch_receipts r "
         "JOIN batches b ON b.id = r.batch_id "
         "JOIN commodities c ON c.id = b.commodity_id "
@@ -280,7 +313,6 @@ async def _proyeksi_porsi_penerimaan(
         "AND r.reviewed_at >= :start AND r.reviewed_at < :end "
         + ("AND b.location_id = :loc " if location_id else "")
         + _scope("r", include_demo)
-        + _scope("b", include_demo)
         + "GROUP BY c.name",
         {"start": start, "end": end, "demo_session_id": demo_session_id,
          **({"loc": location_id} if location_id else {})},
@@ -318,21 +350,30 @@ async def _estimasi_susut(
     `estimated_shrinkage_kg = Σ kg_diterima × (1 − freshness_score)`. Ini
     estimasi model, BUKAN disposal aktual: tidak ada satu baris pun yang ditulis
     ke `disposal_events` dari jalur ini.
+
+    `kg_diterima` = `batch_receipts.accepted_kg` (timbangan), cadangan berat
+    pesanan batch untuk baris lama. Cakupan diambil dari baris PENERIMAAN saja —
+    alasan lengkapnya di `_proyeksi_porsi_penerimaan` (bug cakupan yang membuat
+    penerimaan tidak pernah terlihat KPI).
     """
     rows = await _rows(
         db,
         "SELECT "
-        "SUM(b.quantity_kg) FILTER (WHERE b.freshness_score IS NOT NULL), "
-        "SUM(b.quantity_kg * (1 - b.freshness_score)) "
-        "  FILTER (WHERE b.freshness_score IS NOT NULL), "
-        "SUM(b.quantity_kg), "
+        "SUM(s.kg) FILTER (WHERE s.freshness IS NOT NULL), "
+        "SUM(s.kg * (1 - s.freshness)) FILTER (WHERE s.freshness IS NOT NULL), "
+        "SUM(s.kg), "
         "COUNT(*) "
-        "FROM batch_receipts r JOIN batches b ON b.id = r.batch_id "
-        "WHERE r.status = 'disetujui' "
-        "AND r.reviewed_at >= :start AND r.reviewed_at < :end "
-        + ("AND b.location_id = :loc " if location_id else "")
+        "FROM ("
+        "  SELECT COALESCE(r.accepted_kg, b.quantity_kg) AS kg, "
+        "         b.freshness_score AS freshness, "
+        "         b.location_id "
+        "  FROM batch_receipts r JOIN batches b ON b.id = r.batch_id "
+        "  WHERE r.status = 'disetujui' "
+        "  AND r.reviewed_at >= :start AND r.reviewed_at < :end "
         + _scope("r", include_demo)
-        + _scope("b", include_demo),
+        + ") s "
+        "WHERE 1=1 "
+        + ("AND s.location_id = :loc " if location_id else ""),
         {"start": start, "end": end, "demo_session_id": demo_session_id,
          **({"loc": location_id} if location_id else {})},
     )
@@ -866,6 +907,14 @@ async def compute_kpis(
             if invoice_values else None
         ),
         "invoice_sample_count": len(invoice_values),
+        # Versi rumus + basis jendela simpan (konsep Performance & Audit §5.4):
+        # panel audit membacanya dari sini supaya UI tidak menulis ulang rumus.
+        # `storage_*` adalah nilai yang DIPAKAI saat keputusan dihitung; angka
+        # di DB tidak menyimpan per-baris, jadi yang dilaporkan adalah default
+        # mesin beserta basisnya — bukan tebakan per keputusan.
+        "formula_version": FORMULA_VERSION,
+        "storage_default_days": str(DEFAULT_STORAGE_DAYS),
+        "storage_default_basis": BASIS_ASUMSI,
         "note": "invoice_unit_price_mean_idr = harga komersial PO (tanpa "
                 "expected loss/freshness/safety), bukan SDC",
     }
@@ -1137,7 +1186,8 @@ async def compute_kpis(
         )
     metrics.append(ev_metric)
 
-    assert [m["name"] for m in metrics] == list(METRIC_NAMES)
+    # Kontrak tujuh metrik: urutan dan nama harus sama dengan `_daftar_metrik()`.
+    assert [m["name"] for m in metrics] == list(_daftar_metrik())
     await _tempel_klasifikasi_asal(
         db,
         metrics,

@@ -39,6 +39,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import os
 import re
 from datetime import datetime, timedelta, timezone
@@ -49,6 +50,11 @@ from a2a.server.apps.jsonrpc import A2AFastAPIApplication
 from a2a.server.events import EventQueue
 from a2a.server.request_handlers import DefaultRequestHandler
 from a2a.server.tasks import InMemoryTaskStore
+
+
+# Logger uvicorn: satu-satunya yang sudah terkonfigurasi saat app dijalankan
+# (`uvicorn server:app`), sehingga baris ini muncul di `cf logs` tanpa setup tambahan.
+_log = logging.getLogger("uvicorn.error")
 from a2a.types import (
     AgentCapabilities,
     AgentCard,
@@ -103,6 +109,7 @@ SKILL_LOSS = "food_loss"
 SKILL_SUPPLIER_RISK = "supplier_risk"
 SKILL_RECEIPTS = "receipts_queue"
 SKILL_QUARANTINE = "quarantine_status"
+SKILL_BATCH = "batch_detail"
 SKILL_GAP = "unsupported_domain"
 SKILL_EVIDENCE = "decision_evidence"
 SKILL_SYSTEM = "system_status"
@@ -118,6 +125,7 @@ SKILLS = (
     SKILL_SUPPLIER_RISK,
     SKILL_RECEIPTS,
     SKILL_QUARANTINE,
+    SKILL_BATCH,
     SKILL_EVIDENCE,
     SKILL_SYSTEM,
 )
@@ -167,6 +175,28 @@ _KEYWORDS: tuple[tuple[str, tuple[str, ...]], ...] = (
     ),
     # Karantina punya kolom sendiri (`quarantine_status`), bukan status pasokan.
     (SKILL_QUARANTINE, ("karantina", "quarantine", "dikarantina")),
+    # Rincian SATU batch: keamanan tersimpan vs hasil evaluasi, kebijakan suhu komoditas,
+    # dan kecukupan bukti (`GET /batches/{id}`). Ditaruh sesudah karantina dan penerimaan
+    # karena pertanyaan "penerimaan barang batch X" adalah antrean penerimaan, bukan rincian
+    # keamanan. Kata `batch`/`bacth` saja tidak cukup: bentuk pertanyaannya bisa "batch mana
+    # yang suhunya menyimpang", dan itu memang domain ini.
+    (
+        SKILL_BATCH,
+        (
+            "batch",
+            "bacth",
+            "batches",
+            "suhu",
+            "temperature",
+            "kedaluwarsa",
+            "expired",
+            "expiry",
+            "masa layak",
+            "layak pakai",
+            "excursion",
+            "penyimpangan suhu",
+        ),
+    ),
     (
         SKILL_QUEUE,
         ("approval", "approve", "persetujuan", "setuju", "usulan", "keputusan", "antrean", "queue"),
@@ -347,6 +377,12 @@ def _nomor_rujukan(pesan: str) -> re.Match[str] | None:
     """Id utuh kalau ada, kalau tidak potongan 8+ karakter yang tampil di tabel."""
     return _UUID.search(pesan) or _ID_PENDEK.search(pesan)
 
+#: Kata yang menandakan permintaan PEMBUANGAN/pengalihan limbah. Pertanyaan "batch mana yang
+#: harus dibuang?" memuat kata `batch` milik skill rincian batch, padahal domainnya
+#: kehilangan pangan (`batch_disposal_report`). Tanpa penjaga ini, rincian satu batch
+#: mencuri pertanyaan pembuangan (tes lama `test_batch_harus_dibuang_…` menangkapnya).
+_DISPOSAL_WORDS = ("dibuang", "pembuangan", "buang", "disposal", "limbah", "waste")
+
 #: Kata yang menandakan permintaan PENERIMAAN BARANG untuk satu batch, bukan bukti keputusan.
 _RECEIPT_WORDS = (
     "penerimaan barang",
@@ -371,6 +407,7 @@ class ReadOnlyBackend(Protocol):
     def health(self) -> dict[str, Any]: ...
     def demo_session(self) -> dict[str, Any]: ...
     def batches(self) -> list[dict[str, Any]]: ...
+    def batch_detail(self, batch_id: str) -> dict[str, Any]: ...
     def suppliers(self) -> list[dict[str, Any]]: ...
     def locations(self) -> list[dict[str, Any]]: ...
     def balance_map(self, commodity: str) -> dict[str, Any]: ...
@@ -383,6 +420,7 @@ class ReadOnlyBackend(Protocol):
     ) -> dict[str, Any]: ...
     def pending_decisions(self) -> list[dict[str, Any]]: ...
     def purchase_orders(self) -> list[dict[str, Any]]: ...
+    def po_detail(self, po_number: str) -> dict[str, Any]: ...
     def supply_point(self, location_id: str, commodity: str) -> dict[str, Any]: ...
     def demand(self, location_id: str, commodity: str) -> dict[str, Any]: ...
     def demand_forecast(self, location_id: str, commodity: str) -> dict[str, Any]: ...
@@ -446,12 +484,28 @@ def resolve_skill(user_input: str) -> tuple[str, Mapping[str, Any]]:
     nomor_batch = _nomor_rujukan(pesan)
     if nomor_batch and any(k in teks for k in _RECEIPT_WORDS):
         return SKILL_SUPPLY, {"batch_id": nomor_batch.group(1)}
+    # Batch yang disebut eksplisit + kata keamanan/suhu = rincian batch, walaupun pesannya
+    # memuat `bukti` (milik SKILL_EVIDENCE, diperiksa lebih dulu di dalam loop). Contoh nyata:
+    # "bukti suhu batch 068edb8a cukup?" dulu dijawab bukti keputusan, bukan rincian batch.
+    if (
+        nomor_batch
+        and any(k in teks for k in dict(_KEYWORDS)[SKILL_BATCH])
+        and not any(k in teks for k in _DISPOSAL_WORDS)
+    ):
+        return SKILL_BATCH, {"batch_id": nomor_batch.group(1)}
     for skill, kata_kunci in _KEYWORDS:
         if skill == SKILL_KPI:  # sudah diperiksa di atas, sebelum PO
             continue
         if not any(keyword in teks for keyword in kata_kunci):
             continue
+        if skill == SKILL_BATCH and any(k in teks for k in _DISPOSAL_WORDS):
+            # "batch mana yang harus dibuang" = kehilangan pangan, bukan rincian keamanan.
+            continue
         payload: dict[str, Any] = {}
+        if skill == SKILL_BATCH:
+            nomor = _nomor_rujukan(pesan)
+            if nomor:
+                payload["batch_id"] = nomor.group(1)
         if skill == SKILL_EVIDENCE:
             nomor = _nomor_rujukan(pesan)
             if nomor:
@@ -762,6 +816,34 @@ def render_skill(
         return report.receipts_queue_report(client.receipts_menunggu(), note=note)
     if skill == SKILL_QUARANTINE:
         return report.quarantine_report(client.batches(), note=note)
+    if skill == SKILL_BATCH:
+        batch_id = str((payload or {}).get("batch_id") or "").strip() or None
+        if batch_id:
+            # Operator menyalin id pendek (8 karakter) dari laporan karantina/daftar batch.
+            # Petakan ke id lengkap dulu, supaya pertanyaan yang wajar tidak berakhir "tidak
+            # ditemukan" hanya karena id dipotong.
+            daftar = client.batches()
+            if len(batch_id) < 36:
+                cocok = [
+                    str(row.get("id") or row.get("batch_id") or "")
+                    for row in daftar
+                    if isinstance(row, Mapping)
+                    and str(row.get("id") or row.get("batch_id") or "")
+                    .lower()
+                    .startswith(batch_id.lower())
+                ]
+                if len(cocok) == 1:
+                    batch_id = cocok[0]
+            try:
+                detail = client.batch_detail(batch_id)
+            except MealchainRejected:
+                # Batch tidak ada / bukan milik peran ini: tampilkan kandidat, bukan rincian
+                # karangan dan bukan pesan error mentah.
+                return report.batch_detail_report(
+                    None, candidates=daftar, batch_id=batch_id, note=note
+                )
+            return report.batch_detail_report(detail, batch_id=batch_id, note=note)
+        return report.batch_detail_report(None, candidates=client.batches(), note=note)
     if skill == SKILL_GAP:
         return report.unsupported_report(
             "pengiriman barang, surat jalan, atau stok material SAP",
@@ -773,6 +855,21 @@ def render_skill(
         hanya_disetujui = any(
             kata in kecil for kata in ("disetujui", "dieksekusi", "approved", "sudah disetujui")
         )
+        # Nomor PO disebut → baca DOKUMEN-nya (29 Okt 2026), bukan sekadar baris
+        # daftar: rincian biaya, persetujuan bernama, syarat, keputusan asal.
+        # Backend lama tanpa rute `/detail` ditangani dengan jatuh ke tampilan
+        # daftar — jangan menjawab "tidak ditemukan" hanya karena rutenya belum ada.
+        if nomor:
+            baca = getattr(client, "po_detail", None)
+            if callable(baca):
+                try:
+                    dokumen = baca(nomor)
+                except MealchainRejected:
+                    dokumen = None
+                except MealchainUnavailable as exc:
+                    return report.unavailable_report("purchase_order", str(exc))
+                if isinstance(dokumen, dict):
+                    return report.po_document_report(dokumen, note=note)
         return report.purchase_order_report(
             client.purchase_orders(),
             po_number=nomor,
@@ -1138,6 +1235,17 @@ class MealchainExecutor(AgentExecutor):
         except Exception as exc:  # jaring pengaman: pengguna harus tetap dapat penjelasan
             body = report.unavailable_report(skill, f"galat tak terduga: {exc!r}")
 
+        # Satu baris bukti per pesan, terlihat di `cf logs`: tanpa ini tidak ada cara
+        # membedakan "chat kosong karena artefak kosong" dari "chat kosong karena
+        # Joule tidak memanggil jembatan" saat demo. Ukuran art di access log router
+        # BUKAN panjang jawaban, jadi jangan dipakai menebak.
+        _log.info(
+            "pesan A2A: skill=%s teks=%d char artefak=%d char",
+            skill,
+            len(teks or ""),
+            len(body),
+        )
+
         await event_queue.enqueue_event(
             TaskArtifactUpdateEvent(
                 task_id=context.task_id,
@@ -1251,6 +1359,20 @@ def agent_card(app_url: str) -> AgentCard:
                     "keamanannya — dibaca dari kolom `quarantine_status`."
                 ),
                 tags=["karantina", "quarantine", "keamanan pangan", "batch"],
+                inputModes=modalitas,
+                outputModes=["text/markdown"],
+            ),
+            AgentSkill(
+                id=SKILL_BATCH,
+                name="Rincian keamanan satu batch",
+                description=(
+                    "Rincian satu batch menurut ID: jumlah, status keamanan tersimpan dan hasil "
+                    "evaluasi terbaru, kelayakan pakai beserta penghalang dan langkah berikutnya, "
+                    "skor kesegaran, masa layak, status karantina, kebijakan suhu komoditas yang "
+                    "dipakai menilai (rentang suhu, sampel minimum, versi kebijakan, jenisnya), "
+                    "serta kecukupan bukti observasi suhu. Baca-saja."
+                ),
+                tags=["batch", "suhu", "keamanan pangan", "kedaluwarsa", "kesegaran"],
                 inputModes=modalitas,
                 outputModes=["text/markdown"],
             ),

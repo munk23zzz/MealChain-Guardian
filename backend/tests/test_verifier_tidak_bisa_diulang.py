@@ -223,9 +223,14 @@ def test_setiap_percobaan_meninggalkan_trace_verify(client):
         client.post("/actions/verify", json={"decision_id": did}, headers=headers)
 
         jumlah = _hitung(
-            "SELECT count(*) FROM agent_traces WHERE decision_id = :d AND step_name = 'VERIFY'",
+            "SELECT count(*) FROM agent_traces WHERE decision_id = :d AND step_name = 'VERIFY' "
+            "AND agent_name IS NULL",
             {"d": did},
         )
+        # `agent_name IS NULL` = baris pipeline `/actions/verify`. Sejak review
+        # 7 worker berjalan lokal (`AGENT_REVIEW_MODE=local`), temuan
+        # freshness/safety/verifier juga menulis step_name VERIFY dengan
+        # `agent_name` terisi — tanpa filter ini tesnya menghitung jejak review.
         assert jumlah == 2, f"harus ada 2 baris VERIFY (2 percobaan), dapat {jumlah}"
         terakhir = _hitung(
             "SELECT count(*) FROM agent_traces WHERE decision_id = :d AND step_name = 'VERIFY' "

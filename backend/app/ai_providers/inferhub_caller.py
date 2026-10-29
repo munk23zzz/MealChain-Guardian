@@ -21,6 +21,21 @@ from urllib.request import Request, urlopen
 
 INFERHUB_DEFAULT_MAX_TOKENS = 4000
 
+#: Subpath OpenAI-compatible yang harus ada di `INFERHUB_URL`.
+CHAT_SUBPATH = "/chat/completions"
+
+
+def _chat_endpoint(endpoint: str) -> str:
+    """URL InferHub yang siap POST: akhiran `/chat/completions` dijamin ada.
+
+    Menerima base (`https://api.inferhub.dev/v1`), URL dengan garis miring penutup, dan
+    URL yang sudah lengkap (tidak digandakan).
+    """
+    bersih = endpoint.rstrip("/")
+    if bersih.endswith(CHAT_SUBPATH):
+        return bersih
+    return bersih + CHAT_SUBPATH
+
 
 class InferhubInvocationError(RuntimeError):
     """Kegagalan invoke Inferhub (status_code HTTP bila ada)."""
@@ -44,6 +59,13 @@ def build_caller(
         raise RuntimeError(
             "INFERHUB_URL / INFERHUB_API_KEY belum dikonfigurasi"
         )
+    # 29 Okt 2026: `INFERHUB_URL` di operator berisi `https://api.inferhub.dev/v1` — base,
+    # bukan endpoint penuh. Caller mem-POST apa adanya sehingga SEMUA slot InferHub kena
+    # `404 page not found` (terukur di rantai nyata: 8 slot mati, padahal katalog model 397
+    # entri dan API hidup). Normalisasi di sini: kalau URL belum menunjuk subpath chat,
+    # tambahkan `/chat/completions`. Menaruh perbaikan di callers (bukan di .env) berarti
+    # nilai .env lama tetap benar.
+    endpoint = _chat_endpoint(endpoint)
 
     def _call(prompt: str) -> str:
         payload = json.dumps(

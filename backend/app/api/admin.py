@@ -16,7 +16,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.auth import require_roles
+from app.api.auth import require_roles, require_sesi_manusia
 from app.core.admin_rules import (
     UNSET,
     AdminRuleError,
@@ -28,7 +28,13 @@ from app.models.locations import Location
 from app.models.users import User
 from app.services.ledger_service import append_block
 
-router = APIRouter(prefix="/admin", tags=["admin"])
+router = APIRouter(
+    prefix="/admin",
+    tags=["admin"],
+    # AUD-006: seluruh endpoint admin menuntut sesi pengguna (klaim typ=user).
+    # Token layanan agen berperan bgn_monitor tetap 403 di sini.
+    dependencies=[Depends(require_sesi_manusia)],
+)
 
 
 class UserUpdate(BaseModel):

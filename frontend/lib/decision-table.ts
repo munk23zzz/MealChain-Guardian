@@ -46,6 +46,16 @@ export function verificationState(
   if (status === "rejected") return "ditolak";
   if (status === "approved" || status === "executed") return "terverifikasi";
   if (status === "pending_approval" || status === "pending") return "menunggu";
+  // Keputusan yang ditandai verifikator BELUM diverifikasi: ia harus terjangkau
+  // lewat chip "Menunggu verifikasi". Sebelumnya ia jatuh ke "lainnya" sehingga
+  // tidak muncul di chip mana pun (13 baris, chip 2+6+3 = 11).
+  if (
+    status === "verifier_flagged" ||
+    status === "review_only" ||
+    status === "proposed"
+  ) {
+    return "menunggu";
+  }
   return "lainnya";
 }
 
@@ -72,6 +82,12 @@ export function statusLabel(status: string | null | undefined): string {
     rejected: "Ditolak",
     expired: "Kedaluwarsa",
     draft: "Draf",
+    // Dua status yang dulu lolos sebagai enum Inggris mentah ke kolom Status
+    // (terlihat 29 Okt 2026: baris "price_anomaly" bercetak `verifier_flagged`).
+    // Istilahnya sama dengan yang dipakai di feed (Fase 25).
+    verifier_flagged: "Ditandai verifikator",
+    review_only: "Temuan tinjauan",
+    proposed: "Diusulkan",
   };
   const raw = (status ?? "").trim();
   if (!raw) return "—";
@@ -94,7 +110,12 @@ export function filterDecisions<T extends AuditDecision>(
   const verification = filter.verification ?? "all";
 
   return rows.filter((row) => {
-    if (commodity && (row.commodity_name ?? "").toLowerCase() !== commodity) {
+    if (commodity === TANPA_KOMODITAS) {
+      // Baris tanpa komoditas (3 di data demo) tidak bisa dijangkau penyaring
+      // komoditas mana pun. Tanpa opsi ini, "Semua" menghitung 24 tetapi
+      // pilihan komoditas hanya menjumlah 21 — selisih yang tak bisa dicari.
+      if ((row.commodity_name ?? "").trim()) return false;
+    } else if (commodity && (row.commodity_name ?? "").toLowerCase() !== commodity) {
       return false;
     }
     if (verification !== "all" && verificationState(row) !== verification) {
@@ -122,6 +143,9 @@ export function filterDecisions<T extends AuditDecision>(
 }
 
 /** Daftar komoditas yang benar-benar ada di feed (bukan daftar tetap). */
+/** Nilai penyaring untuk baris yang tidak membawa komoditas. */
+export const TANPA_KOMODITAS = "__tanpa_komoditas__";
+
 export function commodityOptions(
   rows: ReadonlyArray<AuditDecision>
 ): { value: string; label: string; count: number }[] {
@@ -133,6 +157,14 @@ export function commodityOptions(
     const ada = peta.get(key);
     if (ada) ada.count += 1;
     else peta.set(key, { value: nama, label: nama, count: 1 });
+  }
+  const tanpa = rows.filter((row) => !(row.commodity_name ?? "").trim()).length;
+  if (tanpa > 0) {
+    peta.set(TANPA_KOMODITAS, {
+      value: TANPA_KOMODITAS,
+      label: "Tanpa komoditas",
+      count: tanpa,
+    });
   }
   return Array.from(peta.values()).sort((a, b) =>
     a.label.localeCompare(b.label, "id")
@@ -182,14 +214,28 @@ export function tableSummary({
   return bagian.join(" · ");
 }
 
-export const DECISION_PAGE_SIZE = 6;
+/** Baris per halaman tabel keputusan. 10 = sama dengan daftar lain di aplikasi
+ *  ini (Pemasok, Kiriman); pemilik 29 Okt 2026 meminta tabel Agent Log memakai
+ *  ukuran halaman yang sama. Pemotongan halaman memakai `paginate` di
+ *  `lib/pagination.ts` supaya penomoran & rentang "1–10 dari 14" tidak berbeda
+ *  antar panel. */
+export const DECISION_PAGE_SIZE = 10;
 
-export function pageSlice<T>(rows: ReadonlyArray<T>, page: number): T[] {
-  const aman = Math.max(1, Math.trunc(page) || 1);
-  const mulai = (aman - 1) * DECISION_PAGE_SIZE;
-  return rows.slice(mulai, mulai + DECISION_PAGE_SIZE);
-}
+/**
+ * Label kalimat untuk keadaan verifikasi (audit 29 Okt 2026).
+ *
+ * Dulu komponen mencetak kuncinya apa adanya ("menunggu") di sebelah kolom
+ * Status yang berbunyi "Menunggu persetujuan" — dua gaya label di satu baris
+ * membuat yang satu terbaca seperti token backend yang bocor.
+ */
+const LABEL_VERIFIKASI: Record<VerificationKey | "lainnya", string> = {
+  all: "—",
+  terverifikasi: "Terverifikasi",
+  menunggu: "Menunggu verifikasi",
+  ditolak: "Ditolak",
+  lainnya: "—",
+};
 
-export function pageCount(total: number): number {
-  return Math.max(1, Math.ceil(total / DECISION_PAGE_SIZE));
+export function labelVerifikasi(state: VerificationKey | "lainnya"): string {
+  return LABEL_VERIFIKASI[state] ?? "—";
 }

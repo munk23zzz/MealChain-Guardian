@@ -87,7 +87,8 @@ class ModelPalsu:
         return self.jawaban
 
 
-def test_mode_default_off_dan_tidak_memanggil_model(monkeypatch):
+def test_mode_default_advisory_dan_memanggil_model(monkeypatch):
+    """Default = advisory: sembilan agent lewat model tanpa perlu saklar env."""
     monkeypatch.delenv("WORKER_AGENT_MODE", raising=False)
     model = ModelPalsu('{"summary": "diperkaya model"}')
 
@@ -99,7 +100,23 @@ def test_mode_default_off_dan_tidak_memanggil_model(monkeypatch):
         role="Safety Agent",
     )
 
-    assert mode_dari_env() == "off"
+    assert mode_dari_env() == "advisory"
+    assert model.prompt != []
+    assert hasil.facts["reasoning"]["status"] == "applied"
+
+
+def test_mode_off_eksplisit_tidak_memanggil_model(monkeypatch):
+    monkeypatch.setenv("WORKER_AGENT_MODE", "off")
+    model = ModelPalsu('{"summary": "diperkaya model"}')
+
+    hasil = terapkan_penalaran(
+        _temuan(),
+        prompt="prompt",
+        mode=mode_dari_env(),
+        model=model,
+        role="Safety Agent",
+    )
+
     assert model.prompt == []
     assert hasil.summary == _temuan().summary
     assert hasil.facts["reasoning"]["status"] == "off"
@@ -186,6 +203,43 @@ def test_angka_berbeda_nilai_tetap_ditolak():
     model = ModelPalsu(json.dumps({"summary": "Kebutuhan 1.081,0 kg belum tertutup."}))
 
     hasil = terapkan_penalaran(asli, prompt="p", mode="advisory", model=model, role="Supply Agent")
+
+    assert hasil.facts["reasoning"]["status"] == "rejected"
+    assert hasil.summary == asli.summary
+
+
+def test_angka_dibulatkan_bukan_karangan():
+    """Fakta `-5.708053…` ditulis model sebagai "5,7%" — itu pembulatan, bukan karangan.
+
+    Terukur 29 Okt 2026: worker `price` (satu-satunya agent yang menulis angka
+    panjang) selalu ditolak `model_angka_baru` hanya karena membulatkan deviasi
+    ke satu desimal, sehingga agent itu tampak deterministik.
+    """
+    asli = _temuan(
+        facts={"deviation_pct": "-5.708053440648106248654538106", "quote_count": 20},
+        summary="20 quote; deviasi -5.708053440648106248654538106.",
+    )
+    model = ModelPalsu(json.dumps({"summary": "Harga 5,7% di bawah referensi dari 20 quote."}))
+
+    hasil = terapkan_penalaran(asli, prompt="p", mode="advisory", model=model, role="Price Agent")
+
+    assert hasil.facts["reasoning"]["status"] == "applied"
+    assert hasil.summary.startswith("Harga 5,7%")
+
+
+def test_pembulatan_tidak_meloloskan_angka_yang_benar_benar_baru():
+    """Toleransi pembulatan tidak boleh jadi pintu belakang karangan.
+
+    `6,1` bukan pembulatan dari `5.708053…`; `999` juga bukan pembulatan dari
+    angka mana pun di fakta, jadi keduanya tetap ditolak.
+    """
+    asli = _temuan(
+        facts={"deviation_pct": "-5.708053440648106248654538106", "quote_count": 20},
+        summary="20 quote; deviasi -5.708053440648106248654538106.",
+    )
+    model = ModelPalsu(json.dumps({"summary": "Deviasi 6,1% dan 999 quote."}))
+
+    hasil = terapkan_penalaran(asli, prompt="p", mode="advisory", model=model, role="Price Agent")
 
     assert hasil.facts["reasoning"]["status"] == "rejected"
     assert hasil.summary == asli.summary

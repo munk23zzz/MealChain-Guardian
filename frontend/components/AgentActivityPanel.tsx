@@ -12,8 +12,11 @@
 // di bawah panel — lihat `app/page.tsx` tab `agent-log`.
 
 import AgentPipelinePanel from "./AgentPipelinePanel";
+import AgentExecutionSummary from "./AgentExecutionSummary";
 import DecisionAuditTable from "./DecisionAuditTable";
+import { buildPipeline, pipelineCaveat, pipelineSummary } from "../lib/agent-activity";
 import type { AuditDecision } from "../lib/decision-table";
+import type { ExecutionOverview } from "../lib/agent-execution";
 import type { LedgerBlockView, TraceStep } from "../lib/agent-activity";
 
 const KALIMAT_PERAN: Record<string, string> = {
@@ -43,7 +46,13 @@ export default function AgentActivityPanel({
   summary,
   steps,
   ledger,
+  overview = null,
+  periodLabel = null,
+  now = null,
+  loading = false,
   onOpenEvidence = null,
+  stageFilter = null,
+  onStageFilter = null,
 }: {
   role?: string | null;
   decisions: ReadonlyArray<AuditDecision>;
@@ -57,16 +66,51 @@ export default function AgentActivityPanel({
   steps: TraceStep[] | null;
   /** `null` = blok ledger belum dimuat. */
   ledger: LedgerBlockView[] | null;
+  /** Ringkasan eksekusi dari daftar keputusan; `null` = tidak ditampilkan. */
+  overview?: ExecutionOverview | null;
+  periodLabel?: string | null;
+  /** Jam acuan untuk penanda "lewat tenggat" di tabel. */
+  now?: Date | null;
+  /** Daftar keputusan masih dimuat. */
+  loading?: boolean;
   onOpenEvidence?: (() => void) | null;
+  /** Tahap yang sedang disaring (Tahap 4 redesign); `null` = semua langkah. */
+  stageFilter?: string | null;
+  onStageFilter?: ((code: string | null) => void) | null;
 }) {
+  // Ringkasan "3 dari 10 tahap punya jejak" pindah ke KANAN header (Tahap 4):
+  // angkanya menerangkan seluruh panel, jadi tempatnya di kepala panel, bukan
+  // baris baru di atas strip yang mendorong semuanya turun.
+  const tahap = buildPipeline({ steps, ledger });
+  const ringkas = pipelineSummary(tahap);
+  const caveat = pipelineCaveat(tahap);
+
   return (
     <section className="agent-activity" aria-label="Agent Activity">
       <header className="aa-head">
-        <div>
-          <h2>Agent Activity</h2>
-          <p className="aa-sub">{kalimatPeran(role)}</p>
+        <div className="aa-head-main">
+          {/* Label modul, bukan judul kedua: halaman sudah punya h1 "Agent
+              Activity Log" (20 px). Sebelumnya h2 18 px duduk 10 px di bawahnya
+              sehingga dua judul besar bersaing di satu layar. */}
+          <h2 className="aa-kicker">Agent Activity</h2>
+          <p className="aa-sub" title={kalimatPeran(role)}>
+            {kalimatPeran(role)}
+          </p>
         </div>
+        {steps !== null ? (
+          <p className="aa-summary aa-head-sum" role="status" aria-atomic="true" title={caveat}>
+            {ringkas}
+          </p>
+        ) : null}
       </header>
+
+      {overview ? (
+        <AgentExecutionSummary
+          overview={overview}
+          periodLabel={periodLabel}
+          loading={loading}
+        />
+      ) : null}
 
       <DecisionAuditTable
         rows={decisions}
@@ -76,6 +120,7 @@ export default function AgentActivityPanel({
         selectedId={selectedId}
         onSelect={onSelect}
         summary={summary}
+        now={now}
       />
 
       <AgentPipelinePanel
@@ -83,6 +128,8 @@ export default function AgentActivityPanel({
         steps={steps}
         ledger={ledger}
         onOpenEvidence={onOpenEvidence}
+        stageFilter={stageFilter}
+        onStageFilter={onStageFilter}
       />
     </section>
   );

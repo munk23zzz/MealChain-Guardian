@@ -72,16 +72,18 @@ describe("Rencana alih", () => {
   it("mencetak baris pasangan dari server apa adanya", () => {
     const html = renderAllocation();
     expect(html).toContain('data-testid="allocation-table"');
-    expect(html).toContain("<td>Bogor</td>");
-    expect(html).toContain("<td>Jakarta</td>");
+    expect(html).toContain('data-label="Dari">Bogor<');
+    expect(html).toContain('data-label="Tujuan">Jakarta<');
     expect(html).toContain("400 kg");
     expect(html).toContain("62 km");
   });
 
-  it("menyebut ambang server sekali di kaki, bukan paragraf", () => {
+  it("ambang tidak diulang di dalam tabel (L5: kalimatnya di kepala kartu)", () => {
+    // Komponen tabel murni: kalimat ambang dipasok pemanggil lewat
+    // `planRingkas()` dan ditulis di kepala kartu, bukan di badan tabel.
     const html = renderAllocation();
-    expect(html).toContain("Hanya surplus ≥ 150 kg per lokasi.");
-    expect(html.match(/150 kg/g) ?? []).toHaveLength(1);
+    expect(html).not.toContain("Hanya surplus ≥");
+    expect(html).not.toContain("150 kg per lokasi");
   });
 
   it("tanpa pasangan: menulis sebab dari server, bukan angka 0", () => {
@@ -136,7 +138,8 @@ describe("Kerangka halaman gabungan", () => {
     expect(html).toContain("Keadaan jaringan");
     expect(html).not.toContain("Neraca hari ini");
     expect(html).toContain("Rencana alih");
-    expect(html).toContain("Limbah · 30 hari");
+    expect(html).toContain("<h2>Limbah</h2>");
+    expect(html).toContain("30 hari</span>");
   });
 
   it("limbah tanpa data menulis 'Belum dicatat', tidak menulis 0 kg", () => {

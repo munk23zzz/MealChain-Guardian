@@ -19,10 +19,13 @@
 // tests/kpi-quality-board.test.tsx (bagian kedua tanpa data tetap merender).
 
 import AgentQualityBoard from "./AgentQualityBoard";
-import KPIDashboard from "./KPIDashboard";
+import KPIDashboard, { DESKRIPSI_HALAMAN } from "./KPIDashboard";
+import PageShell from "./PageShell";
+import PerformanceAuditPanel from "./PerformanceAuditPanel";
 import type { QualityRun } from "../lib/agent-quality";
 import type { KpiWindowKey } from "../lib/kpi";
 import type { KpiScope } from "../lib/kpi-provenance";
+import { PERF_AUDIT_SECTION_IDS, perfAuditSections } from "../lib/section-jump";
 
 export default function KpiQualityBoard({
   kpi,
@@ -64,30 +67,81 @@ export default function KpiQualityBoard({
   onOpenDecision?: (decisionId: string) => void;
 }) {
   return (
-    <section className="kpi-quality-page" aria-label="KPI dan Kualitas Agen">
-      <KPIDashboard
-        kpi={kpi}
-        loading={kpiLoading}
-        error={kpiError}
-        onRetry={onRetryKpi}
-        windowKey={windowKey}
-        onWindowChange={onWindowChange}
-        scope={scope}
-        onScopeChange={onScopeChange}
-        scopeDisabledReason={scopeDisabledReason}
-      />
-      {/* Pembatas bergaris: dua bagian panjang dalam satu gulungan tanpa
-          penanda mudah terbaca sebagai satu tabel raksasa. */}
-      <hr className="kpi-quality-divider" />
-      <AgentQualityBoard
-        runs={runs}
-        evaluatedCount={evaluatedCount}
-        totalDecisions={totalDecisions}
-        loading={qualityLoading}
-        error={qualityError}
-        onRetry={onRetryQuality}
-        onOpenDecision={onOpenDecision}
-      />
-    </section>
+    <PageShell
+      className="kpi-quality-page"
+      title="Performance & Audit"
+      description={DESKRIPSI_HALAMAN}
+      sections={perfAuditSections()}
+      jumpAriaLabel="Bagian halaman Performance & Audit"
+      meta={
+        <span className="page-header-pills">
+          {/* Pil kepala = JUMLAH, bukan ulangan kontrol: periode & cakupan sudah
+              punya bilah kendali sendiri di dalam halaman. */}
+          <span className="commodity-pill">
+            {Array.isArray(kpi?.metrics) ? `${kpi.metrics.length} metrik` : "metrik —"}
+          </span>
+          <span className="commodity-pill">
+            {Array.isArray(runs) ? `${runs.length} run dinilai` : "run —"}
+          </span>
+        </span>
+      }
+    >
+      <section
+        className="pa-section"
+        id={PERF_AUDIT_SECTION_IDS.hasil}
+        aria-labelledby="pa-hasil-judul"
+      >
+        <h2 className="pa-section-title" id="pa-hasil-judul">
+          Hasil KPI
+        </h2>
+        <KPIDashboard
+          kpi={kpi}
+          loading={kpiLoading}
+          error={kpiError}
+          onRetry={onRetryKpi}
+          windowKey={windowKey}
+          onWindowChange={onWindowChange}
+          scope={scope}
+          onScopeChange={onScopeChange}
+          scopeDisabledReason={scopeDisabledReason}
+          showHeader={false}
+        />
+      </section>
+
+      <section
+        className="pa-section"
+        id={PERF_AUDIT_SECTION_IDS.audit}
+        aria-labelledby="pa-audit-judul"
+      >
+        <h2 className="pa-section-title" id="pa-audit-judul">
+          Audit perhitungan
+        </h2>
+        {/* Panel audit membaca amplop yang SAMA dengan kartu di atasnya, jadi
+            angkanya tidak mungkin berbeda dari kartu. */}
+        <PerformanceAuditPanel kpi={kpi} windowKey={windowKey} />
+      </section>
+
+      {/* Judul "Mutu agen" menggantikan <hr class="kpi-quality-divider"> yang
+          dulu memisahkan dua gulungan panjang (dibuang di Tahap 1: pemisah
+          bagian adalah hierarki judul, bukan garis ornamen). */}
+      <section
+        className="pa-section"
+        id={PERF_AUDIT_SECTION_IDS.mutu}
+        aria-labelledby="pa-mutu-judul"
+      >
+        <h2 className="pa-section-title" id="pa-mutu-judul">
+          Mutu agen
+        </h2>
+        <AgentQualityBoard
+          runs={runs}
+          evaluatedCount={evaluatedCount}
+          totalDecisions={totalDecisions}
+          loading={qualityLoading}
+          error={qualityError}
+          onRetry={onRetryQuality}
+          onOpenDecision={onOpenDecision}
+        />
+      </section>
+    </PageShell>
   );
 }

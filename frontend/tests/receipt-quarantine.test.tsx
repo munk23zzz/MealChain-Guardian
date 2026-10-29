@@ -232,9 +232,12 @@ describe("MG/phase-04 poin 7 — ceklis penerimaan ≠ karantina", () => {
     const html = board();
     expect(html).toContain("bukan karantina");
     expect(html).toContain("tidak menahan batch");
-    // Label ceklis tetap milik penerimaan, bukan karantina.
+    // Label ceklis tetap milik penerimaan, bukan karantina. Sejak Dok 05 §2
+    // formulirnya pindah ke popup, jadi yang tersisa di kartu adalah tombol
+    // pembukanya — bukan tombol simpan ceklis.
     expect(html).toContain("daftar periksa petugas");
-    expect(html).toContain("Catat hasil terima");
+    expect(html).toContain("Periksa &amp; catat kiriman");
+    expect(html).not.toContain("Catat hasil terima");
   });
 
   it("baris batch ditahan menawarkan akibat karantina, terpisah dari ceklis", () => {

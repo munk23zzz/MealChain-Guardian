@@ -66,11 +66,6 @@ export default function DecisionEconomics({
         </article>
       ))}
 
-      <p className="section-sub" data-testid="risk-method">
-        Dasar risiko: {view.riskMethod.label} · {view.riskMethod.source} · versi{" "}
-        {view.riskMethod.version}
-        {view.riskMethod.period ? ` · periode ${view.riskMethod.period}` : ""}
-      </p>
       {view.message && (
         <p className="section-sub" data-testid="cost-message">
           {view.message}

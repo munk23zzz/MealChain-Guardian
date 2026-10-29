@@ -7,6 +7,13 @@ Butir 4: "`sap_mock_purchase_orders.price` memakai invoice unit price.
 `accepted_value_idr` memakai harga komersial PO. PDF menampilkan bahan,
 transportasi, handling, total PO, serta SDC secara terpisah bila tersedia."
 
+**Perubahan 29 Okt 2026 (permintaan pemilik):** blok SDC dihapus dari PDF dan
+komponen bahan/transportasi/handling pindah ke tabel "Rincian pesanan"
+(template PO korporat). Asersi lama yang menuntut "Safe Delivered Cost" dan
+angka SDC tercetak diganti asersi sebaliknya: angka analitis itu TIDAK boleh
+muncul, sedangkan tiga komponen tagihan tetap wajib tercetak dan berjumlah
+sama dengan total PO.
+
 Kenapa ini penting secara uang: PO adalah dokumen yang dibayar pemasok.
 Menagihkan `expected_loss`/`freshness_risk`/`safety_penalty` ke pemasok berarti
 menagih kerugian internal yang tidak pernah ia sebabkan — dan angka itu
@@ -544,6 +551,9 @@ def test_pdf_menampilkan_bahan_transport_handling_dan_total_po():
     )
     teks = _teks_pdf(isi)
     # Empat komponen komersial, masing-masing dengan labelnya sendiri.
+    # Sejak template korporat (29 Okt 2026) transportasi & penanganan duduk di
+    # tabel "Rincian pesanan" yang sama dengan bahan — bukan blok terpisah.
+    assert "Rincian pesanan" in teks
     assert "Bahan" in teks
     assert _rupiah_tes(5700000) in teks
     assert "Transportasi" in teks
@@ -551,12 +561,19 @@ def test_pdf_menampilkan_bahan_transport_handling_dan_total_po():
     assert "Penanganan" in teks
     assert _rupiah_tes(150000) in teks
     assert _rupiah_tes(5884200) in teks
-    # SDC tampil TERPISAH, bukan sebagai total PO.
-    assert "Safe Delivered Cost" in teks
-    assert _rupiah_tes(7434200) in teks
-    # Penalti disebut sebagai kebijakan simulasi, bukan kerugian aktual.
+    # Total tagihan = bahan + transportasi + penanganan, bukan SDC.
+    assert "Total PO (bahan + transportasi + penanganan)" in teks
+    # Blok "Safe Delivered Cost" DIHAPUS atas permintaan pemilik 29 Okt 2026:
+    # angka analitisnya (7.434.200) tidak boleh tercetak sama sekali.
+    assert "Safe Delivered Cost" not in teks
+    assert _rupiah_tes(7434200) not in teks
+    assert _rupiah_tes(900000) not in teks
+    # Angka risiko analitis tidak tercetak. Klaim "TIDAK ditagihkan" juga tidak
+    # lagi dicetak: kalimat itu tinggal di blok "Syarat & ketentuan" yang
+    # dihapus 29 Okt 2026 atas permintaan pemilik.
     assert "simulasi" in teks.lower()
     assert "aktual" not in teks.lower()
+    assert "TIDAK ditagihkan" not in teks
 
 
 def test_pdf_tanpa_rincian_komersial_tidak_mengarang_komponen():
@@ -727,3 +744,51 @@ def test_invoice_total_baris_legacy_memakai_harga_tersimpan():
 
     assert baris["cost_legacy"] == "legacy_unmigrated"
     assert baris["invoice_total"] == pytest.approx(15720000.00)
+
+
+def test_pdf_menjelaskan_selisih_pembulatan_subtotal_vs_harga_kali_jumlah():
+    """Template korporat: dua arti total tidak boleh diam-diam disamakan.
+
+    Invoice 11,00 untuk 3 kg -> harga satuan 3,67/kg, sehingga harga x jumlah =
+    11,01. PDF wajib mencetak subtotal (11,00) DAN total PO (11,01) sebagai dua
+    baris berbeda — bukan memilih salah satu diam-diam. Kalimat penjelas
+    "Selisih Rp ..." dihapus 29 Okt 2026 bersama catatan kaki lainnya; kedua
+    angka itu sendiri yang menjadi buktinya.
+    """
+    isi = po_document.bangun_pdf(
+        {
+            "po_number": "MC-UJI-BULAT-PDF",
+            "status": "submitted",
+            "created_at": datetime(2026, 10, 29, 3, 0, tzinfo=UTC),
+            "ordered_quantity": 3.0,
+            "price": 3.67,
+            "total": 11.01,
+            "material_number": "MAT-TELU",
+            "commodity_name": "Telur",
+            "location_name": "Jakarta",
+            "supplier_name": "CV Contoh",
+            "commercial_cost": {
+                "purchase_total": "10.00",
+                "transport_total": "1.00",
+                "handling_total": "0.00",
+                "invoice_total": "11.00",
+                "invoice_unit_price": "3.67",
+                "sdc_total": None,
+                "sdc_unit_price": None,
+                "expected_loss": None,
+                "freshness_risk": None,
+                "safety_penalty": None,
+                "risk_method": {"kind": "simulated_policy", "version": "sdc-policy-1"},
+            },
+            "keputusan": {"id": "kep-2", "status": "executed"},
+            "persetujuan": [],
+            "dibuat_pada": datetime(2026, 10, 29, 4, 0, tzinfo=UTC),
+        }
+    )
+    teks = _teks_pdf(isi)
+    assert "Subtotal (jumlah baris di atas)" in teks
+    assert _rupiah_tes(11.00) in teks
+    assert "Total PO (harga satuan × jumlah)" in teks
+    assert _rupiah_tes(11.01) in teks
+    # Kalimat penjelas selisih termasuk catatan kaki yang dihapus 29 Okt 2026.
+    assert "Selisih Rp" not in teks

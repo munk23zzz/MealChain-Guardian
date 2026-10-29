@@ -48,7 +48,7 @@ describe("blockedReason", () => {
   it("menyebut tindakan perbaikan saat lokasi belum diketahui", () => {
     const reason = blockedReason(null);
     expect(reason).toBe(MISSING_LOCATION_REASON);
-    expect(reason).toContain("/auth/me");
+    expect(reason).not.toContain("/auth/me");
   });
 });
 

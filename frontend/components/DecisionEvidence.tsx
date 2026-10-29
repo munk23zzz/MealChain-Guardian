@@ -28,16 +28,45 @@
 // bertema terang, 19 Okt 2026), kelas tes-sensitif
 // (`.map-*`, `.side-tab*`, `.board-table-wrap`) tidak disentuh.
 
-import DecisionDetail from "./DecisionDetail";
+import DecisionApproval from "./DecisionApproval";
 import PageHeader from "./PageHeader";
+import DecisionCostEvidence from "./DecisionCostEvidence";
+import DecisionIdentityBatch from "./DecisionIdentityBatch";
+import DecisionTraceIntegrity from "./DecisionTraceIntegrity";
+import EvidenceEmptyState from "./EvidenceEmptyState";
+import DecisionSafetySupplier from "./DecisionSafetySupplier";
+import DecisionSummary from "./DecisionSummary";
 import SectionJump from "./SectionJump";
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ISI HALAMAN DIKOSONGKAN — 29 Okt 2026
+//
+// Permintaan pemilik: "hapus seluruh isi halaman Decision & Evidence, sisakan
+// kerangka kosong (pemilih keputusan + kepala), lalu bangun ulang dari nol",
+// ditambah "balikin design yang tadi" — jadi kerangka ini memakai kepala dan
+// bilah kendali yang sudah ada, bukan bentuk baru.
+//
+// Kode isi lama TIDAK dihapus dari berkas ini: ia duduk di balik saklar di
+// bawah, sehingga memulihkannya cukup mengubah satu nilai. Salinan utuh
+// (DecisionEvidence, DecisionDetail, evidence-dossier.css) juga disimpan di
+// docs/arsip/decision-evidence-20261029/.
+//
+// Tahap 8 (29 Okt 2026): saklar "isi sedang dibangun ulang" sudah dicabut —
+// halaman hanya punya satu jalur render. Nav bagian kini selalu hidup karena
+// semua jangkarnya ada (lihat lib/section-jump.ts).
+// ─────────────────────────────────────────────────────────────────────────────
+import { PAGE_TITLES } from "../lib/navigation";
 import { evidenceSections } from "../lib/section-jump";
 import { pendingDecisions, type TodayDecision } from "../lib/today";
-import { decisionGroups } from "../lib/decision-picker";
+import { decisionGroups, statusWord } from "../lib/decision-picker";
 import DecisionPicker from "./DecisionPicker";
 import { countActionable, countExpiredActionable } from "../lib/topbar";
 import { shortId } from "../lib/agent-quality";
 import type { SupplierContext } from "../lib/supplier-exclusions";
+import type {
+  CommercialCostPayload,
+  MarketReference,
+} from "../lib/decision-economics";
 import { useState } from "react";
 
 export default function DecisionEvidence({
@@ -55,7 +84,6 @@ export default function DecisionEvidence({
   onOpenRecommendations,
   onOpenTraces,
   purchaseOrders,
-  traces,
   loading = false,
   diganti = false,
 }: {
@@ -75,8 +103,6 @@ export default function DecisionEvidence({
   onOpenTraces?: () => void;
   /** Data PO jaringan; hanya baris milik keputusan ini yang dipakai. */
   purchaseOrders?: unknown;
-  /** Jejak agen keputusan ini; dirender di dalam dossier. */
-  traces?: unknown;
   /**
    * Daftar keputusan masih diambil dari API. Tanpa ini, tautan yang dibagikan
    * sempat dituduh "tidak ada di cakupan" padahal datanya belum tiba.
@@ -100,124 +126,151 @@ export default function DecisionEvidence({
   });
 
   return (
-    <section className="evidence-page">
+    <section className="evidence-page" aria-labelledby="judul-bukti">
+      {/* TAHAP 1 (29 Okt 2026) — kepala + navigasi bagian.
+          Kepala kini berbentuk KARTU seperti halaman Overview: judul dan satu
+          kalimat penjelas di kiri, penanda keadaan di kanan (data simulasi,
+          status keputusan, nomor keputusan). Alasan: kepala `PageHeader` biasa
+          menaruh kontrol pemilih di kanan atas sehingga judul, penjelas, dan
+          kontrol berebut tempat; di pola Overview kontrol turun ke bilahnya
+          sendiri dan kepala hanya menjawab "halaman apa ini, keadaan apa".
+
+          Yang TIDAK diubah di tahap ini: isi halaman di bawah nav (ringkasan,
+          keputusan, bukti, jejak) tetap seperti sekarang — perubahan isi
+          dikerjakan di tahap 2–5. */}
       <PageHeader
-        title="Decision & Evidence"
+        titleId="judul-bukti"
+        title={PAGE_TITLES.evidence}
+        description="Halaman bukti satu keputusan: ringkasan, persetujuan, bukti biaya, keamanan & pemasok, identitas dan batch, sampai jejak dan integritas buktinya."
         meta={
-          // Pemilih keputusan: dulu tanpa label (hanya opsi "— pilih keputusan —")
-          // dan tanpa konteks jumlah, sehingga pengguna tidak tahu ada berapa
-          // keputusan dan mana yang menunggu tindakan. Label terlihat + kalimat
-          // jumlah di bawahnya menjawab itu, dan angkanya dari SATU sumber yang
-          // sama dengan lonceng notifikasi (countActionable).
-          <div className="evidence-picker">
-            <DecisionPicker
-              id="pilih-keputusan"
-              label="Keputusan yang diperiksa"
-              groups={groups}
-              value={selectedId}
-              onChange={onSelect}
-              hint={
-                <>
-                  {countActionable(decisions, now, role)} menunggu tindakan
-                  {expiredCount > 0
-                    ? showExpired
-                      ? ` · ${expiredCount} lewat tenggat ditampilkan`
-                      : ` · ${expiredCount} lewat tenggat disembunyikan`
-                    : ""}{" "}
-                  · {decisions.length} keputusan tersedia
-                </>
-              }
-            />
-            {expiredCount > 0 && (
-              <label className="evidence-picker-toggle">
-                <input
-                  type="checkbox"
-                  checked={showExpired}
-                  onChange={(event) => setShowExpired(event.target.checked)}
-                />
-                Tampilkan yang lewat tenggat ({expiredCount})
-              </label>
-            )}
+          <>
+            <span
+              className="overview-demo-chip"
+              title="Data contoh untuk demo, bukan data operasional produksi"
+            >
+              Data simulasi
+            </span>
+            {selected ? (
+              <span
+                className="evidence-header-status"
+                data-status={String(selected.status ?? "")}
+              >
+                {statusWord(selected.status)}
+              </span>
+            ) : null}
+            {selected ? (
+              <span className="overview-updated">
+                #{shortId(String(selected.decision_id))}
+              </span>
+            ) : null}
+          </>
+        }
+        filters={
+          <div className="evidence-controls">
+            <div className="evidence-picker">
+              <DecisionPicker
+                id="pilih-keputusan"
+                label="Keputusan yang diperiksa"
+                groups={groups}
+                value={selectedId}
+                onChange={onSelect}
+                hint={
+                  <>
+                    {countActionable(decisions, now, role)} menunggu tindakan
+                    {expiredCount > 0
+                      ? showExpired
+                        ? ` · ${expiredCount} lewat tenggat ditampilkan`
+                        : ` · ${expiredCount} lewat tenggat disembunyikan`
+                      : ""}{" "}
+                    · {decisions.length} keputusan tersedia
+                  </>
+                }
+              />
+              {expiredCount > 0 && (
+                <label className="evidence-picker-toggle">
+                  <input
+                    type="checkbox"
+                    checked={showExpired}
+                    onChange={(event) => setShowExpired(event.target.checked)}
+                  />
+                  Tampilkan yang lewat tenggat ({expiredCount})
+                </label>
+              )}
+            </div>
           </div>
         }
       />
 
-      {/* F2: navigasi bagian — pengganti "gulir 3.000 px lalu menebak".
-          Komponen bersama (juga dipakai Overview & Keamanan Pangan); tautannya
-          <a>, bukan tombol, supaya bisa dibuka di tab baru dan terbaca pembaca
-          layar sebagai daftar tujuan. */}
-      {selected && !loading && <SectionJump items={evidenceSections()} />}
-
-      {!selected && loading ? (
-        <article className="card evidence-empty" role="status">
-          <h2>Memuat keputusan…</h2>
-          <p className="evidence-note">
-            Daftar keputusan sedang diambil dari API. Kalau halaman ini dibuka lewat tautan
-            bersama, keputusan yang dituju ditampilkan begitu daftarnya tiba.
-          </p>
-        </article>
-      ) : !selected ? (
-        <article className="card evidence-empty">
-          {/* Tautan yang dibagikan bisa menunjuk keputusan di luar cakupan peran
-              penerima — katakan itu, jangan berpura-pura tidak ada yang dipilih. */}
-          <h2>
-            {diganti
-              ? "Keputusan ini sudah diganti oleh Muat Demo"
-              : selectedId
-                ? "Keputusan itu tidak ada di cakupan akun ini"
-                : "Belum ada keputusan dipilih"}
-          </h2>
-          <p className="evidence-note">
-            {diganti
-              ? "Baris keputusan yang dituju tautan sudah tidak ada — \"Muat Demo\" mengganti baris operasional (batch, keputusan, pesanan). Pilih keputusan terbaru di kanan atas; data yang tampil setelah ini berasal dari dataset baru."
-              : selectedId
-              ? `Tautan menunjuk keputusan #${shortId(String(selectedId))}, tetapi keputusan itu tidak ada di daftar yang boleh dilihat peran ini — peran & lokasi membatasi daftar. Pilih keputusan lain di kanan atas, atau minta tautan dari akun yang cakupannya memuat keputusan itu.`
-              : "Pilih keputusan di kanan atas, atau buka salah satu yang menunggu tindakan di bawah ini. Halaman ini menampilkan bukti satu keputusan — bukan ringkasan seluruh feed."}
-          </p>
-          {suggestions.length === 0 ? (
-            <p className="evidence-note">
-              Tidak ada keputusan yang menunggu tindakan saat ini
-              {onOpenRecommendations ? "." : " — buka tab Recommendations untuk melihat semua."}
-            </p>
-          ) : (
-            <ul className="evidence-suggest">
-              {suggestions.map((decision) => (
-                <li key={String(decision.decision_id)}>
-                  <button
-                    type="button"
-                    className="button evidence-suggest-button"
-                    onClick={() => onSelect(String(decision.decision_id))}
-                  >
-                    <span className="evidence-suggest-title">
-                      {String(decision.decision_type ?? "keputusan").replace(/_/g, " ")}
-                    </span>
-                    <span className="evidence-suggest-meta">
-                      {String(decision.status ?? "—")} · {String(decision.decision_id ?? "").slice(0, 8)}
-                    </span>
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
-          {onOpenRecommendations && (
-            <button type="button" className="button button-secondary" onClick={onOpenRecommendations}>
-              Buka Recommendation Feed
-            </button>
-          )}
-        </article>
-      ) : (
-        <DecisionDetail
-          selected={selected}
-          chain={chain}
-          summary={summary}
-          supplierContext={supplierContext}
-          role={role}
-          token={token}
-          now={now}
-          onSupplierCreated={onSupplierCreated}
-          purchaseOrders={purchaseOrders}
-          traces={traces}
+      {/* Nav bagian: lima tujuan, label sama dengan judul bagian yang tercetak.
+          Tahap 7 mencabut gerbang `!ISI_DIBANGUN_ULANG` — dulu nav disembunyikan
+          supaya tidak ada tautan mati ke jangkar yang belum dirender; sekarang
+          keenam bagian ada, jadi syaratnya kembali ke kenyataan: ada keputusan
+          terpilih, daftar tidak sedang dimuat. */}
+      {selected && !loading ? (
+        <SectionJump
+          items={evidenceSections()}
+          ariaLabel="Bagian halaman Decision & Evidence"
         />
+      ) : null}
+
+      {/* TAHAP 8 (29 Okt 2026) — isi halaman jadi SATU jalur.
+          Gerbang `ISI_DIBANGUN_ULANG` dicabut: dulu ia memilih antara isi baru
+          (tahap 1–7) dan isi lama (`DecisionDetail`). Dua jalur berarti dua
+          kebenaran — tiap perbaikan harus dikerjakan dua kali, dan tes lama
+          dipaku pada markup yang tidak lagi dirender. Isi lama tetap utuh di
+          `docs/arsip/decision-evidence-20261029/`.
+
+          Keadaan kosong TIDAK hilang: ketiga sebabnya (memuat · baris diganti
+          "Muat Demo" · tautan di luar cakupan peran) pindah ke
+          `EvidenceEmptyState`, lengkap dengan daftar saran yang menunggu
+          tindakan. */}
+      {!selected ? (
+        <EvidenceEmptyState
+          loading={loading}
+          selectedId={selectedId}
+          diganti={diganti}
+          suggestions={suggestions}
+          onSelect={onSelect}
+          onOpenRecommendations={onOpenRecommendations}
+        />
+      ) : (
+        <>
+          {/* TAHAP 1: ringkasan keputusan — pita jawaban + strip angka.
+              Urutan mengikuti cara orang membaca: apa keputusannya, baru apa
+              yang menahannya. */}
+          <DecisionSummary selected={selected} summary={summary} now={now} />
+          {/* TAHAP 2: persetujuan — satu-satunya bagian yang menuntut tindakan. */}
+          <DecisionApproval
+            decisionId={String(selected.decision_id)}
+            role={role}
+            status={selected.status ?? null}
+            token={token}
+            summary={summary}
+            now={now}
+          />
+          {/* TAHAP 3: bukti biaya — dua tabel yang tidak boleh tercampur. */}
+          <DecisionCostEvidence
+            cost={(selected.commercial_cost ?? null) as CommercialCostPayload | null}
+            market={(selected.market_reference ?? null) as MarketReference | null}
+          />
+          {/* TAHAP 4: keamanan & pemasok — "aman dan dari siapa". */}
+          <DecisionSafetySupplier summary={summary} context={supplierContext} />
+          {/* TAHAP 5: identitas keputusan + evaluasi batch. */}
+          <DecisionIdentityBatch
+            selected={selected as Record<string, unknown> & { decision_id?: string }}
+            summary={summary}
+            token={token ? String(token) : null}
+            now={now}
+          />
+          {/* TAHAP 6: jejak, PO milik keputusan ini, dan integritas bukti. */}
+          <DecisionTraceIntegrity
+            selected={selected as Record<string, unknown> & { decision_id?: string }}
+            summary={summary}
+            chain={chain}
+            token={token ? String(token) : null}
+            purchaseOrders={purchaseOrders}
+          />
+        </>
       )}
     </section>
   );

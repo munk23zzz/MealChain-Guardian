@@ -853,6 +853,14 @@ PO_STATUS_LABEL = {
     "submitted": "terkirim",
     "confirmed": "dikonfirmasi",
 }
+
+# Peran penyetuju, sama dengan label di `po_document.py` backend.
+ROLE_LABEL = {
+    "sppg_head": "Kepala SPPG",
+    "sppg_nutritionist": "Ahli Gizi SPPG",
+    "bgn_monitor": "Monitor BGN",
+}
+
 DECISION_STATUS_LABEL = {
     "proposed": "usulan",
     "verifier_flagged": "ditandai verifikator",
@@ -962,6 +970,125 @@ def _po_detail(po: Mapping[str, Any], *, jumlah_terbaca: int, note: str | None) 
                 "Angka ditampilkan apa adanya, tanpa hitung ulang.",
                 "Dokumen PDF PO diunduh dari UI MealChain (tab Decision & Evidence) setelah "
                 "keputusan disetujui — Joule hanya mengirim teks, tidak melampirkan berkas.",
+            ]
+        )
+    )
+
+
+def po_document_report(dokumen: Mapping[str, Any], *, note: str | None = None) -> str:
+    """Satu PO sebagai DOKUMEN — sedetail PDF-nya (permintaan pemilik 29 Okt 2026).
+
+    Bedanya dengan `_po_detail`: di sini setiap bagian dokumen PO ikut dibaca —
+    rincian biaya komersial (bahan/angkut/penanganan, lalu SDC analitis), daftar
+    persetujuan **dengan nama, komentar, dan waktunya**, syarat persetujuan, dan
+    keputusan asal. Semua angka datang dari `/sap/purchase-orders/{nomor}/detail`;
+    perender hanya menata, tidak menghitung.
+    """
+    biaya = dokumen.get("commercialCost") or {}
+    keputusan = dokumen.get("keputusan") or {}
+    persetujuan = dokumen.get("persetujuan") or []
+    syarat = dokumen.get("syarat") or {}
+
+    def _atau_tidak_tercatat(nilai: Any) -> str:
+        return "tidak tercatat" if nilai in (None, "") else rupiah(nilai)
+
+    identitas = [
+        ("Status PO", _label(PO_STATUS_LABEL, dokumen.get("status"))),
+        ("Dibuat", wib(dokumen.get("createdAt"))),
+        ("Lokasi tujuan", _text(dokumen.get("locationName"))),
+        ("Pemasok", _text(dokumen.get("supplierName"))),
+        ("Bahan", _text(dokumen.get("commodityName"))),
+        ("Nomor material", _text(dokumen.get("materialNumber"))),
+        ("Jumlah dipesan", kg(dokumen.get("quantityKg"))),
+        ("Harga satuan", rupiah(dokumen.get("pricePerKg"))),
+        ("Total PO", rupiah(dokumen.get("totalValue"))),
+    ]
+
+    biaya_baris = [
+        ("Bahan", _atau_tidak_tercatat(biaya.get("purchase_total"))),
+        ("Transportasi", _atau_tidak_tercatat(biaya.get("transport_total"))),
+        ("Penanganan", _atau_tidak_tercatat(biaya.get("handling_total"))),
+        ("Tagihan (invoice)", _atau_tidak_tercatat(biaya.get("invoice_total"))),
+        ("Harga satuan invoice", _atau_tidak_tercatat(biaya.get("invoice_unit_price"))),
+        ("Potensi susut", _atau_tidak_tercatat(biaya.get("expected_loss"))),
+        ("Risiko kesegaran", _atau_tidak_tercatat(biaya.get("freshness_risk"))),
+        ("Penalti keamanan", _atau_tidak_tercatat(biaya.get("safety_penalty"))),
+        ("SDC analitis", _atau_tidak_tercatat(biaya.get("sdc_total"))),
+    ]
+
+    asal = [
+        ("Keputusan", short_id(keputusan.get("id"))),
+        ("Jenis keputusan", _label(DECISION_TYPE_LABEL, keputusan.get("jenis"))),
+        ("Status keputusan", _label(DECISION_STATUS_LABEL, keputusan.get("status"))),
+        ("Iterasi", str(keputusan.get("iteration") or MISSING)),
+        ("Diusulkan oleh", _text(keputusan.get("proposed_by"))),
+        ("Kedaluwarsa", wib(keputusan.get("expires_at")) if keputusan.get("expires_at") else MISSING),
+    ]
+
+    def _blok(judul: str, baris: Sequence[tuple[str, str]]) -> str:
+        isi = "\n".join(f"- **{k}:** {v}" for k, v in baris)
+        return f"{judul}\n{isi}"
+
+    bagian = [
+        _blok("Identitas PO", identitas),
+        _blok("Rincian biaya", biaya_baris),
+        _blok("Keputusan asal", asal),
+    ]
+
+    if persetujuan:
+        baris_setuju = []
+        for orang in persetujuan:
+            tanda = "disetujui" if orang.get("approved") else "menolak"
+            komentar = (orang.get("comment") or "").strip()
+            baris_setuju.append(
+                (
+                    f"{_text(orang.get('name'))} ({_label(ROLE_LABEL, orang.get('role'))})",
+                    f"{tanda} · {wib(orang.get('approvedAt'))}"
+                    + (f" · \"{komentar}\"" if komentar else ""),
+                )
+            )
+        bagian.append(_blok("Persetujuan", baris_setuju))
+    else:
+        bagian.append("Persetujuan\nbelum ada persetujuan tercatat untuk PO ini.")
+
+    peran_wajib = []
+    for butir in syarat.get("required_roles") or []:
+        # Backend mengirim daftar bertingkat (satu alternatif per kelompok:
+        # `[["sppg_head"], ["sppg_nutritionist"]]`). Diratakan supaya tidak
+        # tercetak "—" hanya karena bentuknya list di dalam list.
+        if isinstance(butir, (list, tuple)):
+            peran_wajib.extend(str(nama) for nama in butir)
+        else:
+            peran_wajib.append(str(butir))
+    bagian.append(
+        _blok(
+            "Syarat persetujuan",
+            [
+                ("Jumlah minimal", str(syarat.get("min_approvals") if syarat.get("min_approvals") is not None else MISSING)),
+                ("Peran wajib", ", ".join(_label(ROLE_LABEL, r) for r in peran_wajib) or "tidak tercatat"),
+                ("Terpenuhi", "ya" if syarat.get("satisfied") else "belum"),
+            ],
+        )
+    )
+
+    status_pdf = (
+        "PDF PO sudah bisa diterbitkan dan diunduh dari tab Decision & Evidence."
+        if dokumen.get("bolehPdf")
+        else "PDF PO belum diterbitkan — menunggu keputusan disetujui."
+    )
+    return (
+        f"Purchase order {_text(dokumen.get('poNumber'))} — dokumen lengkap\n\n"
+        + "\n\n".join(bagian)
+        + "\n\n"
+        + _footnote(
+            [
+                note,
+                "Isi dokumen dibaca dari tabel purchase order SAP simulasi di MealChain "
+                "Guardian (bukan SAP S/4HANA nyata).",
+                "Total PO = bahan + transportasi + penanganan. SDC menambahkan penalti risiko "
+                "internal dan tidak ditagihkan ke pemasok.",
+                status_pdf,
+                "Angka ditampilkan apa adanya, tanpa hitung ulang.",
             ]
         )
     )
@@ -1883,6 +2010,217 @@ def quarantine_report(
             ]
         )
     )
+
+
+ELIGIBILITY_LABEL = {
+    "usable": "layak dipakai",
+    "not_usable": "tidak layak dipakai",
+    "blocked": "terhalang",
+    "requires_verification": "perlu verifikasi",
+    "quarantined": "dikarantina",
+}
+#: Jenis kebijakan: WAJIB dikatakan apa adanya. Kebijakan demo tidak boleh
+#: tampil seolah regulasi resmi.
+POLICY_KIND_LABEL = {
+    "simulated_policy": "kebijakan simulasi (belum divalidasi pemilik domain)",
+    "regulation": "regulasi resmi",
+    "contract": "klausul kontrak",
+}
+PROFILE_SOURCE_LABEL = {
+    "commodity_policies": "tabel kebijakan komoditas MealChain",
+    "seed": "data seed demo",
+    "default": "nilai bawaan sistem",
+}
+
+
+def _suhu(value: Any, digits: int = 0) -> str:
+    teks = num(value, digits)
+    return MISSING if teks == MISSING else f"{teks} °C"
+
+
+def _suhu_range(low: Any, high: Any) -> str:
+    if num(low) == MISSING or num(high) == MISSING:
+        return MISSING
+    return f"{num(low, 0)}–{num(high, 0)} °C"
+
+
+def batch_detail_report(
+    payload: Mapping[str, Any] | None,
+    *,
+    candidates: Sequence[Mapping[str, Any]] | None = None,
+    batch_id: str | None = None,
+    note: str | None = None,
+) -> str:
+    """Rincian satu batch: keamanan, kelayakan pakai, kebijakan suhu, dan bukti.
+
+    Semua nilai dibaca dari `GET /batches/{id}` apa adanya: status tersimpan vs hasil
+    evaluasi TIDAK disamakan, kebijakan ditandai jenisnya, dan kecukupan bukti diteruskan
+    dari backend. Perender ini tidak menilai ulang keamanan pangan (Rules.md §1.1).
+
+    Kalau `payload` kosong (batch tidak ditemukan atau belum disebut), laporan berpindah
+    ke daftar kandidat — bukan mengarang rincian.
+    """
+    data = payload if isinstance(payload, Mapping) else {}
+    _batch = data.get("batch")
+    batch: Mapping[str, Any] = _batch if isinstance(_batch, Mapping) else {}
+    if not batch:
+        baris = [
+            [
+                short_id(row.get("id") or row.get("batch_id")),
+                _text(row.get("commodity")),
+                kg(row.get("quantity_kg")),
+                _text(row.get("location")),
+                SAFETY_LABEL.get(str(row.get("safety_status")), _text(row.get("safety_status"))),
+            ]
+            for row in (candidates or ())[:6]
+            if isinstance(row, Mapping)
+        ]
+        kepala = (
+            f"Batch {batch_id[:8]} tidak ditemukan di catatan MealChain Guardian."
+            if batch_id
+            else "Sebutkan ID batch yang mau diperiksa — rincian batch tidak ditebak dari daftar."
+        )
+        ekor = (
+            "\n\nContoh batch yang tercatat:\n\n"
+            + _table(["Batch", "Komoditas", "Jumlah", "Lokasi", "Keamanan"], baris)
+            if baris
+            else ""
+        )
+        return kepala + ekor + "\n\n" + _footnote(
+            [note, "Rincian batch dibaca dari `GET /batches/{id}` — tanpa angka tambahan."]
+        )
+
+    _elig = data.get("eligibility")
+    eligibility: Mapping[str, Any] = _elig if isinstance(_elig, Mapping) else {}
+    _ev = data.get("evidence")
+    evidence: Mapping[str, Any] = _ev if isinstance(_ev, Mapping) else {}
+    _profile = evidence.get("commodity_profile")
+    profile: Mapping[str, Any] = _profile if isinstance(_profile, Mapping) else {}
+
+    status = ELIGIBILITY_LABEL.get(
+        str(eligibility.get("status")), _text(eligibility.get("status"))
+    )
+    judul = " · ".join(
+        bagian
+        for bagian in (
+            f"Batch {short_id(batch.get('id'))}",
+            _text(batch.get("commodity")),
+            _text(batch.get("location")),
+        )
+        if bagian and bagian != MISSING
+    )
+
+    baris_batch = [
+        ["Jumlah", kg(batch.get("quantity_kg"))],
+        [
+            "Status keamanan (tersimpan)",
+            SAFETY_LABEL.get(str(batch.get("safety_status")), _text(batch.get("safety_status"))),
+        ],
+        [
+            "Status keamanan (hasil evaluasi)",
+            SAFETY_LABEL.get(
+                str(evidence.get("evaluated_safety_status")),
+                _text(evidence.get("evaluated_safety_status")),
+            ),
+        ],
+        ["Skor kesegaran", num(batch.get("freshness_score"), digits=2)],
+        ["Layak sampai", wib(batch.get("usable_until"))],
+        [
+            "Karantina",
+            QUARANTINE_LABEL.get(
+                str(batch.get("quarantine_status")), _text(batch.get("quarantine_status"))
+            ),
+        ],
+        ["Status penerimaan", _text(batch.get("receipt_status"))],
+    ]
+
+    kebijakan = profile
+    baris_kebijakan = [
+        [
+            "Suhu aman",
+            _suhu_range(kebijakan.get("safe_temp_min_c"), kebijakan.get("safe_temp_max_c")),
+        ],
+        ["Rantai dingin wajib", "ya" if kebijakan.get("cold_chain_required") else "tidak"],
+        [
+            "Masa layak",
+            (
+                f"{num(kebijakan.get('shelf_life_days'), 0)} hari"
+                if num(kebijakan.get("shelf_life_days"), 0) != MISSING
+                else MISSING
+            ),
+        ],
+        ["Sampel suhu minimum", num(kebijakan.get("min_temperature_samples"), 0)],
+        ["Batas usia observasi", minutes(kebijakan.get("max_observation_age_minutes"))],
+        ["Toleransi penyimpangan", minutes(kebijakan.get("max_excursion_minutes"))],
+        [
+            "Jenis kebijakan",
+            _label(POLICY_KIND_LABEL, str(kebijakan.get("policy_kind")))
+            if kebijakan.get("policy_kind")
+            else MISSING,
+        ],
+        [
+            "Sumber profil",
+            _label(PROFILE_SOURCE_LABEL, str(evidence.get("profile_source")))
+            if evidence.get("profile_source")
+            else MISSING,
+        ],
+        ["Versi kebijakan", _text(kebijakan.get("policy_version"))],
+    ]
+
+    alasan = evidence.get("evidence_reasons")
+    alasan_teks = (
+        "; ".join(_text(a) for a in alasan if a)
+        if isinstance(alasan, (list, tuple)) and alasan
+        else None
+    )
+    penghalang = eligibility.get("blocking_reasons")
+    penghalang_teks = (
+        "; ".join(_text(a) for a in penghalang if a)
+        if isinstance(penghalang, (list, tuple)) and penghalang
+        else None
+    )
+
+    ringkas_bukti = (
+        f"{_label(OBSERVATION_LABEL, str(evidence.get('temperature_observation')))}"
+        f" — {num(evidence.get('sample_count'), 0)} sampel"
+        f", observasi terakhir {wib(evidence.get('observed_at'))}"
+        f"; kecukupan bukti: "
+        f"{_label(EVIDENCE_STATE_LABEL, str(evidence.get('evidence_state')))}"
+    )
+
+    suku = [f"**{judul}**", "", f"Kelayakan pakai: **{status}**."]
+    if penghalang_teks:
+        suku.append(f"Penghalang: {penghalang_teks}.")
+    langkah = eligibility.get("next_step")
+    if langkah:
+        suku.append(f"Langkah berikutnya: {_text(langkah)}.")
+
+    suku += [
+        "",
+        _table(["Aspek batch", "Nilai"], baris_batch),
+        "",
+        "Kebijakan komoditas yang dipakai menilai batch ini:",
+        "",
+        _table(["Kebijakan", "Nilai"], baris_kebijakan),
+        "",
+        f"Bukti suhu: {ringkas_bukti}.",
+    ]
+    if alasan_teks:
+        suku.append(f"Catatan bukti: {alasan_teks}.")
+    if kebijakan.get("policy_basis"):
+        suku += ["", f"Dasar kebijakan: {_text(kebijakan.get('policy_basis'))}"]
+
+    suku += [
+        "",
+        _footnote(
+            [
+                note,
+                "Angka apa adanya dari `GET /batches/{id}` MealChain Guardian.",
+                "Status tersimpan dan hasil evaluasi ditampilkan terpisah; Joule tidak menyamakan keduanya.",
+            ]
+        ),
+    ]
+    return "\n".join(suku)
 
 
 def unsupported_report(domain: str, reason: str) -> str:

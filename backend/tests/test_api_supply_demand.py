@@ -264,7 +264,10 @@ def test_forecast_horizon_respected(client):
     )
     resp = client.get("/demand/forecast/Jakarta/telur", params={"horizon_days": 2})
     assert resp.status_code == 200
-    assert resp.json()["forecast_qty_kg"] == pytest.approx(daily_avg * 2, rel=1e-6)
+    # Peramalan kini dibulatkan 2 desimal di satu pintu (`forecast_service`),
+    # jadi toleransi memakai abs=0.01: maksud tes ini "horizon 2 hari = 2× rata-rata
+    # harian", bukan "presisi penuh sampai 6 desimal".
+    assert resp.json()["forecast_qty_kg"] == pytest.approx(daily_avg * 2, abs=0.01)
 
 
 def test_forecast_invalid_horizon_422(client):

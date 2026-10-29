@@ -432,3 +432,54 @@ Tindakan yang **belum** dilakukan dan menunggu keputusan pemilik: `cf push` ulan
 untuk memuat kode terakhir dan `cf set-env MEALCHAIN_API_URL <backend yang hidup>` +
 `cf restage`. Aturan fase melarang push tanpa izin, jadi status hari itu dicatat sebagai
 batas, bukan sebagai selesai.
+
+---
+
+## Push jembatan 14 skill — 29 Oktober 2026 (langkah manual, perlu login SSO pemilik)
+
+Keadaan terukur dari host operator pada 29 Okt 2026 (tanpa push):
+
+| Hal | Hasil |
+|---|---|
+| `GET /.well-known/agent-card.json` (rute CF) | **200**, tetapi hanya **5 skill**: `supply_situation`, `kpi_snapshot`, `approval_queue`, `purchase_orders`, `delivery_status`. Jadi kode di CF **jauh di belakang** working tree (14 skill; `purchase_orders`/`delivery_status` bahkan bukan nama skill sekarang). |
+| `GET /health` | `backend.reachable: true`, tetapi `backend.url = https://629b1519da4caa.lhr.life` (quick tunnel `localhost.run`), `dataset: {decisions: 11, batches: 50}` — **bukan** dataset kanonik (40 keputusan / 133 batch). |
+| Arti | Joule chat yang memanggil jembatan ini menjawab dari **kode lama + backend lain**. Pertanyaan rincian batch (`batch_detail`) belum ada di sana. |
+
+Empat langkah berikut harus dijalankan pemilik akun (butuh `cf login --sso`, sandi SSO tidak
+boleh lewat chat):
+
+```bash
+# 1) Backend yang bisa dijangkau DARI Cloud Foundry (bukan localhost).
+#    Pakai host stabil (VPS) atau named tunnel; quick tunnel berubah tiap dijalankan.
+curl -s -o /dev/null -w "%{http_code}\n" "$BACKEND_URL/health"   # harus 200
+
+# 2) Push kode terbaru tanpa start, lalu set URL backend, lalu start.
+cd sap-joule/a2a_server
+cf push --no-start
+cf set-env mealchain-joule-bridge-4sehat3trio MEALCHAIN_API_URL "$BACKEND_URL"
+cf set-env mealchain-joule-bridge-4sehat3trio MEALCHAIN_READ_USERNAME "<akun baca>"
+cf set-env mealchain-joule-bridge-4sehat3trio MEALCHAIN_READ_PASSWORD "<sandi akun baca>"
+cf start mealchain-joule-bridge-4sehat3trio
+
+# 3) Verifikasi kartu agen: harus memuat 14 id, termasuk batch_detail.
+curl -s https://mealchain-joule-bridge-4sehat3trio.cfapps.ap10.hana.ondemand.com/.well-known/agent-card.json \
+  | python -c "import json,sys; d=json.load(sys.stdin); ids=[s['id'] for s in d['skills']]; print(len(ids), ids); assert 'batch_detail' in ids"
+
+# 4) Verifikasi backend yang benar-benar dipakai jembatan.
+curl -s https://mealchain-joule-bridge-4sehat3trio.cfapps.ap10.hana.ondemand.com/health
+#    yang diharapkan: backend.reachable=true, backend.url = "$BACKEND_URL",
+#    dataset.decisions=40, dataset.batches=133 (dataset kanonik)
+```
+
+Lalu deploy capability `1.5.0` (`joule/mealchain_capability`) agar Joule punya scenario
+`detail_batch`, dan uji di chat:
+
+1. "Batch `<8 karakter id batch>` aman atau tidak?" → kartu batch + **dua baris** status
+   (tersimpan vs hasil evaluasi).
+2. "Suhu batch mana yang menyimpang?" → Joule meminta id + menampilkan kandidat batch.
+3. "Kebijakan suhunya apa?" (setelah menyebut batch) → rentang suhu + **jenis kebijakan
+   simulasi**, bukan klaim regulasi.
+
+Sebelum langkah 1–4 dijalankan, status integrasi Joule **belum** diperbarui: jembatan lokal
+sudah benar (209 tes lulus; `uji-semua-skill` SEMUA OK), tetapi chat Joule masih memanggil
+kode 5-skill di CF.

@@ -1383,6 +1383,19 @@ async def repropose_action(
     # ditulis: anak tetap bisa dieksekusi lewat jalur `supplier_id` + batch
     # pemasok di SPPG tujuan, dan layar menampilkan alasan sebenarnya.
     await _salin_binding_induk(db, parent, child)
+    # Bahan LEARN (29 Okt 2026): langkah ini tidak hanya menyalin alasan induk,
+    # tetapi MEMBACA riwayat penolakan lain di kota+komoditas yang sama. Tanpa
+    # ini, "belajar dari penolakan" berarti agent hanya melihat satu penolakan
+    # yang kebetulan sedang diproses — data penolakan lain ada di DB tapi tidak
+    # pernah dibaca.
+    from app.services.rejection_feedback import riwayat_penolakan
+
+    riwayat = await riwayat_penolakan(
+        db,
+        target_location_id=parent.target_location_id,
+        commodity_id=parent.commodity_id,
+        kecuali_decision_id=parent.id,
+    )
     db.add(
         AgentTrace(
             decision_id=child.id,
@@ -1392,6 +1405,7 @@ async def repropose_action(
                 "parent_decision_id": str(parent.id),
                 "parent_iteration": parent.iteration or 1,
                 "parent_status": parent.status,
+                "riwayat_penolakan_dibaca": riwayat["jumlah"],
             },
             output_summary={
                 "parent_rejection_reason": parent.rejection_reason,
@@ -1399,6 +1413,7 @@ async def repropose_action(
                     "Iterasi baru menyertakan penyesuaian atas penolakan: "
                     + (parent.rejection_reason or "")
                 ),
+                "riwayat_penolakan": riwayat,
             },
         )
     )

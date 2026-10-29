@@ -7,7 +7,7 @@
 // yang dipilih diteruskan ke `GET /decisions?window=…` lewat hook pemanggil —
 // komponen ini tidak memotong data sendiri.
 
-import { FEED_WINDOWS, feedWindowHint, type FeedWindowKey } from "../lib/decisions-window";
+import { FEED_WINDOWS, feedWindowHintBilaBerbeda, type FeedWindowKey } from "../lib/decisions-window";
 
 export default function PeriodPicker({
   value,
@@ -39,7 +39,7 @@ export default function PeriodPicker({
           </button>
         );
       })}
-      <span className="feed-period-hint">{feedWindowHint(value)}</span>
+      <span className="feed-period-hint">{feedWindowHintBilaBerbeda(value) ?? ""}</span>
     </div>
   );
 }

@@ -19,6 +19,10 @@ import "./supply-adequacy.css";
 // karena ia menyusun ulang baris `sa-*` pada kartu yang sempit.
 import "./surplus-regions.css";
 import "./adequacy-columns.css";
+// Cincin Overview: bentuk bagian-dari-acuan untuk kedua kartu (29 Okt 2026).
+import "./radial-charts.css";
+// Donat komposisi komoditas: satu diagram, satu warna per komoditas.
+import "./commodity-donut.css";
 import "./agent-activity.css";
 // Tombol pil/oval di seluruh halaman (27 Okt 2026, permintaan pemilik).
 // Diimpor terakhir dengan alasan yang sama: menang urutan tanpa !important.

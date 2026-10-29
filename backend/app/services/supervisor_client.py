@@ -34,10 +34,25 @@ class SupervisorResult:
 
 
 def _build_prompt(outcome_ctx: dict) -> str:
-    """Prompt narasi — ringkasan operasional, tanpa secret."""
+    """Prompt narasi — ringkasan operasional, tanpa secret.
+
+    `decision_id` WAJIB ikut bila sudah ada. Tool supervisor
+    (`agent/tools.py::get_cost_eligibility` dan `get_evidence_digest`) hanya
+    bisa dipanggil dengan id keputusan; tanpa id di prompt, agen menjawab
+    "saya memerlukan decision_id" — terukur 29 Okt 2026: narasi SUPERVISE
+    berisi pertanyaan balik ke manusia, bukan angka, sehingga tahap
+    pengawasan tampak "tidak mendeteksi data" padahal barisnya ada.
+    Id keputusan sudah lahir (`flush`) sebelum langkah SUPERVISE dijalankan,
+    jadi tidak ada alasan menyembunyikannya dari agen.
+    """
     return json.dumps(
         {
             "task": "ringkas keputusan distribusi untuk reviewer manusia",
+            # Id keputusan + id entitas yang dirujuk tool. `None` = memang belum
+            # ada (mis. keputusan belum dibuat) — jangan diganti string kosong.
+            "decision_id": outcome_ctx.get("decision_id"),
+            "supplier_id": outcome_ctx.get("supplier_id"),
+            "batch_ids": outcome_ctx.get("batch_ids"),
             "commodity": outcome_ctx.get("commodity"),
             "target_location": outcome_ctx.get("target_location"),
             "surplus": outcome_ctx.get("surplus"),
@@ -45,6 +60,16 @@ def _build_prompt(outcome_ctx: dict) -> str:
             "verifier_verdict": outcome_ctx.get("verifier_verdict"),
             "forecast": outcome_ctx.get("forecast"),
             "chosen": outcome_ctx.get("chosen"),
+            # Instruksi eksplisit: baca lewat tool lebih dulu, dan bila tool
+            # gagal sebutkan tool + galatnya. Bertanya balik ke manusia bukan
+            # pengawasan.
+            "instruksi": (
+                "Bila decision_id tersedia, panggil get_cost_eligibility dan "
+                "get_evidence_digest dengan id itu sebelum menarasikan. Kutip "
+                "hanya angka yang dikembalikan tool atau yang ada di fakta ini. "
+                "Bila sebuah tool gagal, sebut nama tool dan galatnya — jangan "
+                "meminta manusia mengirim ulang data yang sudah ada."
+            ),
         },
         ensure_ascii=False,
     )

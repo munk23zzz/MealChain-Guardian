@@ -81,7 +81,11 @@ export default function SupplyDemandPanel({
           <dd>{demand ? formatKg(demand.quantityKg) : "—"}</dd>
           <span>{demand ? neededByLabel(demand.neededBy) : "tidak ada catatan"}</span>
         </div>
-        <div className={styles.card} data-tone={gap?.tone ?? "unknown"}>
+        {/* `data-lead` (L4): selisih adalah angka yang dicari lebih dulu, jadi
+            ia dipromosikan seperti angka utama di strip ringkasan halaman
+            Pemasok. Dipasang sebagai atribut supaya ukurannya bisa ditata dari
+            globals (kelas modul di-hash dan tidak terbaca pratinjau statis). */}
+        <div className={styles.card} data-tone={gap?.tone ?? "unknown"} data-lead="true">
           <dt>Selisih</dt>
           <dd>{gap ? gap.text : "—"}</dd>
           <span>{gap ? "" : "saldo tidak terbaca"}</span>
@@ -94,14 +98,28 @@ export default function SupplyDemandPanel({
           className={styles.card}
           data-tone={forecast ? "forecast" : "unknown"}
           data-testid="supply-demand-forecast"
+          data-source={forecast?.source ?? "unknown"}
         >
           <dt>{forecast ? `Perkiraan ${forecast.horizonDays} hari` : "Perkiraan 7 hari"}</dt>
           <dd>{forecast ? formatKg(forecast.quantityKg) : "—"}</dd>
-          <span>
-            {forecast
-              ? `${forecast.methodLabel} · ${forecast.confidenceLabel}`
-              : `tidak ada perkiraan ${commodity ?? "komoditas ini"} dari server`}
-          </span>
+          {/* Metode mentah ("sap_rpt_1_6 · keyakinan 42,7% · SAP-RPT-1.6")
+              DIHAPUS 29 Okt 2026 atas permintaan pemilik: tiga kode teknis
+              berderet di bawah satu angka terbaca sebagai kebocoran backend,
+              bukan penjelasan. Yang tersisa hanya kalimat yang memang mengubah
+              cara membaca angka (mis. "dasar tipis"), dan itu pun opsional. */}
+          {forecast?.note ? (
+            <span data-testid="supply-demand-forecast-source">{forecast.note}</span>
+          ) : forecast?.fallbackUsed ? (
+            // Cadangan statistik dipakai = angka ini bukan keluaran model.
+            // Satu frasa, tanpa nama metode/kode sumber.
+            <span data-testid="supply-demand-forecast-source">
+              cadangan statistik — model tidak dipakai
+            </span>
+          ) : !forecast ? (
+            <span data-testid="supply-demand-forecast-source">
+              {`belum ada perkiraan ${commodity ?? "komoditas ini"}`}
+            </span>
+          ) : null}
         </div>
       </dl>
 
@@ -151,12 +169,12 @@ export default function SupplyDemandPanel({
                         <th scope="row">
                           {batch.id ? batch.id.slice(0, 8) : `batch ${index + 1}`}
                         </th>
-                        <td>{formatKg(
+                        <td data-label="Jumlah">{formatKg(
                           batch.quantity_kg === null || batch.quantity_kg === undefined
                             ? null
                             : Number(batch.quantity_kg)
                         )}</td>
-                        <td>
+                        <td data-label="Keamanan">
                           {isQuarantined(batch) ? (
                             <span className={styles.badge} data-tone="watch">
                               Ditahan
@@ -170,7 +188,7 @@ export default function SupplyDemandPanel({
                             </span>
                           )}
                         </td>
-                        <td>
+                        <td data-label="Masa layak">
                           {/* Satu keterangan saja: kalau ada angka pastinya, angka
                               itu yang ditulis — bukan ember "≤ 7 hari" DAN angka. */}
                           <span className={styles.expiry} data-state={layak.key}>
@@ -190,8 +208,8 @@ export default function SupplyDemandPanel({
         ) : null}
         {detail.batchesTruncated ? (
           <p className={styles.truncated}>
-            Daftar batch dibatasi {detail.batchCap} baris terbaru dari server; batch yang lebih lama
-            tidak ikut di tabel ini.
+            Daftar batch dibatasi {detail.batchCap} baris terbaru; batch yang lebih lama tidak ikut
+            di tabel ini.
           </p>
         ) : null}
       </section>

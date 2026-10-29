@@ -7,9 +7,10 @@
 // memuat satu lokasi, sehingga hitungan klien selalu berakhir "tidak ada
 // pasangan" di atas rencana yang sebenarnya punya sumber.
 //
-// Aturan tampilan (29 Okt 2026): satu tabel, satu baris kaki. Tidak ada paragraf
-// penjelas — ambang yang dipakai server ditulis sekali di kaki tabel, dan
-// istilah kolom dibuat pendek karena kartu ini bersebelahan dengan tabel lokasi.
+// Aturan tampilan (29 Okt 2026): satu tabel, tanpa paragraf penjelas. Ambang
+// surplus ditulis SEKALI di kepala kartu (dipasok pemanggil lewat planRingkas),
+// dan istilah kolom dibuat pendek karena kartu ini bersebelahan dengan tabel
+// lokasi.
 
 import { formatKg } from "../lib/overview-format";
 import { alasanTanpaRencana, planFromServer } from "../lib/surplus";
@@ -30,7 +31,6 @@ export default function AllocationTable({
 }) {
   const dariServer = planFromServer(plan, 6);
   const rows = dariServer?.rows ?? [];
-  const ambang = dariServer?.minSurplusKg ?? 150;
 
   if (error) {
     return <p className="evidence-note">Rencana alih tidak bisa dimuat: {error}</p>;
@@ -44,8 +44,8 @@ export default function AllocationTable({
 
   return (
     <>
-      <div className="board-table-wrap">
-        <table className="location-table" data-testid="allocation-table">
+      <div className="board-table-wrap allocation-table-wrap">
+        <table className="location-table allocation-table" data-testid="allocation-table">
           <thead>
             <tr>
               <th scope="col">Dari</th>
@@ -69,11 +69,18 @@ export default function AllocationTable({
                   key={`${row.from}-${row.to}-${row.kg}`}
                   data-open={aktif ? "true" : undefined}
                 >
-                  <td>{row.from}</td>
-                  <td>{row.to}</td>
-                  <td className="num">{formatKg(row.kg)}</td>
-                  <td className="num">{row.distanceKm === null ? "—" : `${row.distanceKm} km`}</td>
-                  <td className="num">
+                  <td data-label="Dari">{row.from}</td>
+                  <td data-label="Tujuan">
+                    {row.to}
+                    {/* L5: penanda teks, bukan hanya latar — warna sendirian tidak
+                        boleh jadi satu-satunya pembeda (Color Only). */}
+                    {aktif ? <span className="alih-open-note"> · sedang dibuka</span> : null}
+                  </td>
+                  <td className="num" data-label="Jumlah">{formatKg(row.kg)}</td>
+                  <td className="num" data-label="Jarak">
+                    {row.distanceKm === null ? "—" : `${row.distanceKm} km`}
+                  </td>
+                  <td className="num" data-label="Biaya">
                     {row.costSharePct === null || row.costSharePct === undefined
                       ? "—"
                       : `${row.costSharePct.toLocaleString("id-ID", {
@@ -87,9 +94,9 @@ export default function AllocationTable({
         </table>
       </div>
       <ScrollHint />
-      {/* Satu kalimat: ambang yang dipakai server. Rumus biaya pindah ke
-          tooltip judul kolom — penjelasan proses tidak perlu di baris baca. */}
-      <p className="evidence-note">Hanya surplus ≥ {ambang} kg per lokasi.</p>
+      {/* Kalimat ambang pindah ke kepala kartu (L5, 29 Okt 2026) supaya dua
+          kartu bawah berbagi urutan baca yang sama. Nilainya dibaca pemanggil
+          lewat `planRingkas()` di lib/surplus.ts, bukan digandakan di sini. */}
     </>
   );
 }

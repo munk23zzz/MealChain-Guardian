@@ -1,7 +1,13 @@
-// Kontrak markup halaman "Decision & Evidence" (Langkah 4). Yang dipin:
-// - tanpa keputusan terpilih: keadaan kosong yang jelas + saran dari data;
-// - dengan keputusan: empat kartu fakta + riwayat iterasi + bukti tersimpan;
-// - nilai yang tidak ada ditulis "—", bukan 0 / "Rp0" / "Tidak".
+// Kontrak halaman "Decision & Evidence" — BAGIAN YANG TETAP BERLAKU.
+//
+// Tahap 8 (29 Okt 2026): berkas ini dihidupkan kembali dari `.pause`. Dua belas
+// tes lamanya memaku markah kartu fakta versi `DecisionDetail` (tile fakta,
+// "kotak langkah berikutnya", "Jalur persetujuan", urutan region) — markah itu
+// sudah pensiun, dan penggantinya ada di `evidence-tahap1..7-*.test.tsx`.
+// Yang dipertahankan di sini adalah yang masih dijalankan kode hari ini:
+// keadaan kosong (memuat · di luar cakupan · diganti Muat Demo · saran), peran
+// baca-saja, dan pemilih keputusan. Versi utuh tes lama diarsipkan di
+// docs/arsip/decision-evidence-20261029/tes-lama/.
 import { describe, expect, it } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 
@@ -102,33 +108,7 @@ describe("Decision & Evidence — tanpa pilihan", () => {
 });
 
 describe("Decision & Evidence — dengan keputusan", () => {
-  it("judul halaman + kartu bukti utama", () => {
-    const html = render();
-    expect(html).toContain("Decision &amp; Evidence");
-    expect(html).toContain("Ringkasan keputusan");
-    expect(html).toContain("Biaya");
-    expect(html).toContain("Keamanan &amp; pemasok");
-    expect(html).toContain("Governance &amp; persetujuan");
-    expect(html).toContain("Jejak &amp; riwayat");
-  });
 
-  it("mengisi fakta nyata: rute, komoditas, biaya, keamanan, pemasok", () => {
-    const html = render();
-    expect(html).toContain("Cianjur → Jakarta");
-    expect(html).toContain("telur");
-    expect(html).toContain("Rp15.720.000");
-    expect(html).toContain("Rp16.206.000");
-    expect(html).toContain("Lolos");
-    expect(html).toContain("Supplier A Cianjur");
-    expect(html).toContain("keandalan 80%");
-    // F1: hitungan persetujuan hanya di stepper. Fixture ini tidak menyebut
-    // peran penyetuju, jadi stepper jujur menulis "0 dari 2" — dan angkanya
-    // tidak boleh muncul dua kali di layar yang sama.
-    // 29 Okt 2026: hitungan "0 dari 2" hanya ada di kotak Langkah-berikutnya
-    // yang kini dilepas (persetujuan dijalankan di popup Recommendations).
-    // Halaman bukti tidak lagi mengulang hitungan itu di kepala keputusan.
-    expect(html).not.toContain("0 dari 2");
-  });
 
   it("tenggat memakai jam yang diberikan pemanggil", () => {
     expect(render()).toContain("Lewat 13 menit");
@@ -164,11 +144,6 @@ describe("Decision & Evidence — dengan keputusan", () => {
     expect(html).not.toContain("tidak ada di cakupan");
   });
 
-  it("badge kasus demo ikut terbawa ke kepala keputusan (dulu dari kartu feed)", () => {
-    const denganKasus = render({ selected: { ...SELECTED, demo_case: "gangguan-logistik" } });
-    expect(denganKasus).toContain("Kasus: Gangguan Logistik");
-    expect(render()).not.toContain("rec-case");
-  });
 
   it("umur jendela ditulis sebagai persen terpakai, bukan jam mentah", () => {
     const html = render();
@@ -187,13 +162,6 @@ describe("Decision & Evidence — dengan keputusan", () => {
     expect(aman).toContain('data-state="aman"');
   });
 
-  it("ekspor bukti satu tombol di kepala halaman, mati tanpa token", () => {
-    const html = render();
-    expect(html).toContain("Unduh bukti (JSON)");
-    expect(html).toContain("evidence-export");
-    expect(html).toContain("evidence-hero-actions");
-    expect(render({ token: null })).toContain("disabled");
-  });
 
   it("lini masa audit: cerita satu keputusan, waktu tidak dikarang", () => {
     const html = render();
@@ -238,7 +206,7 @@ describe("Decision & Evidence — dengan keputusan", () => {
     expect(html).toContain('data-testid="integrity-panel"');
     expect(html).toContain('data-testid="ledger-status"');
     expect(html).toContain('data-testid="dossier-status"');
-    expect(html).toContain("Dossier Keputusan");
+    expect(html).toContain("Dossier keputusan ini");
   });
 
   it("jam klien belum siap: label tenggat '—' (bukan jam server)", () => {
@@ -247,37 +215,7 @@ describe("Decision & Evidence — dengan keputusan", () => {
     expect(html).not.toContain("Lewat 13 menit");
   });
 
-  it("summary belum dimuat: fakta kosong ditulis '—', riwayat iterasi tetap tampil", () => {
-    const html = render({ summary: null });
-    expect(html).toContain("—");
-    expect(html).not.toContain("Rp0");
-    // Yang masih diketahui dari payload keputusan tetap terisi:
-    expect(html).toContain("600 kg");
-    expect(html).toContain("Lewat 13 menit");
-    // Riwayat iterasi tidak ikut hilang.
-    expect(html).toContain("v1");
-    expect(html).toContain("alasan: Kuota penuh");
-    expect(html).toContain("v1 diajukan");
-    // Temuan tidak boleh dikarang: dulu, sebelum ringkasan tiba, blok triase
-    // sudah tampil "Perlu diperhatikan (1) Belum diverifikasi" padahal data
-    // aslinya tiga temuan — angka karangan yang menyesatkan.
-    expect(html).not.toContain("Perlu diperhatikan");
-    expect(html).not.toContain("Belum diverifikasi");
-  });
 
-  it("tiga temuan nyata: judul (3) dan tiga tile dalam satu baris daftar", () => {
-    const html = render({
-      summary: {
-        ...SUMMARY,
-        verifier: { verdict: "unavailable", verified_by: null },
-        expiry: { expires_at: "2026-10-11T02:16:47.973521+00:00", valid: false, seconds_remaining: 0 },
-        safety: { worst_status: null, blocked: true, batches_checked: 0, reason: "safety revalidation gagal: tidak ada batch sumber" },
-      },
-    });
-    expect(html).toContain("Perlu diperhatikan (3)");
-    expect(html.match(/evidence-flag evidence-flag-/g)?.length).toBe(3);
-    expect(html).toContain("safety revalidation gagal: tidak ada batch sumber");
-  });
 });
 
 // Dropdown 126 keputusan dulu mencetak istilah backend mentah
@@ -339,21 +277,16 @@ describe("Decision & Evidence — jejak agen", () => {
     expect(html).not.toContain("rec-hint");
   });
 
-  // 29 Okt 2026: jejak agen tidak lagi dilempar ke tab Agent Log. Dossier harus
-  // lengkap di halamannya sendiri, jadi jejak dirender DI DALAM bagian "Jejak &
-  // hasil" dan tombol lompatan di kepala dihapus.
-  it("jejak agen dirender di dalam dossier, bukan lewat lompatan ke tab lain", () => {
+  // 29 Okt 2026 (keputusan pemilik, kedua): blok "Jejak agen keputusan ini"
+  // DIHAPUS dari Decision & Evidence. Jejak agen punya rumahnya sendiri di tab
+  // Agent Log; menduplikasinya di dossier membuat halaman bukti berisi dua
+  // cerita langkah yang panjangnya berbeda (7 tahap pipeline vs 9 baris review).
+  it("jejak agen tidak lagi dirender di dossier Decision & Evidence", () => {
     const html = render();
-    expect(html).toContain("Jejak agen keputusan ini");
-    expect(html).toContain('data-testid="trace-list"');
-    expect(html).not.toContain("Buka jejak agen");
-    expect(html).not.toContain("tab Agent Log");
-    expect(html).not.toContain("evidence-traces");
-  });
-
-  it("jejak kosong menyebut sebabnya, bukan panel kosong", () => {
-    const html = render();
-    expect(html).toMatch(/belum ada langkah agen yang terekam/i);
+    expect(html).not.toContain("Jejak agen keputusan ini");
+    expect(html).not.toContain('data-testid="trace-list"');
+    // Bagian bukti lain tetap ada: yang dihapus hanya jejak agennya.
+    expect(html).toContain("Jejak &amp; riwayat");
   });
 });
 
@@ -383,21 +316,6 @@ describe("Decision & Evidence — kerapian kartu fakta (17 Okt 2026)", () => {
     expect(html).toContain('aria-haspopup="listbox"');
   });
 
-  it("baris kosong (\"—\") masuk rincian yang bisa dibuka; fakta terisi tetap tampil", () => {
-    // Tanpa rincian biaya: Harga beli / Logistik / Catatan tidak punya data,
-    // sementara biaya aman terkirim tetap ada.
-    const html = render({
-      selected: { decision_id: "d1", decision_type: "regional_balance", status: "pending_approval" },
-      summary: { ...SUMMARY, cost_breakdown: {} },
-    });
-    const posisiTampak = html.indexOf("Biaya aman terkirim");
-    const posisiRincian = html.indexOf('class="fact-more"');
-    expect(posisiTampak).toBeGreaterThanOrEqual(0);
-    expect(posisiRincian).toBeGreaterThan(posisiTampak);
-    expect(html).toContain("rincian belum ada datanya");
-    // Jangan pernah mengumumkan jumlah nol.
-    expect(html).not.toContain("0 rincian belum ada datanya");
-  });
 
   it("rincian kosong tidak dirender kalau semua barisnya terisi", () => {
     const html = render({
@@ -415,46 +333,10 @@ describe("Decision & Evidence — kerapian kartu fakta (17 Okt 2026)", () => {
   });
 });
 
-describe("Decision & Evidence — kotak langkah berikutnya DILEPAS (29 Okt 2026)", () => {
-  it("ringkasan tidak lagi memuat ajakan bertindak; itu milik popup Recommendations", () => {
-    const html = render();
-    // Asersi dibalik, bukan dihapus: kotak ini sengaja dipindahkan ke popup
-    // (persetujuan tidak lagi dijalankan di halaman ini), dan tes inilah yang
-    // mencegahnya kembali lewat refactor.
-    expect(html).not.toContain("Langkah berikutnya");
-    expect(html).not.toContain("evidence-next");
-    // SUMMARY pada fixture: jendela berlaku sudah lewat (expiry.valid=false).
-    expect(html).toContain("Jendela berlaku keputusan sudah lewat");
-  });
-
-  it("peran pengawas: halaman menyatakan hanya-baca, bukan menawarkan tindakan", () => {
-    const html = render({ role: "bgn_monitor", summary: { ...SUMMARY, expiry: { valid: true } } });
-    expect(html).toContain("Tampilan hanya-baca");
-    expect(html).toContain("bukan kewenangan peran ini");
-    expect(html).not.toContain("evidence-next");
-  });
-});
 
 // ── Desain baru (17 Okt 2026): struktur "catatan keputusan" ───────────────
 // Urutan region = urutan pengambilan keputusan manusia, bukan urutan tabel.
 describe("Decision & Evidence — struktur catatan keputusan", () => {
-  it("kepala keputusan: aksi + angka kunci dalam bahasa manusia", () => {
-    const html = render();
-    expect(html).toContain("evidence-hero-title");
-    expect(html).toContain("Seimbangkan 600 kg telur: Cianjur → Jakarta");
-    expect(html).toContain("Kuantitas");
-    expect(html).toContain("600 kg");
-    expect(html).toContain("Rp16.206.000");
-    expect(html).toContain("+Rp486.000");
-    // F1 redesign: "Tujuan" tidak lagi berdiri sebagai metrik — ia sudah ada
-    // di judul ("Cianjur → Jakarta"). Yang masuk strip keempat adalah Tenggat,
-    // dan hanya muncul kalau jam acuan diberikan.
-    expect(html).not.toContain("<dt>Tujuan</dt>");
-    expect(html).toContain("Cianjur → Jakarta");
-    // Status ditulis sebagai kata, bukan enum mentah (copy hygiene).
-    expect(html).toContain(">menunggu persetujuan<");
-    expect(html).not.toContain(">PENDING_APPROVAL<");
-  });
 
   it("flag triase hanya yang benar-benar perlu diperhatikan", () => {
     const html = render();
@@ -472,28 +354,7 @@ describe("Decision & Evidence — struktur catatan keputusan", () => {
     expect(html).not.toContain("Kalau ditolak");
   });
 
-  it("kartu 'Jalur persetujuan' dilepas; kronologi dibaca di blok Governance", () => {
-    const html = render();
-    // Empat langkah itu kini hanya hidup di popup Recommendations; di halaman
-    // bukti, urutan langkah tetap terbaca di "Langkah" milik Governance.
-    expect(html).not.toContain("Jalur persetujuan");
-    expect(html).not.toContain("evidence-route-step");
-    expect(html).toContain("Langkah");
-  });
 
-  it("urutan region: kepala → zona keputusan → bukti → jejak", () => {
-    // Dokumen `02-approval-action.md` §7.1 (28 Okt 2026): jawaban (apa menahan,
-    // siapa dibutuhkan, apa setelah ini) dibaca LEBIH DULU daripada kronologi.
-    // 29 Okt 2026: kartu "Jalur persetujuan" dilepas, jadi urutannya berhenti
-    // di blok keputusan lalu bukti.
-    const html = render();
-    const urut = ["evidence-hero", "evidence-decide", "evidence-grid", "evidence-bottom"].map(
-      (kelas) => html.indexOf(kelas)
-    );
-    for (let i = 1; i < urut.length; i += 1) {
-      expect(urut[i]).toBeGreaterThan(urut[i - 1]);
-    }
-  });
 
   it("zona keputusan tetap punya jangkar (nav bagian menunjuk ke sini)", () => {
     const html = render();

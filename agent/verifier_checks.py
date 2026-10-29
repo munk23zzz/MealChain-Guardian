@@ -446,24 +446,31 @@ def cek_ledger(
     # Keputusan yang belum dieksekusi memang belum punya blok aksi; menuntutnya
     # akan menandai setiap review dini. Yang diaudit: klaim "sudah tercatat"
     # pada keputusan yang sudah punya aksi.
-    status = str(fakta.get("status") or "").lower()
+    # Status: FAKTA lebih dulu (itu snapshot yang diambil verifier), lalu klaim
+    # sebagai cadangan. Dulu hanya `fakta["status"]` yang dibaca, dan pemanggil
+    # yang tidak mengirim status membuat cabang ini praktis kode mati (AUD-019).
+    status = str(fakta.get("status") or klaim.status or "").lower()
     # Penentu sebenarnya bukan label status, melainkan ada-tidaknya aksi:
     # blok ledger lahir saat eksekusi. Keputusan tanpa aksi (termasuk
     # `needs_verification`/`verifier_flagged` dan label baru di kemudian hari)
     # tidak boleh dituntut sudah punya blok.
     aksi = ledger.get("actions")
-    if jumlah == 0 and not aksi:
-        return _cek(
-            "ledger_tercatat",
-            "ada blok ledger untuk keputusan",
-            aktual + " (belum ada aksi)",
-            True,
-        )
-    # Blok ledger lahir saat eksekusi. `pending_approval` juga belum punya
-    # aksi — dulu status itu tidak ada di daftar, sehingga SETIAP review yang
-    # lahir dari Demo Control ditandai gagal `ledger_tercatat` dan keputusan
-    # berakhir `verifier_flagged` (terukur 28 Okt 2026: `9dbd0835`).
-    if jumlah == 0 and status in {"proposed", "pending", "menunggu", "pending_approval"}:
+    # Status yang memang BELUM punya aksi: blok ledger lahir saat eksekusi.
+    # Hanya status ini yang boleh "lulus" dengan 0 blok. Dulu pemeriksaannya
+    # `jumlah == 0 and not aksi` tanpa melihat status (audit 2026-10-29,
+    # AUD-019), sehingga keputusan `approved`/`executed` yang kehilangan blok
+    # juga lolos — cabang status di bawahnya menjadi kode mati.
+    status_tanpa_aksi = {
+        "proposed",
+        "pending",
+        "menunggu",
+        "pending_approval",
+        "review_only",
+        # `verifier_flagged` = menunggu review ulang: belum ada aksi, jadi blok
+        # ledger memang belum lahir (kontrak test_verifier_angka_bersitasi).
+        "verifier_flagged",
+    }
+    if jumlah == 0 and not aksi and status in status_tanpa_aksi:
         return _cek(
             "ledger_tercatat",
             "ada blok ledger untuk keputusan",

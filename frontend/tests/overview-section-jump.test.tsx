@@ -48,7 +48,11 @@ describe("Overview — navigasi bagian", () => {
 
   it("sasaran nav memakai kelas jump-target", () => {
     for (const { id } of overviewSections({ isApprover: true })) {
-      expect(pageSrc).toMatch(new RegExp(`className="[^"]*jump-target[^"]*"\\s+id="${id}"`));
+      // Tag yang memuat id ini harus membawa `jump-target`. Sejak kepala
+      // halaman memakai `PageHeader` bersama (30 Okt 2026), kelas itu dioper
+      // sebagai prop `className`, jadi urutan atributnya bukan patokan lagi.
+      const tag = (pageSrc.match(new RegExp(`<[A-Za-z]+[^>]*id="${id}"[^>]*>`, "g")) ?? []).join(" ");
+      expect(tag, `tag untuk #${id}`).toContain("jump-target");
     }
   });
 

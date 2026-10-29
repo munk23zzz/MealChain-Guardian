@@ -88,7 +88,8 @@ function waktu(iso: string | null | undefined): number | null {
   return Number.isFinite(t) ? t : null;
 }
 
-function langkahUntuk(
+/** Langkah trace milik satu tahap pipeline (nama langkah = kode tahap). */
+export function langkahUntuk(
   steps: ReadonlyArray<TraceStep>,
   code: string
 ): TraceStep[] {
@@ -244,7 +245,7 @@ export function buildPipeline({
 export function pipelineCaveat(stages: ReadonlyArray<StageView>): string {
   const total = stages.length;
   if (stages.every((s) => s.state === "not_loaded")) {
-    return "Belum ada jawaban dari backend untuk tahap mana pun; ini bukan nol tahap.";
+    return "Belum ada jawaban untuk tahap mana pun; ini bukan nol tahap.";
   }
   const punya = stages.filter(
     (s) => s.state === "present" || s.state === "ledger"
@@ -293,7 +294,7 @@ export function traceBanner(
       state: "not_loaded",
       label: "Trace belum dimuat",
       sentence:
-        "Belum ada jawaban dari backend, jangan dibaca sebagai hasil.",
+        "Belum ada jawaban, jangan dibaca sebagai hasil.",
       tone: "neutral",
     };
   }
@@ -407,7 +408,7 @@ export function supervisorView(
   if (!health) {
     return {
       label: "Status supervisor belum dimuat",
-      detail: "Belum ada jawaban dari backend; jangan dibaca sebagai sehat.",
+      detail: "Belum ada jawaban; jangan dibaca sebagai sehat.",
       tone: "neutral",
     };
   }
@@ -415,7 +416,7 @@ export function supervisorView(
   if (!status) {
     return {
       label: "Supervisor menjawab tanpa status",
-      detail: "Backend menjawab, tetapi tidak menyebut status. Itu bukan bukti hidup.",
+      detail: "Jawaban datang, tetapi tidak menyebut status. Itu bukan bukti hidup.",
       tone: "warning",
     };
   }

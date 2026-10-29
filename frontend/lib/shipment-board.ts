@@ -182,7 +182,7 @@ export function boardCounts(rows: readonly SupplierRoute[]): string {
   hitung((r) => r.journey?.state === "di_jalan", (n) => `${n} di jalan`);
   hitung((r) => r.journey?.state === "belum_berangkat", (n) => `${n} belum berangkat`);
   hitung((r) => r.journey?.state === "sudah_tiba", (n) => `${n} sudah tiba`);
-  hitung((r) => !r.journey || r.journey.state === "tidak_diketahui", (n) => `${n} tanpa laporan server`);
+  hitung((r) => !r.journey || r.journey.state === "tidak_diketahui", (n) => `${n} tanpa laporan`);
   return bagian.join(" · ");
 }
 

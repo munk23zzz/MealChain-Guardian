@@ -33,7 +33,13 @@ describe("Recommendation Feed — pagination", () => {
   it("mengembalikan pembaca ke halaman 1 saat pencarian, urutan, atau filter berubah", () => {
     expect(pageSrc).toMatch(/setFeedQuery\(e\.target\.value\);\s*setFeedPage\(1\);/);
     expect(pageSrc).toMatch(/setFeedSort\(e\.target\.value as FeedSort\);\s*setFeedPage\(1\);/);
-    expect(pageSrc).toMatch(/setFeedScope\(feedScope === chip\.id \? FEED_SCOPE_ALL : chip\.id\);\s*setFeedPage\(1\);/);
+    // Tahap 2 (30 Okt 2026): bentuknya berubah karena chip kini punya keadaan
+    // sendiri (`aktif` dipakai juga untuk `aria-pressed`, `disabled`, dan label).
+    // Yang diuji tetap PERILAKUNYA: menekan chip yang sedang aktif melepas
+    // saringan ke FEED_SCOPE_ALL, menekan chip lain memilih chip itu — lalu
+    // daftar kembali ke halaman 1.
+    expect(pageSrc).toMatch(/const aktif = feedScope === chip\.id;/);
+    expect(pageSrc).toMatch(/setFeedScope\(aktif \? FEED_SCOPE_ALL : chip\.id\);\s*setFeedPage\(1\);/);
     expect(pageSrc).toMatch(/setFeedQuery\(""\);\s*setFeedPage\(1\);/);
   });
 });

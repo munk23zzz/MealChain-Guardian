@@ -181,7 +181,9 @@ def test_log_malformed_ditandai_malformed():
     hasil = parse_temperature_log(log, policy=EGG, evaluation_time=AS_OF)
     assert hasil.observation == OBSERVATION_MALFORMED
     assert hasil.evidence_state == EVIDENCE_INSUFFICIENT
-    assert any("malformed" in alasan for alasan in hasil.issues)
+    # Pesan issue sudah dilokalkan ke Bahasa Indonesia ("entri log rusak pada
+    # indeks N"); assertions lama masih mencari kata Inggris "malformed".
+    assert any("rusak" in alasan for alasan in hasil.issues)
 
 
 def test_log_lama_ditandai_stale():

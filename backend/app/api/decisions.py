@@ -9,7 +9,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Literal
 from uuid import UUID, uuid4
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -18,6 +18,7 @@ from sqlalchemy.orm import selectinload
 from app.api.auth import get_current_user
 from app.api.dependencies import get_db
 from app.core.commercial_cost import commercial_cost_payload
+from app.core.config import settings
 from app.core.recommendation_numbers import (
     InvalidRecommendationNumbers,
     validasi_angka_rekomendasi,
@@ -35,6 +36,7 @@ from app.models import (
     Supplier,
     User,
 )
+from app.services.agent_review_hook import jadwalkan_review_latar
 from app.services.approval_summary import build_approval_summary
 from app.services.audit_facts import build_audit_facts
 from app.services.decision_packet import build_decision_packet
@@ -144,6 +146,7 @@ def _extract(recommendation: dict):
 @router.post("/decisions", status_code=201)
 async def create_decision(
     payload: DecisionCreate,
+    background: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
@@ -193,6 +196,10 @@ async def create_decision(
 
     await persist_binding(db, decision, payload.recommendation.get("candidate", {}))
     await db.commit()
+    # Review agent dijadwalkan SETELAH respons dikirim: setiap keputusan yang
+    # lahir dari konsol operator ikut direview, tanpa membuat 201 menunggu model.
+    # `MULTI_AGENT_REVIEW=false` (bawaan) membuat ini tidak terjadi sama sekali.
+    jadwalkan_review_latar(background, str(decision.id), user)
     return {
         "decision_id": str(decision.id),
         "status": "proposed",
@@ -200,6 +207,11 @@ async def create_decision(
         "expires_at": expires_at.isoformat(),
         "created_at": now.isoformat(),
         "ttl_minutes": payload.ttl_minutes,
+        "agent_review": (
+            {"status": "queued", "run_id": None}
+            if settings.multi_agent_review
+            else {"status": "disabled", "run_id": None}
+        ),
     }
 
 

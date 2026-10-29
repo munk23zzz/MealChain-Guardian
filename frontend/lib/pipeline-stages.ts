@@ -1,8 +1,9 @@
-// Metadata sembilan tahap pipeline (dokumen `06-agent-log.md` §2.3).
+// Metadata sepuluh tahap pipeline (dokumen `06-agent-log.md` §2.3).
 //
 // Nama tahap BUKAN karangan UI: ia dipaku `CheckConstraint
-// agent_traces_step_name_check` di backend. Hanya VERIFY dan SUPERVISE yang
-// melibatkan LLM; sisanya tool deterministik. Karena itu kolom `tool` di sini
+// agent_traces_step_name_check` di backend. Tiga tahap melibatkan LLM: VERIFY
+// (menilai konsistensi), ANALYZE (hipotesis sebab + rekomendasi), SUPERVISE
+// (narasi akhir); sisanya tool deterministik. Karena itu kolom `tool` di sini
 // menyebut jenis pelaksananya, bukan nama model.
 
 export interface StageMeta {
@@ -18,7 +19,7 @@ export const PIPELINE_STAGES: ReadonlyArray<StageMeta> = [
     code: "DETECT",
     label: "Mendeteksi kondisi",
     tool: "Tool deterministik (demand.snapshot, price.signal)",
-    detail: "Membaca kebutuhan dan sinyal harga dari database, bukan dari model.",
+    detail: "Membaca kebutuhan dan sinyal harga dari catatan transaksi, bukan dari model.",
   },
   {
     code: "VERIFY",
@@ -44,6 +45,13 @@ export const PIPELINE_STAGES: ReadonlyArray<StageMeta> = [
     label: "Mengoptimalkan",
     tool: "Tool deterministik (rekomendasi engine)",
     detail: "Menyusun usulan penyeimbangan beserta biaya amannya.",
+  },
+  {
+    code: "ANALYZE",
+    label: "Menjelaskan sebab",
+    tool: "Analysis Agent (LLM)",
+    detail:
+      "Model membaca fakta yang sudah dihitung kode (stok, kebutuhan, pemasok terpilih, prakiraan) lalu menyimpulkan sebab kekurangan dan satu rekomendasi. Angka tidak dihitung model; angka yang tidak ada di fakta ditandai di jejak.",
   },
   {
     code: "DECIDE",

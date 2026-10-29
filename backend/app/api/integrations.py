@@ -164,3 +164,30 @@ async def status_integrasi(_user: User = Depends(get_current_user)):
         "categories": list(KATEGORI),
         "components": komponen,
     }
+
+
+@router.get("/integrations/gateway/tool-check")
+async def cek_tool_gateway(_user: User = Depends(get_current_user)):
+    """Bukti `app_uses_gateway`: aplikasi memanggil satu tool LEWAT Gateway.
+
+    Bedanya dengan `/integrations/status`: endpoint ini benar-benar memanggil
+    MCP (initialize → tools/list → tools/call) dan mengembalikan hasil apa adanya.
+    Status `VERIFIED` hanya muncul bila Gateway menjawab dengan data; galat
+    transport dilaporkan `UNVERIFIED` + alasan, bukan 500 dan bukan hijau palsu.
+    """
+    from app.services import agentcore_gateway
+
+    hasil = await agentcore_gateway.panggil_tool(
+        "supply_get",
+        {"location": "Jakarta", "commodity": "beras", "q": "integrations"},
+    )
+    status = str(hasil.get("status") or "UNVERIFIED").upper()
+    return {
+        "checked_at": datetime.now(UTC).isoformat(),
+        # NOT_CONFIGURED = tidak ada panggilan jaringan sama sekali.
+        "probes_run": 0 if status == "NOT_CONFIGURED" else 1,
+        "status": status,
+        "tool": hasil.get("tool"),
+        "data": hasil.get("data"),
+        "detail": hasil.get("alasan"),
+    }

@@ -190,8 +190,10 @@ describe("costFacts — biaya", () => {
     expect(find(rows, "Logistik").value).toBe("—");
   });
 
-  // Fase 7d: jarak pemasok masuk biaya → panel menampilkan pecahannya.
-  it("pecahan angkut (pemasok → SPPG + antar SPPG) tampil dengan km dan label", () => {
+  // Fase 7d dulu menampilkan pecahan angkut sebagai dua baris. Keputusan
+  // pemilik 29 Okt 2026: pecahan itu DIHAPUS dari layar — "Logistik" tetap satu
+  // angka, tanpa baris turunan yang harus dijumlahkan sendiri oleh pembaca.
+  it("pecahan angkut tidak lagi menjadi baris tersendiri", () => {
     const rows = costFacts({
       cost_breakdown: {
         purchase: "13772500",
@@ -204,12 +206,13 @@ describe("costFacts — biaya", () => {
       safe_delivered_cost: "14980976.71",
     });
     expect(find(rows, "Logistik").value).toBe("Rp18.472");
-    expect(find(rows, "Angkut pemasok → SPPG").value).toBe("Rp6.653");
-    expect(find(rows, "Angkut pemasok → SPPG").hint).toBe("45,075 km dari pemasok");
-    expect(find(rows, "Angkut antar SPPG").value).toBe("Rp11.819");
+    expect(rows.map((r) => r.label)).not.toContain("Angkut pemasok → SPPG");
+    expect(rows.map((r) => r.label)).not.toContain("Angkut antar SPPG");
+    // Alasan jarak (km) ikut hilang bersama barisnya — jangan tersisa separuh.
+    expect(rows.map((r) => r.hint ?? "").join(" ")).not.toContain("km");
   });
 
-  it("koordinat pemasok kosong: biayanya 0 tetapi alasannya ditulis, bukan diklaim 0 km", () => {
+  it("alasan koordinat pemasok kosong tidak lagi dicetak di baris biaya", () => {
     const rows = costFacts({
       cost_breakdown: {
         transport_supplier_leg: "0.00",
@@ -218,10 +221,7 @@ describe("costFacts — biaya", () => {
         supplier_leg_reference: "supplier_coordinates_missing",
       },
     });
-    expect(find(rows, "Angkut pemasok → SPPG").value).toBe("Rp0");
-    expect(find(rows, "Angkut pemasok → SPPG").hint).toBe(
-      "jarak tidak diketahui — koordinat pemasok kosong"
-    );
+    expect(rows.map((r) => r.hint ?? "").join(" ")).not.toContain("koordinat pemasok kosong");
   });
 
   it("keputusan lama tanpa pecahan: tidak ada baris angkut tambahan", () => {

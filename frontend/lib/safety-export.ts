@@ -96,14 +96,23 @@ export function safetyExportJson(input: {
     {
       modul: "Keamanan Pangan",
       batch: safetyExportRows(rows),
+      // Setiap batch dihitung TEPAT SEKALI (keadaan terkuat menang: ditahan →
+      // gagal → kedaluwarsa → perlu verifikasi → belum diuji → aman), sama
+      // seperti tile di layar. Sebelumnya berkas ini bisa memuat batch yang
+      // gagal uji sekaligus ditahan, sehingga jumlah kategori melebihi
+      // `batch_diperiksa` (audit 29 Okt 2026). Nama field dibuat eksplisit
+      // supaya auditor tidak membaca `gagal_uji: 0` sebagai "tidak ada batch
+      // gagal" ketika batch itu sebenarnya berstatus lebih kuat (ditahan).
       ringkasan: {
         batch_diperiksa: summary.total,
         aman: summary.safe,
-        gagal: summary.failed,
+        gagal_uji: summary.failed,
+        kedaluwarsa: summary.expired,
         perlu_verifikasi: summary.needsVerification,
         belum_diuji: summary.unchecked,
         ditahan: summary.quarantined,
-        berat_gagal: summary.failedKg === null ? null : formatKg(summary.failedKg),
+        berat_gagal_uji: summary.failedKg === null ? null : formatKg(summary.failedKg),
+        berat_kedaluwarsa: summary.expiredKg === null ? null : formatKg(summary.expiredKg),
         berat_ditahan: summary.quarantinedKg === null ? null : formatKg(summary.quarantinedKg),
       },
       keputusan_keamanan: decisions.rows.map((row) => ({

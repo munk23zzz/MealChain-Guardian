@@ -1,32 +1,36 @@
 "use client";
 
 // Panel "Surplus wilayah lain" — pasangan grafik kecukupan di tab Overview
-// (28 Okt 2026). Grafik di kiri menjawab "lokasi saya cukup atau tidak";
-// panel ini menjawab pertanyaan berikutnya: "kalau kurang, surplusnya ada di
-// mana?".
+// (28 Okt 2026; REDESIGN kolom 29 Okt 2026).
+//
+// Grafik di kiri menjawab "lokasi saya cukup atau tidak"; panel ini menjawab
+// pertanyaan berikutnya: "kalau kurang, surplusnya ada di mana?".
 //
 // Sumber angka HANYA `GET /surplus/regions` (dihitung server, lintas lokasi).
 // Klien tidak boleh menghitungnya dari peta: peta akun SPPG dibatasi cakupan,
 // jadi satu lokasi — dan "daerah lain" akan selalu kosong (Ruling 2026-10-14).
 //
-// Bentuk visual mengikuti bahasa grafik kecukupan (kelas `supply-adequacy` /
-// `sa-*`): kartu, kepala, dan daftar baris yang sama; yang berbeda hanya arti
-// baris (wilayah, bukan komoditas) dan susunan kolomnya.
+// BENTUK (29 Okt 2026): kolom berdiri, bukan baris bertumpuk. Sebelumnya panel
+// ini memakai daftar baris horizontal sementara grafik di sebelahnya memakai
+// kolom vertikal — dua geometri untuk satu pertanyaan menuntut pembaca
+// menerjemahkan dua bahasa. Lebih buruk lagi, lebar batang baris dihitung
+// relatif terhadap wilayah terbesar, sehingga saat hanya ada SATU wilayah
+// batangnya selalu 100% dan tidak menyampaikan apa pun. Kini keduanya memakai
+// kelas `ac-*` yang sama (satu kartu, satu plot, satu garis acuan), dan semua
+// wilayah digambar: wilayah di bawah ambang tampil pucat dengan catatan
+// "di bawah ambang", bukan disembunyikan ke satu kalimat.
 
 import { useEffect, useState, type CSSProperties } from "react";
 
-import { formatClockWib, formatDateTime } from "../lib/datetime";
+import { formatDateTime } from "../lib/datetime";
 import { formatKg } from "../lib/overview-format";
 import {
-  komoditasKeluarga,
-  komoditasTone,
-  regionSharePct,
+  komoditasToneClass,
   regionSurplus,
   regionSurplusReason,
-  sumberRingkas,
-  type RegionSurplusView,
-  type SurplusWilayah,
+  surplusCommoditySlices,
 } from "../lib/surplus-regions";
+import CompositionDonut from "./CompositionDonut";
 
 type Props = {
   /** Respons `GET /surplus/regions` (belum di-parse). */
@@ -43,25 +47,6 @@ type Props = {
   onRetry?: () => void;
 };
 
-function barisAria(wilayah: SurplusWilayah, view: RegionSurplusView): string {
-  const komoditas = wilayah.byCommodity
-    .map((c) => `${c.commodity} ${formatKg(c.surplusKg)}`)
-    .join(", ");
-  const layak =
-    wilayah.layakKg !== null && wilayah.layakKg > 0
-      ? `, layak dialihkan ${formatKg(wilayah.layakKg)}`
-      : "";
-  const ambang =
-    wilayah.layakKg === 0 && view.minKg !== null
-      ? `, seluruh surplusnya di bawah ambang ${formatKg(view.minKg)}`
-      : "";
-  return [
-    `${wilayah.region}: surplus ${formatKg(wilayah.surplusKg)}${layak}${ambang}`,
-    `${wilayah.locations} lokasi sumber (${sumberRingkas(wilayah, 3)})`,
-    komoditas ? `rincian komoditas ${komoditas}` : "rincian komoditas belum tersedia",
-  ].join(". ");
-}
-
 export default function SurplusRegionPanel({
   payload,
   commodities,
@@ -77,14 +62,7 @@ export default function SurplusRegionPanel({
   useEffect(() => setMounted(true), []);
 
   const komoditas = commodities.length ? commodities : view.komoditas;
-  // Kelas warna komoditas: keluarga identitas lebih dulu (telur/ayam/beras/wortel
-  // → amber/rose/biru/violet, sama dengan pil di peta), indeks urutan hanya
-  // cadangan untuk komoditas di luar empat kanonik.
-  const kelasKomoditas = (nama: string) =>
-    `sr-komod-${komoditasKeluarga(nama) ?? komoditasTone(komoditas, nama)}`;
-  const terbesar = view.regions[0]?.surplusKg ?? 0;
   const tanggal = updatedAt ? formatDateTime(new Date(updatedAt).toISOString()) : "—";
-  const jam = updatedAt ? formatClockWib(new Date(updatedAt).toISOString()) : null;
   const asal = view.excludedLocation
     ? `di luar ${view.excludedLocation}`
     : locationName || "SPPG";
@@ -92,11 +70,7 @@ export default function SurplusRegionPanel({
   // benar-benar membuang satu lokasi. Untuk BGN nasional panelnya seluruh
   // jaringan — menulis "daerah lain" di sana akan menyesatkan.
   const judul = view.excludedLocation ? "Surplus wilayah lain" : "Surplus per wilayah";
-  const keteranganHero = view.excludedLocation
-    ? "surplus di daerah lain"
-    : "surplus seluruh jaringan";
   // Sub pendek; rincian sumber dipindah ke title supaya kartu tidak penuh teks.
-  // Tanpa jam: cukup dari mana surplusnya + bahwa angkanya dari server.
   // "dihitung server" adalah penjelasan MEKANISME, bukan bahasa pengguna.
   // Yang dibutuhkan pembaca: angkanya berasal dari data yang tercatat.
   const sub = `${asal} · dari data tercatat`;
@@ -104,10 +78,10 @@ export default function SurplusRegionPanel({
     sourceNote ? `${sourceNote} · ` : ""
   }dihitung ${tanggal}`;
   const catatanLengkap = [
-    "Angka = pasokan tercatat dikurangi kebutuhan pada komoditas yang sama, dijumlahkan per wilayah oleh server (peta akun SPPG hanya memuat lokasi sendiri).",
+    "Angka = pasokan tercatat dikurangi kebutuhan pada komoditas yang sama, dijumlahkan per wilayah (peta hanya memuat lokasi sendiri).",
     "Hanya lokasi yang permintaannya tercatat boleh menyumbang surplus.",
     view.minKg !== null
-      ? `Surplus per lokasi ≥ ${formatKg(view.minKg)} dianggap layak dialihkan.`
+      ? `Surplus per lokasi ≥ ${formatKg(view.minKg)} dianggap layak dialihkan; wilayah yang seluruh surplusnya di bawah ambang digambar pucat.`
       : null,
     view.excludedKg !== null && view.excludedKg > 0
       ? `Surplus ${view.excludedLocation ?? "lokasi Anda"} sendiri (${formatKg(view.excludedKg)}) tidak dihitung di panel ini.`
@@ -122,23 +96,23 @@ export default function SurplusRegionPanel({
   if (loading) {
     return (
       <section
-        className="supply-adequacy sr-panel"
-        aria-label="Surplus wilayah lain"
+        className="adequacy-columns sr-panel"
+        aria-label={judul}
         aria-busy="true"
       >
-        <header className="sa-head">
-          <div className="sa-title">
+        <header className="ac-head">
+          <div className="ac-title">
             <h3>{judul}</h3>
-            <p className="sa-sub">{asal} · memuat wilayah…</p>
+            <p className="ac-sub">{asal} · memuat wilayah…</p>
           </div>
         </header>
-        <div className="sa-skeleton" aria-hidden="true">
+        <div className="ac-skeleton" aria-hidden="true">
           {[0, 1, 2, 3].map((i) => (
-            <div className="sa-skeleton-row sr-skeleton-row" key={i}>
-              <span className="sa-skeleton-name" />
-              <span className="sa-skeleton-track" />
-              <span className="sa-skeleton-gap" />
-            </div>
+            <span
+              className="ac-skeleton-col"
+              key={i}
+              style={{ "--i": i } as CSSProperties}
+            />
           ))}
         </div>
       </section>
@@ -147,15 +121,16 @@ export default function SurplusRegionPanel({
 
   if (error) {
     return (
-      <section className="supply-adequacy sr-panel" aria-label="Surplus wilayah lain">
-        <header className="sa-head">
-          <div className="sa-title">
+      <section className="adequacy-columns sr-panel" aria-label={judul}>
+        <header className="ac-head">
+          <div className="ac-title">
             <h3>{judul}</h3>
-            <p className="sa-sub">{asal}</p>
+            <p className="ac-sub">{asal}</p>
           </div>
         </header>
-        <p className="status-danger sa-error" role="alert">
-          {error} {onRetry && (
+        <p className="status-danger ac-error" role="alert">
+          {error}{" "}
+          {onRetry && (
             <button type="button" onClick={onRetry}>
               Coba lagi
             </button>
@@ -165,147 +140,88 @@ export default function SurplusRegionPanel({
     );
   }
 
+  // Irisan donat = komoditas penyumbang surplus (dijumlahkan antar wilayah).
+  // Angkanya tetap dari server: kg per komoditas apa adanya.
+  const irisan = surplusCommoditySlices(view).map((iris) => {
+    const wilayah = view.regions.find((r) =>
+      r.byCommodity.some((c) => String(c.commodity).toLowerCase() === iris.label.toLowerCase())
+    );
+    return {
+      key: iris.key,
+      label: iris.label,
+      kg: iris.kg,
+      toneClass: iris.toneClass,
+      note: formatKg(iris.kg),
+      aria: `${iris.label} ${formatKg(iris.kg)} surplus (${iris.sharePct}% dari surplus wilayah)${
+        wilayah ? `, wilayah ${wilayah.region}` : ""
+      }`,
+    };
+  });
+  const totalTanpaSatuan = formatKg(
+    irisan.reduce((jumlah, iris) => jumlah + iris.kg, 0)
+  ).replace(/\s*kg$/, "");
+
   return (
     <section
-      className="supply-adequacy sr-panel"
+      className={`adequacy-columns sr-panel${mounted ? " is-mounted" : ""}`}
       aria-labelledby="sr-title"
       data-wilayah={view.regions.length}
       title={catatanLengkap}
     >
-      <header className="sa-head">
-        <div className="sa-title">
-          <h3 id="sr-title">{judul}</h3>
-          <p className="sa-sub" title={subLengkap}>
+      <header className="ac-head">
+        <div className="ac-title">
+          <h3 id="sr-title" title={subLengkap}>
+            {judul}
+          </h3>
+          <p className="ac-sub" title={subLengkap}>
             {sub}
           </p>
         </div>
-        <div className="sa-summary sr-summary" aria-live="polite">
-          <span className="sr-hero" title={keteranganHero}>
-            <strong>{view.totalKg === null ? "—" : formatKg(view.totalKg)}</strong>
-            <em>
-              {view.regions.length} wilayah · dari{" "}
-              {view.sourceLocations ?? view.regions.length} lokasi
-            </em>
-          </span>
-        </div>
+        <span className="ac-count sr-count" aria-live="polite">
+          <strong>{view.totalKg === null ? "—" : formatKg(view.totalKg)}</strong>{" "}
+          {view.regions.length} wilayah
+        </span>
       </header>
 
+      {/* Legenda komoditas sekarang hidup di dalam donat (titik warna + nama +
+          kg). Baris alat tidak lagi dipakai kartu ini, jadi kedua kartu punya
+          urutan identik: kepala → donat → keterangan. */}
+
       {view.kosong ? (
-        <p className="sa-empty">{regionSurplusReason(view.reason)}</p>
+        <p className="ac-empty">{regionSurplusReason(view.reason)}</p>
+      ) : irisan.length ? (
+        // Satu donat, satu warna per komoditas — sama dengan kartu di sebelahnya.
+        // Wilayah asal tetap terbaca di kepala kartu; donat menjawab "surplus ini
+        // terdiri dari komoditas apa".
+        <div className="rc-plot">
+          <CompositionDonut
+            slices={irisan}
+            totalValue={totalTanpaSatuan}
+            totalUnit="kg"
+            aria={`${judul}: ${irisan.map((i) => i.aria).join("; ")}`}
+            caption="irisan = kg surplus · warna = komoditas"
+          />
+          {/* Wilayah tetap disebut walau donat memakai warna komoditas: pembaca
+              masih bisa melihat surplus siapa saja yang dijumlahkan, termasuk
+              yang di bawah ambang kirim. */}
+          <p className="cd-wilayah">
+            {view.regions
+              .map(
+                (wilayah) =>
+                  `${wilayah.region} ${formatKg(wilayah.surplusKg)}${
+                    view.minKg !== null && (wilayah.layakKg ?? 0) <= 0
+                      ? " (di bawah ambang)"
+                      : ""
+                  }`
+              )
+              .join(" · ")}
+          </p>
+        </div>
       ) : (
-        <>
-          {view.layak.length > 0 ? (
-            <ol className="sa-rows">
-              {view.layak.map((wilayah, index) => (
-                <li
-                  key={wilayah.region}
-                  className={`sa-row sa-tone-safe ${
-                    wilayah.byCommodity[0]
-                      ? kelasKomoditas(wilayah.byCommodity[0].commodity)
-                      : "sr-komod-netral"
-                  }`}
-                  style={{ "--i": index } as CSSProperties}
-                >
-                  <div
-                    className="sa-row-btn sa-row-static sr-row-btn"
-                    role="group"
-                    aria-label={barisAria(wilayah, view)}
-                  >
-                    <span className="sa-name">
-                      <span className="sa-commodity">
-                        {wilayah.region}
-                        {index === 0 && <span className="sr-badge">terbesar</span>}
-                      </span>
-                      <span className="sa-stock">
-                        {wilayah.locations} lokasi · {sumberRingkas(wilayah)}
-                      </span>
-                    </span>
-
-                    <span className="sa-track sr-track" aria-hidden="true">
-                      <span className="sa-track-fill">
-                        {wilayah.byCommodity.length > 0 ? (
-                          wilayah.byCommodity.map((c) => (
-                            <span
-                              key={c.commodity}
-                              className={`sa-seg sr-seg ${kelasKomoditas(c.commodity)}`}
-                              style={{
-                                width: `${regionSharePct(c.surplusKg, terbesar)}%`,
-                              }}
-                            />
-                          ))
-                        ) : (
-                          // Wilayah tanpa pecahan komoditas tetap digambar: satu
-                          // batang netral, bukan batang kosong yang terlihat 0.
-                          <span
-                            className="sa-seg sr-seg sr-komod-netral"
-                            style={{
-                              width: `${regionSharePct(wilayah.surplusKg, terbesar)}%`,
-                            }}
-                          />
-                        )}
-                      </span>
-                    </span>
-
-                    <span className="sa-gap sa-gap-ok">
-                      <strong>{formatKg(wilayah.surplusKg)}</strong>
-                      {/* Angka kecil hanya dicetak bila memang BERBEDA: menulis
-                          "3.554,81 kg / 3.554,81 kg layak dialihkan" hanya
-                          mengulang angka besar dengan kalimat tambahan. */}
-                      {wilayah.layakKg !== wilayah.surplusKg && (
-                        <small>
-                          {wilayah.layakKg === null
-                            ? "komposisi layak belum dihitung"
-                            : `${formatKg(wilayah.layakKg)} layak dialihkan`}
-                        </small>
-                      )}
-                    </span>
-                  </div>
-                </li>
-              ))}
-            </ol>
-          ) : (
-            <p className="sa-empty">
-              Surplus hanya di bawah ambang{" "}
-              {view.minKg === null ? "pengiriman" : formatKg(view.minKg)}.
-            </p>
-          )}
-
-          {view.layak[0] && view.layak[0].byCommodity.length > 0 && (
-            // Asal surplus wilayah teratas: pertanyaan lanjutan setelah "di mana"
-            // adalah "dari komoditas apa". Chip ini menjawabnya tanpa tabel baru.
-            <div className="sr-mix">
-              <span className="sr-mix-label" title={`Komoditas penyumbang surplus ${view.layak[0].region}`}>
-                Dari komoditas
-              </span>
-              {view.layak[0].byCommodity.map((c) => (
-                <span className="sr-mix-chip" key={c.commodity}>
-                  <i
-                    className={`sr-dot ${kelasKomoditas(c.commodity)}`}
-                    aria-hidden="true"
-                  />
-                  {c.commodity} {formatKg(c.surplusKg)}
-                </span>
-              ))}
-            </div>
-          )}
-
-          {view.kecil.length > 0 && (
-            // Surplus kecil TIDAK dibuang: ia dikumpulkan satu baris yang
-            // menyebut nama wilayah dan totalnya. Baris 0,5 kg di daftar utama
-            // hanya menghasilkan batang tak terlihat dan mengubur yang penting.
-            <p
-              className="sr-tail"
-              title={view.kecil
-                .map((r) => `${r.region} ${formatKg(r.surplusKg)}`)
-                .join(" · ")}
-            >
-              <strong>Surplus kecil</strong> · {view.kecil.length} wilayah ·{" "}
-              {formatKg(view.kecilKg)}
-            </p>
-          )}
-        </>
+        <p className="ac-empty">
+          Server belum memerinci surplus per komoditas untuk wilayah ini.
+        </p>
       )}
-
     </section>
   );
 }

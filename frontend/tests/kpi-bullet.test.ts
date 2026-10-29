@@ -63,7 +63,7 @@ describe("bulletOf — bar skala sendiri", () => {
   });
 });
 
-describe("KPI_DIRECTION — arah perbaikan ketujuh metrik", () => {
+describe("KPI_DIRECTION — arah perbaikan tujuh metrik", () => {
   it("tujuh metrik punya arah; tidak ada metrik karangan", () => {
     const expected = [
       "Avoidable Food Loss",

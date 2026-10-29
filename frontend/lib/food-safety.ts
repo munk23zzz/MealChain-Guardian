@@ -59,6 +59,64 @@ export function safetyLabel(status: unknown): string {
   return SAFETY_LABEL[key] ?? key.replace(/_/g, " ");
 }
 
+/**
+ * Keadaan operasional satu batch — satu sumbu untuk lencana tabel, chip
+ * saringan, dan angka ringkasan. Sebelumnya ketiganya menjawab pertanyaan yang
+ * sedikit berbeda, sehingga halaman yang sama mencetak "Aman 112" untuk batch
+ * yang masa layaknya sudah lewat (audit 29 Okt 2026).
+ *
+ * Urutan kekuatan (yang pertama menang): ditahan → gagal uji → kedaluwarsa →
+ * perlu verifikasi → belum diuji → aman.
+ */
+export type SafetyState =
+  | "ditahan"
+  | "gagal"
+  | "kedaluwarsa"
+  | "verifikasi"
+  | "belum"
+  | "aman";
+
+export function safetyState(row: SafetyRow): SafetyState {
+  if (row.quarantine === "quarantined") return "ditahan";
+  if (row.tone === "danger") return "gagal";
+  // `hoursLeft` null = tanggal layak tidak tercatat; itu bukan kedaluwarsa.
+  if (row.hoursLeft !== null && row.hoursLeft < 0) return "kedaluwarsa";
+  if (row.tone === "warn") return "verifikasi";
+  if (row.tone === "ok") return "aman";
+  return "belum";
+}
+
+const STATE_LABEL: Record<SafetyState, string> = {
+  ditahan: "Ditahan",
+  gagal: "Gagal uji",
+  kedaluwarsa: "Kedaluwarsa",
+  verifikasi: "Perlu verifikasi",
+  belum: "Belum diuji",
+  aman: "Aman",
+};
+
+/**
+ * Lencana status untuk SATU baris tabel. Batch yang masa layaknya sudah lewat
+ * ditulis "Kedaluwarsa", bukan "Aman" — sebelumnya tabel menulis "Aman" untuk
+ * barang yang tidak boleh dipakai (audit 29 Okt 2026). Karantina tetap punya
+ * lencana sendiri, jadi di sini tidak diubah.
+ */
+export function safetyBadge(row: SafetyRow): { label: string; tone: SafetyTone } {
+  if (safetyState(row) === "kedaluwarsa") return { label: "Kedaluwarsa", tone: "danger" };
+  return { label: row.statusLabel, tone: row.tone };
+}
+
+export function safetyStateLabel(state: SafetyState): string {
+  return STATE_LABEL[state];
+}
+
+export function safetyStateTone(state: SafetyState): SafetyTone {
+  if (state === "gagal" || state === "kedaluwarsa") return "danger";
+  if (state === "verifikasi" || state === "ditahan") return "warn";
+  if (state === "aman") return "ok";
+  return "muted";
+}
+
 export function safetyTone(status: unknown): SafetyTone {
   switch (text(status)?.toLowerCase()) {
     case "pass":
@@ -119,6 +177,15 @@ export function hoursLeft(usableUntil: unknown, now: Date): number | null {
 export function hoursLabel(hours: number | null): string {
   if (hours === null) return DASH;
   const abs = Math.abs(hours);
+  // Di bawah satu jam, pembulatan ke jam berbohong dua kali: 31 menit menjadi
+  // "lewat 1 jam", dan 5 menit juga "lewat 1 jam" (atau "lewat 0 jam").
+  // Satuan menit dipakai apa adanya; nol menit ditulis sebagai "kurang dari
+  // 1 menit", bukan "0 menit".
+  const menit = Math.round(abs * 60);
+  if (menit < 60) {
+    if (menit < 1) return hours >= 0 ? "kurang dari 1 menit lagi" : "lewat kurang dari 1 menit";
+    return hours >= 0 ? `${menit} menit lagi` : `lewat ${menit} menit`;
+  }
   // Pembulatan jam bisa mencapai 24 (mis. 3 hari − 1 menit). Tanpa dibawa ke
   // satuan hari, layar menulis "2 hari 24 jam" — satuan yang tidak pernah
   // dipakai orang.
@@ -225,6 +292,9 @@ export type SafetySummary = {
   failed: number;
   needsVerification: number;
   unchecked: number;
+  /** Batch yang masa layaknya sudah lewat (state `kedaluwarsa`). */
+  expired: number;
+  expiredKg: number | null;
   failedKg: number | null;
   failedLocations: string[];
   /** Batch yang sedang DITAHAN: stoknya ada, tetapi tidak layak dialokasikan. */
@@ -243,26 +313,42 @@ export function safetySummary(batches: unknown): SafetySummary {
  * angka di layar selalu bercerita tentang baris yang benar-benar terlihat.
  */
 export function safetySummaryOfRows(rows: SafetyRow[]): SafetySummary {
-  const failed = rows.filter((row) => row.tone === "danger");
-  const ditahan = rows.filter((row) => row.quarantine === "quarantined");
-  const quarantinedKg = ditahan.reduce<number | null>(
-    (total, row) => (row.kg === null ? total : (total ?? 0) + row.kg),
-    null
-  );
-  const failedKg = failed.reduce<number | null>(
-    (total, row) => (row.kg === null ? total : (total ?? 0) + row.kg),
-    null
-  );
+  // Semua angka dihitung dari SATU keadaan per baris (`safetyState`), sama
+  // dengan chip saringan dan lencana tabel.
+  const berState = new Map<SafetyState, SafetyRow[]>();
+  for (const row of rows) {
+    const state = safetyState(row);
+    const isi = berState.get(state);
+    if (isi) isi.push(row);
+    else berState.set(state, [row]);
+  }
+  const ambil = (state: SafetyState) => berState.get(state) ?? [];
+  const berat = (daftar: SafetyRow[]) =>
+    daftar.reduce<number | null>(
+      (total, row) => (row.kg === null ? total : (total ?? 0) + row.kg),
+      null
+    );
+  const failed = ambil("gagal");
+  const ditahan = ambil("ditahan");
+  const kedaluwarsa = ambil("kedaluwarsa");
+  const quarantinedKg = berat(ditahan);
+  const expiredKg = berat(kedaluwarsa);
+  const failedKg = berat(failed);
   return {
     total: rows.length,
-    // Batch yang ditahan tidak dihitung "aman": secara operasional ia bukan
-    // stok yang boleh dipakai, seberapa pun bagus skor kesegarannya.
-    safe: rows.filter((row) => row.tone === "ok" && row.quarantine !== "quarantined").length,
+    // Batch yang ditahan/kedaluwarsa tidak dihitung "aman": secara operasional
+    // keduanya bukan stok yang boleh dipakai.
+    safe: ambil("aman").length,
     failed: failed.length,
-    needsVerification: rows.filter((row) => row.tone === "warn").length,
-    unchecked: rows.filter((row) => row.tone === "muted").length,
+    needsVerification: ambil("verifikasi").length,
+    unchecked: ambil("belum").length,
+    expired: kedaluwarsa.length,
+    expiredKg,
     failedKg,
-    failedLocations: failed.map((row) => row.location),
+    // Satu lokasi bisa punya beberapa batch gagal. Daftar lokasi yang
+    // mengulang nama ("Jakarta, Jakarta") terbaca seperti dua lokasi berbeda
+    // dan membuat kalimat putusan lebih panjang dari kejadiannya.
+    failedLocations: Array.from(new Set(failed.map((row) => row.location))),
     quarantined: ditahan.length,
     quarantinedKg,
     hasFail: failed.length > 0,
@@ -902,7 +988,14 @@ export function receivingSentence(state: ReceivingState): string {
     return `${state.done} dari ${state.total} titik periksa sudah ditandai — semuanya sesuai.`;
   }
   const sisa = state.total - state.done;
-  return `${state.done} dari ${state.total} titik periksa sudah ditandai — ${sisa} belum diperiksa. Boleh disimpan sebagian.`;
+  // Dok 05 §2: "Tombol simpan tetap mati selama ada butir kosong." Kalimatnya
+  // harus menyebut gerbang yang BENAR-BENAR ada — dulu berbunyi "Boleh disimpan
+  // sebagian" karena tombolnya memang tidak pernah mati. Sekarang tombolnya
+  // mati, jadi kalimatnya menyebut syarat itu, bukan membiarkan petugas menebak
+  // kenapa tombol tidak bereaksi.
+  const syarat =
+    state.total === 1 ? "titiknya" : `kelima titik${state.total === 5 ? "" : ` (${state.total})`}`;
+  return `${state.done} dari ${state.total} titik periksa sudah ditandai — ${sisa} belum diperiksa. Tombol simpan aktif setelah ${syarat} dijawab.`;
 }
 
 /**
@@ -1036,17 +1129,38 @@ export type ReceiptCardRow = {
 /** Saringan daftar batch (redesign 20 Okt 2026): pengguna memilih PRIORITAS,
  *  bukan menggulir 30 baris. "tindakan" = apa pun yang belum beres (gagal,
  *  perlu verifikasi, atau ditahan) — sasaran pertama kepala SPPG. */
-export type SafetyFilter = "semua" | "tindakan" | "gagal" | "verifikasi" | "aman";
+export type SafetyFilter =
+  | "semua"
+  | "tindakan"
+  | "gagal"
+  | "verifikasi"
+  | "aman"
+  // Tiga saringan per kelompok status (redesign 29 Okt 2026, tahap 2): angka
+  // ringkasan kini menjadi tombol, jadi setiap kelompok yang punya angka harus
+  // punya saringan yang namanya sama persis — bukan dipetakan diam-diam ke
+  // "tindakan" yang isinya lebih luas daripada yang dibaca pengguna di tile.
+  | "kedaluwarsa"
+  | "belum"
+  | "ditahan";
 
 export function matchesSafetyFilter(row: SafetyRow, filter: SafetyFilter): boolean {
+  // Semua chip memakai `safetyState` yang sama dengan lencana tabel dan angka
+  // ringkasan, sehingga "chip 19" tidak mungkin lagi berbeda dari "tile 18"
+  // (audit 29 Okt 2026: karantina dihitung dua kali dengan cara berbeda).
+  const state = safetyState(row);
   if (filter === "semua") return true;
-  if (filter === "gagal") return row.tone === "danger";
-  if (filter === "verifikasi") return row.tone === "warn";
-  // "Aman" = boleh dialokasikan. Batch karantina TIDAK masuk meski ujinya
-  // lolos — kalau ikut, chip "Aman 3" di tabel bertabrakan dengan ringkasan
-  // yang menulis "2 aman · 1 ditahan" untuk data yang sama (terukur 29 Okt).
-  if (filter === "aman") return row.tone === "ok" && row.quarantine !== "quarantined";
-  return row.tone === "danger" || row.tone === "warn" || row.quarantine !== "none";
+  if (filter === "gagal") return state === "gagal";
+  if (filter === "verifikasi") return state === "verifikasi";
+  if (filter === "aman") return state === "aman";
+  if (filter === "kedaluwarsa") return state === "kedaluwarsa";
+  if (filter === "belum") return state === "belum";
+  if (filter === "ditahan") return state === "ditahan";
+  return (
+    state === "gagal" ||
+    state === "kedaluwarsa" ||
+    state === "verifikasi" ||
+    state === "ditahan"
+  );
 }
 
 /** Saring berdasarkan keadaan + pencarian lokasi/komoditas (tanpa peduli huruf). */
@@ -1071,6 +1185,9 @@ export function safetyFilterCounts(rows: readonly SafetyRow[]): Record<SafetyFil
     gagal: rows.filter((r) => matchesSafetyFilter(r, "gagal")).length,
     verifikasi: rows.filter((r) => matchesSafetyFilter(r, "verifikasi")).length,
     aman: rows.filter((r) => matchesSafetyFilter(r, "aman")).length,
+    kedaluwarsa: rows.filter((r) => matchesSafetyFilter(r, "kedaluwarsa")).length,
+    belum: rows.filter((r) => matchesSafetyFilter(r, "belum")).length,
+    ditahan: rows.filter((r) => matchesSafetyFilter(r, "ditahan")).length,
   };
 }
 
@@ -1331,7 +1448,13 @@ export function evidenceSummary(rows: readonly EvidenceRow[]): EvidenceSummary {
  * Jumlah kelima angka SELALU = jumlah baris yang diperiksa, jadi pembaca tidak
  * perlu menghitung selisih atau membaca legenda.
  */
-export type SafetyGroupKey = "ditahan" | "gagal" | "verifikasi" | "belum" | "aman";
+export type SafetyGroupKey =
+  | "ditahan"
+  | "gagal"
+  | "kedaluwarsa"
+  | "verifikasi"
+  | "belum"
+  | "aman";
 
 export type SafetyGroup = {
   key: SafetyGroupKey;
@@ -1341,33 +1464,25 @@ export type SafetyGroup = {
 };
 
 export function safetyStatusGroups(rows: SafetyRow[]): SafetyGroup[] {
-  let ditahan = 0;
-  let gagal = 0;
-  let verifikasi = 0;
-  let belum = 0;
-  let aman = 0;
-
-  for (const row of rows) {
-    if (row.quarantine === "quarantined") {
-      ditahan += 1;
-    } else if (row.tone === "danger") {
-      gagal += 1;
-    } else if (row.tone === "warn") {
-      verifikasi += 1;
-    } else if (row.tone === "ok") {
-      aman += 1;
-    } else {
-      // Tone tak dikenal diperlakukan "belum diuji", bukan "aman": tidak ada
-      // dasar untuk menyebutnya lolos.
-      belum += 1;
-    }
-  }
+  const hitung: Record<SafetyState, number> = {
+    aman: 0,
+    gagal: 0,
+    kedaluwarsa: 0,
+    verifikasi: 0,
+    belum: 0,
+    ditahan: 0,
+  };
+  for (const row of rows) hitung[safetyState(row)] += 1;
 
   return [
-    { key: "aman", label: "Aman", value: aman, tone: "ok" },
-    { key: "gagal", label: "Gagal uji", value: gagal, tone: "danger" },
-    { key: "verifikasi", label: "Perlu verifikasi", value: verifikasi, tone: "warn" },
-    { key: "belum", label: "Belum diuji", value: belum, tone: "muted" },
-    { key: "ditahan", label: "Ditahan", value: ditahan, tone: "warn" },
+    { key: "aman", label: "Aman", value: hitung.aman, tone: "ok" },
+    { key: "gagal", label: "Gagal uji", value: hitung.gagal, tone: "danger" },
+    // Kelompok baru (audit 29 Okt 2026): batch yang masa layaknya sudah lewat
+    // tidak boleh lagi bersembunyi di "Aman". Tile-nya hanya dirender bila
+    // memang ada isinya, supaya strip tetap lima angka pada hari biasa.
+    { key: "kedaluwarsa", label: "Kedaluwarsa", value: hitung.kedaluwarsa, tone: "danger" },
+    { key: "verifikasi", label: "Perlu verifikasi", value: hitung.verifikasi, tone: "warn" },
+    { key: "belum", label: "Belum diuji", value: hitung.belum, tone: "muted" },
+    { key: "ditahan", label: "Ditahan", value: hitung.ditahan, tone: "warn" },
   ];
 }

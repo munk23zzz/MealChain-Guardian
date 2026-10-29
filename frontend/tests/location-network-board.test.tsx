@@ -124,7 +124,9 @@ describe("LocationNetworkBoard — halaman gabungan", () => {
   it("lokasi tampil sebagai tabel urut dari yang terparah, bukan deretan chip", () => {
     const html = renderBoard();
     expect(html).toContain('data-testid="location-network-table"');
-    expect(html).toContain('class="location-table"');
+    // L3: tabel ini juga membawa kelas papan sendiri (`network-table`) untuk
+    // mode kartu di layar sempit; kelas dasarnya tetap `location-table`.
+    expect(html).toMatch(/class="location-table network-table"/);
     expect(html).toContain(">Wilayah<");
     expect(html.indexOf("Jakarta")).toBeLessThan(html.indexOf("Cianjur"));
     expect(html.indexOf("Cianjur")).toBeLessThan(html.indexOf("Medan"));
@@ -132,7 +134,8 @@ describe("LocationNetworkBoard — halaman gabungan", () => {
 
   it("baris terpilih terbuka (aria-expanded) dan rinciannya ada di halaman yang sama", () => {
     const html = renderBoard();
-    expect(html).toContain('aria-pressed="true"');
+    // L3: pola disclosure — `aria-expanded`, bukan `aria-pressed`.
+    expect(html).toContain('aria-expanded="true"');
     expect(html).toContain('id="rincian-lokasi"');
     expect(html).toContain('data-testid="supply-demand-panel"');
     expect(html).toContain("2.150 kg");
@@ -143,13 +146,13 @@ describe("LocationNetworkBoard — halaman gabungan", () => {
 
   it("baris lain tetap tertutup supaya hanya satu rincian tampil", () => {
     const html = renderBoard();
-    expect((html.match(/aria-pressed="true"/g) ?? []).length).toBe(1);
-    expect((html.match(/aria-pressed="false"/g) ?? []).length).toBe(LOCATIONS.length - 1);
+    expect((html.match(/aria-expanded="true"/g) ?? []).length).toBe(1);
+    expect((html.match(/aria-expanded="false"/g) ?? []).length).toBe(LOCATIONS.length - 1);
   });
 
   it("tanpa pilihan, semua baris tertutup", () => {
     const html = renderBoard({ selected: null });
-    expect(html).not.toContain('aria-pressed="true"');
+    expect(html).not.toContain('aria-expanded="true"');
     expect(html).not.toContain('id="rincian-lokasi"');
   });
 

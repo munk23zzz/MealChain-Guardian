@@ -29,7 +29,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 from fastapi import HTTPException
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.freshness import (
@@ -45,6 +45,7 @@ from app.models import (
     DecisionEvidence,
     LedgerBlock,
 )
+from app.models.decisions import AgentTrace
 
 
 def _id(value: Any) -> str | None:
@@ -173,11 +174,119 @@ async def _fakta_ledger(db: AsyncSession, decision: Decision) -> dict[str, Any]:
         )
         .all()
     )
+    # Jumlah blok SELURUH registry: narasi menyebut "ledger valid (2.571 blok)",
+    # dan angka itu hanya sah bila ada di fakta.
+    total = (
+        await db.execute(select(func.count()).select_from(LedgerBlock))
+    ).scalar_one()
     return {
         "count": len(rows),
+        "registry_total": int(total or 0),
         "block_ids": sorted(str(row[0]) for row in rows),
         "actions": sorted({str(row[1]) for row in rows}),
     }
+
+
+#: Kunci yang memuat KALIMAT model, bukan besaran hasil kode. Dibuang sebelum
+#: fakta putaran dipakai sebagai himpunan angka bersitasi; memasukkan teks model
+#: ke sana sama saja membiarkan model mengutip karangannya sendiri.
+_KUNCI_TEKS = frozenset(
+    {
+        "reasoning",
+        "summary",
+        "narrative",
+        "narration",
+        "rationale",
+        "catatan",
+        "warnings",
+        "warning_count",
+        "error",
+        "note",
+        "decisions",
+    }
+)
+
+
+def _tanpa_teks_model(nilai: Any) -> Any:
+    """Buang kalimat model, sisakan angka/status hasil kode (rekursif)."""
+    if isinstance(nilai, dict):
+        return {
+            kunci: _tanpa_teks_model(isi)
+            for kunci, isi in nilai.items()
+            if kunci not in _KUNCI_TEKS
+        }
+    if isinstance(nilai, list):
+        return [_tanpa_teks_model(isi) for isi in nilai]
+    return nilai
+
+
+async def _fakta_putaran(db: AsyncSession, decision: Decision) -> list[dict[str, Any]]:
+    """Besaran yang DIHITUNG KODE selama putaran ini (tanpa kalimat model).
+
+    Kenapa ada (29 Okt 2026): narasi supervisor mencetak "harga deviasi -1,92%
+    ... 3 rute OSRM ... jarak 23,4 km/20,8 menit ... ledger 2.571 blok". Semua
+    angka itu lahir dari kode -- respons `/price/deviation`, kolom `road_routes`,
+    dan jumlah blok ledger -- tetapi tidak satu pun ada di fakta audit, sehingga
+    cek `angka_bersitasi` menandai narasi SEHAT sebagai tanpa sumber dan verdict
+    jatuh ke `flagged` (kartu verifier "Ditinjau" pada putaran yang semua worker
+    `ok`). Yang dimasukkan hanya `agent_traces.output_summary` setelah kalimat
+    model dibuang: `reasoning.rationale`, `summary`, `warnings` tidak ikut.
+    """
+    rows = (
+        await db.execute(
+            select(AgentTrace.step_name, AgentTrace.output_summary).where(
+                AgentTrace.decision_id == decision.id
+            )
+        )
+    ).all()
+    hasil: list[dict[str, Any]] = []
+    for step, isi in rows:
+        bersih = _tanpa_teks_model(isi)
+        if not isinstance(bersih, dict) or not bersih:
+            continue
+        hasil.append({"step": step, **bersih})
+    return hasil
+
+
+async def _fakta_neraca(db: AsyncSession, decision: Decision) -> dict[str, Any] | None:
+    """Pasokan/kebutuhan/celah yang MENJADI DASAR keputusan ini.
+
+    Kenapa ada (29 Okt 2026): narasi supervisor menyebut "kekurangan 281,41 kg
+    (pasokan 1.232,83 vs kebutuhan 1.514,24)", tetapi angka itu hanya ada di
+    langkah `DETECT` putaran -- tidak di fakta audit maupun approval-summary.
+    Cek `angka_bersitasi` lalu menandai narasi itu sebagai angka tanpa sumber
+    dan verdict jatuh ke `flagged`, sehingga keputusan demo tidak bisa disetujui
+    walau audit model sendiri menyatakan CONSISTENT.
+
+    Sumbernya baris `agent_traces` langkah `DETECT` milik keputusan ini: angka
+    yang ditulis pipeline deterministik, bukan kalimat model. Baris `DETECT`
+    milik WORKER (yang membawa `facts`) sengaja dilewati -- memasukkan teks
+    model ke himpunan angka bersitasi akan membuat model boleh mengutip
+    karangannya sendiri.
+    """
+    rows = (
+        await db.execute(
+            select(AgentTrace.output_summary).where(
+                AgentTrace.decision_id == decision.id,
+                AgentTrace.step_name == "DETECT",
+            )
+        )
+    ).scalars().all()
+    for isi in rows:
+        if not isinstance(isi, dict):
+            continue
+        if isi.get("facts") is not None:  # baris worker, bukan pipeline
+            continue
+        if isi.get("gap_kg") is None:
+            continue
+        return {
+            "supply_kg": _angka(isi.get("supply_kg")),
+            "demand_kg": _angka(isi.get("demand_kg")),
+            "gap_kg": _angka(isi.get("gap_kg")),
+            "suppliers_total": isi.get("suppliers_total"),
+            "sumber": "agent_traces:DETECT",
+        }
+    return None
 
 
 async def build_audit_facts(db: AsyncSession, decision: Decision) -> dict[str, Any]:
@@ -211,6 +320,13 @@ async def build_audit_facts(db: AsyncSession, decision: Decision) -> dict[str, A
         "exclusion": exclusion,
         # Fakta #5: blok ledger yang menunjuk keputusan ini.
         "ledger": ledger,
+        # Fakta #6: neraca pasokan/kebutuhan yang mendasari keputusan. Angka
+        # ini yang dikutip narasi ("kekurangan 281,41 kg"); tanpa dimasukkan
+        # di sini, cek `angka_bersitasi` menandainya tanpa sumber.
+        "balance": await _fakta_neraca(db, decision),
+        # Fakta #7: besaran hasil kode sepanjang putaran (jarak/durasi rute,
+        # deviasi harga, jumlah bukti) -- tanpa kalimat model.
+        "run_facts": await _fakta_putaran(db, decision),
         # Himpunan id yang boleh dipakai verifier sebagai sitasi.
         "citations": {
             "decision_id": str(decision.id),

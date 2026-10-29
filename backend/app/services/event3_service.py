@@ -29,6 +29,7 @@ from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.evidence_consistency import temperature_consistency
+from app.core.policy_store import profil_untuk_komoditas
 from app.core.safety import evaluate_safety
 from app.models import (
     Batch,
@@ -148,12 +149,25 @@ async def run_safety_disruption_event(
 
     # Commit #1 — evaluasi deterministik + persist status FAIL/otherwise.
     raw_log = batch.temperature_log or []
-    temp_result = evaluate_safety(
-        raw_log,
-        safe_min_c=0.0,
-        safe_max_c=8.0,
-        max_excursion_minutes=30.0,
-    )
+    # Audit 2026-10-29 (AUD-009): dulu semua komoditas dinilai dengan rentang
+    # rantai dingin 0–8 °C, sehingga beras ambient (mis. 8 sampel @9,5 °C)
+    # tersimpan `fail` padahal profilnya tidak mengukur excursion. Profil
+    # komoditas sekarang dipakai — sumber yang sama dengan `/safety/evaluate`.
+    try:
+        policy, _asal_profil = await profil_untuk_komoditas(db, batch.commodity_id)
+    except KeyError:
+        policy = None
+    if policy is not None:
+        temp_result = evaluate_safety(raw_log, policy=policy)
+    else:
+        # Fallback lama hanya untuk batch tanpa profil (data lama/komoditas baru);
+        # nilainya sama dengan bawaan profil, jadi tidak ada ambang baru.
+        temp_result = evaluate_safety(
+            raw_log,
+            safe_min_c=0.0,
+            safe_max_c=8.0,
+            max_excursion_minutes=30.0,
+        )
     batch.safety_status = temp_result["safety_status"]
     await db.commit()
 

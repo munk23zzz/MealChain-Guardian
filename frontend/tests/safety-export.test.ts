@@ -102,7 +102,16 @@ describe("safetyExportJson — satu berkas untuk audit", () => {
       jumlah: "400 kg",
       status_keamanan: "Aman",
     });
-    expect(parsed.ringkasan).toMatchObject({ batch_diperiksa: 2, gagal: 1, ditahan: 1 });
+    // Satu batch dihitung sekali: b2 gagal uji SEKALIGUS ditahan, dan keadaan
+    // terkuat (ditahan) yang dipakai — sama seperti tile di layar. Dulu berkas
+    // ini menulis gagal 1 + ditahan 1 untuk dua batch, sehingga kategori
+    // melebihi `batch_diperiksa` (audit 29 Okt 2026).
+    expect(parsed.ringkasan).toMatchObject({
+      batch_diperiksa: 2,
+      aman: 1,
+      gagal_uji: 0,
+      ditahan: 1,
+    });
     expect(parsed.keputusan_keamanan).toHaveLength(1);
     expect(parsed.keputusan_keamanan[0]).toMatchObject({
       id: "d1",
@@ -111,16 +120,34 @@ describe("safetyExportJson — satu berkas untuk audit", () => {
     });
   });
 
-  it("berat gagal yang tidak terbaca tidak dijumlahkan menjadi 0", () => {
+  it("berat per keadaan: ditahan dan gagal dilaporkan terpisah", () => {
     const parsed = JSON.parse(safetyExportJson({ rows, summary, decisions }));
-    // b2 gagal dan beratnya terbaca (120 kg) → total dijumlahkan.
-    expect(parsed.ringkasan.berat_gagal).toBe("120 kg");
-    // Berat yang tidak terbaca (`failedKg === null`) tetap null di berkas —
-    // bukan "0 kg": nol berarti "tidak ada berat", padahal beratnya tak terbaca.
-    const parsed2 = JSON.parse(
-      safetyExportJson({ rows, summary: { ...summary, failedKg: null }, decisions })
+    // b2 ditahan → beratnya masuk `berat_ditahan`, bukan `berat_gagal_uji`,
+    // karena ia tidak lagi dihitung sebagai baris keadaan "gagal".
+    expect(parsed.ringkasan.berat_ditahan).toBe("120 kg");
+    expect(parsed.ringkasan.berat_gagal_uji).toBe(null);
+
+    // Batch yang gagal tanpa ditahan tetap menimbulkan berat gagal.
+    const tanpaKarantina = safetyRows(
+      [BATCHES[0], { ...BATCHES[1], quarantine_status: null }],
+      NOW
     );
-    expect(parsed2.ringkasan.berat_gagal).toBe(null);
+    const ringkasFail = safetySummaryOfRows(tanpaKarantina);
+    const berkas = JSON.parse(
+      safetyExportJson({ rows: tanpaKarantina, summary: ringkasFail, decisions })
+    );
+    expect(berkas.ringkasan.berat_gagal_uji).toBe("120 kg");
+
+    // Berat yang tidak terbaca tetap null di berkas — bukan "0 kg": nol berarti
+    // "tidak ada berat", padahal beratnya tak terbaca.
+    const berkasNull = JSON.parse(
+      safetyExportJson({
+        rows: tanpaKarantina,
+        summary: { ...ringkasFail, failedKg: null },
+        decisions,
+      })
+    );
+    expect(berkasNull.ringkasan.berat_gagal_uji).toBe(null);
   });
 
   it("JSON valid dan deterministik (tanpa cap waktu saat dibangun)", () => {

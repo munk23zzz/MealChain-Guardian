@@ -19,7 +19,9 @@ menambah tes yang membuktikan provider benar-benar menjawab.
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException
+from datetime import datetime, timezone
+
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -27,8 +29,17 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.ai_providers.model_registry import get_agent_chain
 from app.api.auth import get_current_user
 from app.api.dependencies import get_db
-from app.models import Decision, User
+from app.core.scope import apply_location_scope
+from app.models import (
+    Batch,
+    BatchReceipt,
+    Commodity,
+    Decision,
+    Location,
+    User,
+)
 from app.services.ledger_service import verify_chain
+from app.services.supervisor_answers import ringkas_keputusan_per_status
 
 router = APIRouter(prefix="/agent", tags=["agent"])
 
@@ -147,30 +158,19 @@ async def supervisor_ask(
         }
 
     if any(k in tanya for k in ("menunggu", "pending", "persetujuan", "approval")):
+        # Semua status dihitung (audit 29 Okt 2026): versi sebelumnya menyaring
+        # empat status saja, sehingga "Keputusan per status" menjumlah ke 43 dari
+        # total 49 dan pembaca menyimpulkan sistemnya salah hitung.
         rows = (
-            await db.execute(
-                select(Decision.status, func.count())
-                .where(
-                    Decision.status.in_(
-                        ["pending_approval", "approved", "executed", "rejected"]
-                    )
-                )
-                .group_by(Decision.status)
-            )
+            await db.execute(select(Decision.status, func.count()).group_by(Decision.status))
         ).all()
-        hitung = {status: jumlah for status, jumlah in rows}
+        ringkas = ringkas_keputusan_per_status({status: jumlah for status, jumlah in rows})
         return {
             "mode": "deterministic",
             "tool": "GET /decisions (agregasi status)",
             "writes": False,
-            "answer": (
-                "Keputusan per status: "
-                + ", ".join(f"{k} {v}" for k, v in sorted(hitung.items()))
-                + "."
-                if hitung
-                else "Belum ada keputusan tercatat."
-            ),
-            "data": hitung,
+            "answer": ringkas["answer"],
+            "data": ringkas["data"]["per_status"],
         }
 
     return {
@@ -182,4 +182,106 @@ async def supervisor_ask(
             "Yang bisa ditanyakan: " + " · ".join(CONTOH_PERTANYAAN)
         ),
         "data": None,
+    }
+
+
+@router.get("/feedback/rejections")
+async def feedback_rejections(
+    limit: int = Query(
+        default=20,
+        ge=1,
+        le=100,
+        description="Jumlah baris terbaru per jenis (keputusan, penerimaan).",
+    ),
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> dict:
+    """Riwayat PENOLAKAN yang boleh dibaca langkah LEARN agent (baca-saja).
+
+    Kenapa ada (29 Okt 2026): data demo memuat kasus ditolak — penerimaan ayam
+    300 kg yang ditolak saat serah terima dan 10 keputusan `rejected` di tiga
+    kota — tetapi tidak ada satu pun jalan baca untuk agent. Gateway tool agent
+    hanya punya tool pasokan/harga/rute/pengajuan, jadi LEARN hanya bisa
+    mencatat penolakan yang kebetulan sedang diproses, bukan membaca pola yang
+    sudah ada.
+
+    Endpoint ini TIDAK menulis apa pun (`writes: false`) dan memakai cakupan
+    lokasi yang sama dengan feed keputusan: peran SPPG melihat kotanya sendiri,
+    `bgn_monitor` melihat nasional. `sumber` disebut apa adanya supaya pembaca
+    bisa memeriksa sendiri tabel yang dibaca.
+    """
+    komoditas: dict = {}
+    for cid, nama in (await db.execute(select(Commodity.id, Commodity.name))).all():
+        komoditas[cid] = nama
+    lokasi: dict = {}
+    for lid, nama in (await db.execute(select(Location.id, Location.name))).all():
+        lokasi[lid] = nama
+
+    stmt_keputusan = (
+        select(Decision)
+        .where(Decision.status == "rejected")
+        .order_by(Decision.created_at.desc(), Decision.id.desc())
+        .limit(limit)
+    )
+    stmt_keputusan = apply_location_scope(
+        stmt_keputusan, Decision.target_location_id, user
+    )
+    keputusan = [
+        {
+            "decision_id": str(row.id),
+            "decision_type": row.decision_type,
+            "status": row.status,
+            "iteration": row.iteration or 1,
+            "rejection_reason": row.rejection_reason,
+            "komoditas": komoditas.get(row.commodity_id),
+            "lokasi_tujuan": lokasi.get(row.target_location_id),
+            "created_at": row.created_at.isoformat() if row.created_at else None,
+            "expires_at": row.expires_at.isoformat() if row.expires_at else None,
+        }
+        for row in (await db.scalars(stmt_keputusan)).all()
+    ]
+
+    stmt_penerimaan = (
+        select(BatchReceipt, Batch)
+        .join(Batch, Batch.id == BatchReceipt.batch_id)
+        .where(BatchReceipt.status == "ditolak")
+        .order_by(
+            BatchReceipt.reviewed_at.desc().nullslast(), BatchReceipt.id.desc()
+        )
+        .limit(limit)
+    )
+    stmt_penerimaan = apply_location_scope(stmt_penerimaan, Batch.location_id, user)
+    penerimaan = []
+    for catatan, batch in (await db.execute(stmt_penerimaan)).all():
+        penerimaan.append(
+            {
+                "receipt_id": str(catatan.id),
+                "batch_id": str(batch.id),
+                "status": catatan.status,
+                "komoditas": komoditas.get(batch.commodity_id),
+                "lokasi": lokasi.get(batch.location_id),
+                "ordered_kg": (
+                    float(catatan.ordered_kg) if catatan.ordered_kg is not None else None
+                ),
+                "accepted_kg": (
+                    float(catatan.accepted_kg) if catatan.accepted_kg is not None else None
+                ),
+                # Ditolak = tidak masuk stok: kolom "diterima" sengaja kosong.
+                "received_kg": None,
+                "review_note": catatan.review_note,
+                "reviewed_at": (
+                    catatan.reviewed_at.isoformat() if catatan.reviewed_at else None
+                ),
+            }
+        )
+
+    cakupan_lokasi = getattr(user, "location_id", None)
+    return {
+        "writes": False,
+        "sumber": ["decisions(status='rejected')", "batch_receipts(status='ditolak')"],
+        "cakupan": lokasi.get(cakupan_lokasi) or "nasional",
+        "dihitung_pada": datetime.now(timezone.utc).isoformat(),
+        "jumlah": {"keputusan": len(keputusan), "penerimaan": len(penerimaan)},
+        "keputusan": keputusan,
+        "penerimaan": penerimaan,
     }

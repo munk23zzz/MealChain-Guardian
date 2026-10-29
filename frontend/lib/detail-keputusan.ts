@@ -191,11 +191,26 @@ export function tigaLapisBiaya(
       ],
     },
     {
-      judul: "Tambahan karena risiko",
-      nilai: rupiah(jumlah(susut, segar, aman)),
-      rumus: perKg(jumlah(susut, segar, aman)),
+      // Susut BUKAN risiko (konsep Performance & Audit, 29 Okt 2026): ia biaya
+      // yang tumbuh karena barang menunggu di gudang. Dipisah agar tidak
+      // tercampur dengan penalti mutu/keamanan yang sifatnya lain.
+      judul: "Susut selama disimpan",
+      nilai: rupiah(susut),
+      rumus: perKg(susut),
       baris: [
-        { label: "Perkiraan susut", nilai: rupiah(susut), rumus: null },
+        {
+          label: "Susut gudang",
+          nilai: rupiah(susut),
+          // Rumus waktu, bukan kesegaran.
+          rumus: "harga beli × laju susut × (hari simpan ÷ umur simpan)",
+        },
+      ],
+    },
+    {
+      judul: "Tambahan karena risiko",
+      nilai: rupiah(jumlah(segar, aman)),
+      rumus: perKg(jumlah(segar, aman)),
+      baris: [
         { label: "Risiko kesegaran", nilai: rupiah(segar), rumus: null },
         { label: "Penalti keamanan", nilai: rupiah(aman), rumus: null },
       ],

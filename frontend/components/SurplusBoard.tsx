@@ -17,6 +17,7 @@ import {
 } from "../lib/surplus";
 import { formatKg } from "../lib/overview-format";
 import { LoadingState } from "./LoadingState";
+import { klikBaris } from "../lib/baris-klik";
 import ScrollHint from "./ScrollHint";
 
 export default function SurplusBoard({
@@ -242,7 +243,17 @@ export default function SurplusBoard({
               </thead>
               <tbody>
                 {rows.map((row) => (
-                  <tr key={`${row.from}-${row.to}-${row.kg}`}>
+                  <tr
+                    key={`${row.from}-${row.to}-${row.kg}`}
+                    /* Klik baris = buka lokasi tujuan di peta (29 Okt 2026),
+                       sama dengan tombol "Lihat di peta". */
+                    data-klik-baris={onOpenLocation ? "true" : undefined}
+                    onClick={
+                      onOpenLocation
+                        ? (e) => klikBaris(e, () => onOpenLocation(row.to))
+                        : undefined
+                    }
+                  >
                     <td>{row.from}</td>
                     <td>{row.to}</td>
                     <td className="num">{formatKg(row.kg)}</td>

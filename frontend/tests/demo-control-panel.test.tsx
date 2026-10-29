@@ -4,13 +4,14 @@
 // - tab ini hanya tiga blok (siapkan data → jalankan agent → bukti), TANPA
 //   skenario Event 1/2/3;
 // - tombol agent hanya hidup untuk kepala SPPG yang punya token;
-// - blok bukti menyebut langkah/provider yang benar-benar tercatat, dan TIDAK
-//   membocorkan alamat runtime internal saat review 7-worker mati.
+// - blok ketiga adalah LOG PROSES PENGAMBILAN DATA (bukan sembilan kartu):
+//   barisnya langkah yang tercatat, tanpa membocorkan alamat runtime internal
+//   saat review 7-worker mati (29 Okt 2026, permintaan pemilik).
 
 import { describe, expect, it } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 
-import DemoControlPanel, { DemoProof } from "../components/DemoControlPanel";
+import DemoControlPanel, { DemoRunLog } from "../components/DemoControlPanel";
 import type { AgentRun } from "../lib/demo-agent";
 
 const RUN: AgentRun = {
@@ -71,11 +72,11 @@ function render(props: Partial<React.ComponentProps<typeof DemoControlPanel>> = 
 }
 
 describe("DemoControlPanel — tiga blok, tanpa event", () => {
-  it("menyusun blok dalam urutan muat demo → jalankan agent → bukti", () => {
+  it("menyusun blok dalam urutan muat demo → jalankan agent → log proses", () => {
     const html = render();
     const i1 = html.indexOf("Muat demo");
     const i2 = html.indexOf("Jalankan agent");
-    const i3 = html.indexOf("Bukti agent");
+    const i3 = html.indexOf("Log proses pengambilan data");
     expect(i1).toBeGreaterThan(-1);
     expect(i2).toBeGreaterThan(i1);
     expect(i3).toBeGreaterThan(i2);
@@ -133,105 +134,103 @@ describe("DemoControlPanel — tiga blok, tanpa event", () => {
   });
 });
 
-describe("DemoProof — bukti dari payload, bukan karangan", () => {
-  it("sembilan kartu agen: tujuh worker, supervisor, verifier", () => {
-    const html = renderToStaticMarkup(<DemoProof run={RUN} />);
-    expect(html.match(/class="dc-agent"/g)).toHaveLength(9);
-    expect(html).toContain('aria-label="Sembilan agen review"');
-    expect(html).toContain('data-state="ok"');
-    expect(html).toContain('data-state="limited"');
-    expect(html).toContain('data-state="failed"');
-    expect(html).toContain('data-state="idle"');
-    expect(html).toContain("Tidak dijalankan");
-    expect(html).toContain("2 peringatan");
-    // Supervisor & verifier adalah kartu, bukan kalimat di luar grid.
-    expect(html).toContain(">Supervisor</h3>");
-    expect(html).toContain("Narasi selesai");
-    expect(html).toContain("fallback_1:sap_ai_core");
-    // Nama agen ENGLISH (peran sistem multi-agen), bukan terjemahan; label
-    // Indonesia dari payload tidak lagi dipakai kartu.
-    expect(html).toContain(">Verifier</h3>");
-    expect(html).not.toContain(">Verifikasi</h3>");
-    expect(html).toContain("Audit sepakat: 8 cek lulus.");
-    // Teks jumlah ikut sembilan.
-    expect(html).not.toContain("Tujuh agen");
-    expect(html).not.toContain("kedelapan");
-    expect(html).not.toContain("Review 8 agen");
+describe("DemoRunLog — log proses dari jejak, bukan kartu karangan", () => {
+  // Perubahan kontrak 29 Okt 2026 (permintaan pemilik): blok "Bukti agent"
+  // DIHAPUS. Sembilan kartu "Selesai · Durasi · Peringatan", kartu Supervisor
+  // + narasinya, dan catatan audit Verifier tidak dicetak lagi; penggantinya
+  // satu terminal "Log proses pengambilan data" yang barisnya dibaca dari
+  // jejak putaran (langkah + sumber data).
+  it("mencetak terminal log, bukan sembilan kartu agen", () => {
+    const html = renderToStaticMarkup(<DemoRunLog run={RUN} />);
+    expect(html).toContain('aria-label="Log proses pengambilan data"');
+    expect(html).toContain('role="log"');
+    // Kartu, grid, dan judul-judul lamanya hilang.
+    expect(html).not.toContain('class="dc-agent"');
+    expect(html).not.toContain('aria-label="Sembilan agen review"');
+    expect(html).not.toContain(">Supervisor</h3>");
+    expect(html).not.toContain(">Verifier</h3>");
+    expect(html).not.toContain("Narasi selesai");
+    expect(html).not.toContain("Durasi");
   });
 
-  it("putaran sedang berjalan → kesembilan kartu Berjalan, bukan hasil lama", () => {
-    const html = renderToStaticMarkup(<DemoProof run={RUN} running />);
-    expect(html.match(/class="dc-agent" data-state="running"/g)).toHaveLength(9);
-    expect(html).toContain("Putaran baru sedang berjalan");
-    expect(html).toContain("kesembilan kartu");
-    expect(html).not.toContain("Selesai");
+  it("setiap langkah tersimpan menjadi satu baris log", () => {
+    const html = renderToStaticMarkup(<DemoRunLog run={RUN} />);
+    for (const nama of ["DETECT", "VERIFY", "PREDICT", "OPTIMIZE", "DECIDE", "SUPERVISE"]) {
+      expect(html).toContain(nama);
+    }
+    expect(html).toContain("6 langkah");
+    // Sumber data yang dipanggil server tetap disebut per bagian.
+    expect(html).toContain('data-sumber="supply.get"');
+    expect(html).toContain('data-sumber="verifier.rest"');
   });
 
-  // Arah pemilik 21 Okt: daftar langkah cukup nama langkah/agent. Slug alat
-  // (mis. `evaluate_safety`, `supervisor.narration`) tidak lagi dicetak — dulu
-  // ia tampil di sebelah nama dan terbaca sebagai istilah internal.
-  it("hanya nama langkah yang tercatat, tanpa slug alat", () => {
-    const html = renderToStaticMarkup(<DemoProof run={RUN} />);
-    expect(html).toContain("DETECT");
-    expect(html).not.toContain("supervisor.narration");
-    expect(html).not.toContain("supply.get+demand.get");
-    expect(html).not.toContain("dc-step-tool");
-    // Enam langkah pada fixture, bukan tujuh yang "seharusnya" ada.
-    expect((html.match(/class="dc-step"/g) ?? []).length).toBe(6);
+  it("mengatakan bahwa baris dibaca dari jejak tersimpan (tanpa jam karangan)", () => {
+    const html = renderToStaticMarkup(<DemoRunLog run={RUN} />);
+    expect(html).toContain("Dibaca dari jejak putaran tersimpan");
+    // `agent_traces` tidak menyimpan jam per langkah: tidak ada "--.--.--".
+    expect(html).not.toContain("--.--.--");
   });
 
-  it("menampilkan id keputusan (potongan), kuantitas, dan provider yang menjawab", () => {
-    const html = renderToStaticMarkup(<DemoProof run={RUN} />);
-    expect(html).toContain("590ce354");
-    expect(html).toContain("1.257,14 kg");
-    expect(html).toContain("fallback_1:sap_ai_core");
-    expect(html).toContain("Cianjur → Jakarta");
-  });
-
-  it("review 7-worker yang mati dinyatakan tanpa membocorkan alamat runtime", () => {
-    // Tanpa baris agen tersimpan, kalimat review runtime yang mati tampil.
+  it("putaran berjalan: baris hidup dipakai apa adanya (jam + ringkasan)", () => {
     const html = renderToStaticMarkup(
-      <DemoProof run={{ ...RUN, agents: [], agents_run_id: null }} />
+      <DemoRunLog
+        run={RUN}
+        running
+        langkahHidup={[
+          {
+            step: "DETECT",
+            tool: "supply.get+demand.get",
+            ringkas: "supply_kg=780 · gap_kg=780",
+            at: "2026-10-29T03:21:04Z",
+          },
+        ]}
+      />,
     );
-    expect(html).toContain("tidak terjangkau");
+    expect(html).toContain("10.21.04");
+    expect(html).toContain("gap_kg=780");
+    expect(html).toContain(">live<");
+    // Selama putaran, baris tersimpan belum dipakai (itu hasil putaran lama).
+    expect(html).not.toContain("Dibaca dari jejak putaran tersimpan");
+    expect(html).not.toContain('class="dc-agent"');
+  });
+
+  it("narasi supervisor dan audit verifier tidak lagi dicetak", () => {
+    const html = renderToStaticMarkup(<DemoRunLog run={RUN} />);
+    expect(html).not.toContain("Ringkasan keputusan distribusi.");
+    expect(html).not.toContain("dc-narration");
+    expect(html).not.toContain("Audit sepakat");
+    expect(html).toContain("Buka Agent Log");
+  });
+
+  it("review 7-worker yang mati tidak membocorkan alamat runtime", () => {
+    const html = renderToStaticMarkup(
+      <DemoRunLog run={{ ...RUN, agents: [], agents_run_id: null }} />,
+    );
     expect(html).not.toContain("trycloudflare");
     expect(html).not.toContain("AgentApiError");
   });
 
-  it("daftar langkah pipeline dilipat, isinya tetap ada di DOM", () => {
-    const html = renderToStaticMarkup(<DemoProof run={RUN} />);
-    expect(html).toContain('<details class="dc-steps-fold">');
-    expect(html).not.toContain('<details class="dc-steps-fold" open');
-    expect(html).toContain("Langkah pipeline");
-    expect(html).toContain('class="dc-steps"');
-    // Enam langkah di fixture tetap dirender walau lipatan tertutup.
-    expect(html.match(/class="dc-step"/g)).toHaveLength(6);
-  });
-
-  it("narasi supervisor dilipat (details), bukan memenuhi kartu", () => {
-    const html = renderToStaticMarkup(<DemoProof run={RUN} />);
-    expect(html).toContain('<details class="dc-narration">');
-    expect(html).not.toContain('<details class="dc-narration" open');
-  });
-
-  // Arah pemilik 21 Okt: judul lipatan cukup "Hasil supervisor". Keterangan
-  // "apa adanya dari model" adalah catatan internal, bukan bahasa layar.
-  it("lipatan narasi berlabel \"Hasil supervisor\", tanpa catatan internal", () => {
-    const html = renderToStaticMarkup(<DemoProof run={RUN} />);
-    expect(html).toContain("Hasil supervisor");
-    expect(html).not.toContain("apa adanya dari model");
-  });
-
-  it("tanpa narasi, lipatan tidak dirender sama sekali", () => {
+  it("tanpa langkah sama sekali: terminal jujur kosong, tanpa baris karangan", () => {
     const html = renderToStaticMarkup(
-      <DemoProof run={{ ...RUN, supervisor: { status: "unavailable" } }} />
+      <DemoRunLog run={{ ...RUN, steps: [] }} />,
     );
-    expect(html).not.toContain("dc-narration");
+    expect(html).toContain("0 langkah");
+    expect(html).toContain(">siap<");
+    expect(html).not.toContain("Dibaca dari jejak putaran tersimpan");
   });
-
   it("tombol buka keputusan memakai id dari payload", () => {
-    const html = renderToStaticMarkup(<DemoProof run={RUN} onOpenDecision={() => {}} />);
+    const html = renderToStaticMarkup(
+      <DemoRunLog run={RUN} onOpenDecision={() => {}} onOpenAgentLog={() => {}} />,
+    );
+    // Id utuh ada di payload handler; tombolnya hidup saat handler tersedia.
     expect(html).toContain("Buka keputusan");
     expect(html).not.toMatch(/class="button button-secondary dc-open-decision"[^>]*disabled/);
+  });
+
+  it("tombol tanpa handler dimatikan, bukan menipu", () => {
+    const html = renderToStaticMarkup(<DemoRunLog run={RUN} />);
+    expect(html).toMatch(/class="button button-secondary dc-open-decision"[^>]*disabled/);
+    expect(html).toMatch(/class="button button-secondary dc-open-log"[^>]*disabled/);
+    expect(html).toMatch(/class="button button-secondary dc-refresh-proof"[^>]*disabled/);
   });
 });

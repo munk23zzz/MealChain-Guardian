@@ -8,32 +8,34 @@
 //
 // Restyle 2026-10-10: layout mengikuti mockup Stitch
 // (mockupui/kpi_analytics_dashboard/code.html) — header konsol dengan
-// breadcrumb, bento grid 7 kartu (4 atas + 3 bawah), ikon inline SVG.
+// breadcrumb, bento grid kartu (dua baris × empat), ikon inline SVG.
 // Kontrak markup untuk test TIDAK berubah (class kpi-* dipin).
 
+import { useEffect, useRef, useState } from "react";
+
+import KpiDetailPanel from "./KpiDetailPanel";
+import KpiMetaLine from "./KpiMetaLine";
 import PageHeader from "./PageHeader";
+import EmptyState from "./EmptyState";
 import {
   bulletOf,
   directionLabel,
-  fmtCoverage,
   KPI_WINDOWS,
   metricDescription,
-  periodePil,
+  rapikanTeksBackend,
   type KpiWindowKey,
 } from "../lib/kpi";
 import {
-  baselineText,
-  baselineOf,
-  estimateLine,
-  estimateOf,
-  factLine,
   KPI_SCOPES,
-  klasifikasiAsalOf,
   provenanceLines,
   scopeLabel,
   type KpiScope,
 } from "../lib/kpi-provenance";
-import { roleLabel } from "../lib/settings";
+
+/** Deskripsi halaman — satu teks, dipakai kepala halaman di sini DAN di
+ *  `PageShell` tab gabungan, supaya dua tempat tidak menulis dua kalimat. */
+export const DESKRIPSI_HALAMAN =
+  "Tujuh indikator kontinuitas pangan. Angka yang belum bisa dihitung ditulis alasannya.";
 
 const UNIT_FMT: Record<string, (v: string) => string> = {
   IDR: (v) =>
@@ -197,6 +199,7 @@ export default function KPIDashboard({
   scope = "operational",
   onScopeChange,
   scopeDisabledReason = null,
+  showHeader = true,
 }: {
   kpi: any | null;
   loading?: boolean;
@@ -211,14 +214,57 @@ export default function KPIDashboard({
   onScopeChange?: (scope: KpiScope) => void;
   /** Diisi halaman bila tidak ada sesi demo aktif (simulasi tidak bisa dipilih). */
   scopeDisabledReason?: string | null;
+  /** `false` = kepala halaman tidak dirender karena cangkang halaman
+   *  (`PageShell`) sudah memilikinya. Default `true` supaya pemakaian
+   *  sendirian tetap punya judul. */
+  showHeader?: boolean;
 }) {
+  // Satu panel penjelasan untuk SATU kartu (permintaan pemilik 29 Okt 2026:
+  // "ketika KPI diklik muncul penjelasan detail di bawah sub sub KPI, ada 1
+  // shape informasi dari KPI yang diklik"). `null` = tidak ada panel sama
+  // sekali — blok kosong permanen hanya menambah tinggi halaman.
+  const [terpilih, setTerpilih] = useState<string | null>(null);
+  // Simpan tombol per nama kartu: setelah panel ditutup, fokus kembali ke
+  // tombol yang tadi diklik. Tanpa ini pengguna papan ketik/pembaca layar
+  // kehilangan tempatnya dan mulai dari awal bagian.
+  const kartuRef = useRef<Record<string, HTMLElement | null>>({});
+  // Panel rincian hidup DI BAWAH grid (bukan di dalam kartu). Pada layar biasa
+  // kartu baris pertama berakhir sekitar 606 px sementara panel mulai di
+  // 873 px — jadi tanpa digulir, membuka rincian tampak seperti klik yang mati.
+  const panelRef = useRef<HTMLElement | null>(null);
+
+  // Tahap 3 redesign (29 Okt 2026): saat panel dibuka, panel digulir ke layar
+  // dan fokus pindah ke judulnya. Menggulir saja tidak cukup untuk pengguna
+  // papan ketik (Tab berikutnya akan kembali ke tempat lama), dan memindahkan
+  // fokus saja tidak cukup untuk pengguna tetikus. Gerak halus dihormati:
+  // `prefers-reduced-motion: reduce` memakai lompatan langsung.
+  useEffect(() => {
+    if (!terpilih) return;
+    const panel = panelRef.current;
+    if (!panel) return;
+    const kurangiGerak =
+      typeof window !== "undefined" &&
+      typeof window.matchMedia === "function" &&
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    panel.scrollIntoView?.({
+      block: "start",
+      behavior: kurangiGerak ? "auto" : "smooth",
+    });
+    panel.querySelector<HTMLElement>(".kpi-detail-title")?.focus({ preventScroll: true });
+  }, [terpilih]);
+
+  function tutupPanel() {
+    const nama = terpilih;
+    setTerpilih(null);
+    if (nama) kartuRef.current[nama]?.focus();
+  }
+
   if (loading) {
     return (
       <section className="kpi-dashboard" aria-busy="true">
-        <PageHeader
-          title="KPI"
-          description="Tujuh indikator kontinuitas pangan. Angka yang belum bisa dihitung ditulis alasannya."
-        />
+        {showHeader ? (
+          <PageHeader title="Performance & Audit" description={DESKRIPSI_HALAMAN} />
+        ) : null}
         {/* Kelas kpi-loading tetap ada (dipin tes) tetapi hanya untuk pembaca
             layar: tampilannya kini skeleton, bukan teks "Memuat…" berkedip. */}
         <p className="kpi-loading sr-only" aria-live="polite">
@@ -237,10 +283,9 @@ export default function KPIDashboard({
   if (error) {
     return (
       <section className="kpi-dashboard">
-        <PageHeader
-          title="KPI"
-          description="Tujuh indikator kontinuitas pangan. Angka yang belum bisa dihitung ditulis alasannya."
-        />
+        {showHeader ? (
+          <PageHeader title="Performance & Audit" description={DESKRIPSI_HALAMAN} />
+        ) : null}
         <p className="kpi-error status-danger" role="alert">
           {error}
         </p>
@@ -253,62 +298,76 @@ export default function KPIDashboard({
     );
   }
 
+  // Tahap 6 (29 Okt 2026): dulu `return null` — bagian berjudul tanpa isi,
+  // tanpa sebab, tanpa jalan keluar. Sekarang keadaan kosong menjelaskan apa
+  // yang tidak ada dan menawarkan dua tindakan yang benar-benar tersedia:
+  // ganti periode di bilah kendali, atau muat ulang.
   if (!kpi || !Array.isArray(kpi.metrics)) {
-    return null;
+    return (
+      <section className="kpi-dashboard">
+        {showHeader ? (
+          <PageHeader title="Performance & Audit" description={DESKRIPSI_HALAMAN} />
+        ) : null}
+        <EmptyState
+          kode="kpi"
+          judul="Belum ada angka KPI"
+          sebab="Respons KPI untuk periode ini belum memuat satu metrik pun, jadi tidak ada yang bisa ditampilkan tanpa mengarang angka."
+          saran="Coba periode lain di bilah kendali di atas (Hari ini · 7 hari · 1 bulan), lalu muat ulang bila masih kosong."
+          aksi={
+            onRetry ? (
+              <button type="button" className="button kpi-retry" onClick={onRetry}>
+                Muat ulang
+              </button>
+            ) : null
+          }
+        />
+      </section>
+    );
   }
 
   return (
     <section className="kpi-dashboard">
-      <PageHeader
-        title="KPI"
-        description="Tujuh indikator kontinuitas pangan. Angka yang belum bisa dihitung ditulis alasannya."
-        meta={
-          <span className="page-header-pills" data-testid="kpi-scope">
-            <span className="commodity-pill">
-              {periodePil(windowKey, kpi.period?.start, kpi.period?.end)}
-            </span>
-            <span className="commodity-pill" title={kpi.scope?.location_id ?? undefined}>
-              Cakupan: {kpi.scope?.role ? roleLabel(kpi.scope.role) : "—"}
-            </span>
-            <span className="commodity-pill" data-testid="kpi-data-mode">
-              {scopeLabel(kpi.data_mode)}
-            </span>
-          </span>
-        }
-      />
-      {/* Pemilih periode (permintaan pemilik 2026-10-16). Jendela 24 jam tetap
-          sah, tetapi dataset demo beracuan 8 Okt: tanpa pilihan ini, kartu
-          "Avoidable Food Loss" dan "Procurement Price Deviation" selalu
-          menjawab "belum ada data" padahal datanya ADA di database — hanya di
-          luar 24 jam. Kontrol ini tidak menghitung apa pun; ia memberi tahu
-          HALAMAN jendela mana yang harus dimuat (angkanya tetap dari backend). */}
-      <div className="kpi-controls">
-      <div className="kpi-period" role="group" aria-label="Jendela periode KPI">
-        <span className="kpi-period-label">Periode:</span>
-        {KPI_WINDOWS.map((w) => {
-          const aktif = w.key === windowKey;
-          return (
-            <button
-              key={w.key}
-              type="button"
-              className={`commodity-pill kpi-period-pill${aktif ? " is-active" : ""}`}
-              data-window={w.key}
-              aria-pressed={aktif}
-              onClick={() => onWindowChange?.(w.key)}
-            >
-              {w.label}
-            </button>
-          );
-        })}
-      </div>
-      {/* Cakupan data (Fase 8): operasional vs simulasi. Angka kedua cakupan
-          TIDAK boleh tercampur — backend menyaring baris sesi demo di SQL. */}
-      <KpiScopeToggle
-        scope={scope}
-        onScopeChange={onScopeChange}
-        disabled={Boolean(scopeDisabledReason)}
-        disabledReason={scopeDisabledReason}
-      />
+      {/* Kepala halaman hanya dirender bila komponen ini berdiri sendiri.
+          Di dalam tab gabungan, kepala halaman milik `PageShell` (Tahap 1
+          redesign "Performance & Audit", 29 Okt 2026) — satu judul, satu
+          deskripsi, satu tempat. */}
+      {showHeader ? (
+        <PageHeader title="Performance & Audit" description={DESKRIPSI_HALAMAN} />
+      ) : null}
+      {/* SATU bilah kontrol (Tahap 2 redesign, 29 Okt 2026): periode, cakupan,
+          dan meta (siapa cakupannya · mode data · kapan dihitung · ringkasan
+          keadaan metrik) dalam satu baris. Sebelumnya pemilih periode dan
+          toggle cakupan adalah dua baris terpisah, sementara pil di kepala
+          halaman mengulang keduanya. Kontrol ini TIDAK menghitung KPI; ia
+          hanya memberi tahu HALAMAN apa yang harus dimuat. */}
+      <div className="kpi-controls" role="group" aria-label="Kendali Performance & Audit">
+        <div className="kpi-period" role="group" aria-label="Jendela periode KPI">
+          <span className="kpi-period-label">Periode</span>
+          {KPI_WINDOWS.map((w) => {
+            const aktif = w.key === windowKey;
+            return (
+              <button
+                key={w.key}
+                type="button"
+                className={`commodity-pill kpi-period-pill${aktif ? " is-active" : ""}`}
+                data-window={w.key}
+                aria-pressed={aktif}
+                onClick={() => onWindowChange?.(w.key)}
+              >
+                {w.label}
+              </button>
+            );
+          })}
+        </div>
+        {/* Cakupan data (Fase 8): operasional vs simulasi. Angka kedua cakupan
+            TIDAK boleh tercampur — backend menyaring baris sesi demo di SQL. */}
+        <KpiScopeToggle
+          scope={scope}
+          onScopeChange={onScopeChange}
+          disabled={Boolean(scopeDisabledReason)}
+          disabledReason={scopeDisabledReason}
+        />
+        <KpiMetaLine kpi={kpi} />
       </div>
       {/* Grup terpisah: angka simulasi tidak boleh terbaca sebagai hasil
           operasional, jadi judulnya menyebut mode data yang dikirim backend. */}
@@ -317,7 +376,9 @@ export default function KPIDashboard({
         data-mode={String(kpi.data_mode ?? "")}
         aria-label={scopeLabel(kpi.data_mode)}
       >
-        <h2 className="kpi-group-title">{scopeLabel(kpi.data_mode)}</h2>
+        {/* Label cakupan = SUB-judul di bawah judul bagian halaman, jadi h3:
+            halaman sudah punya satu h1 (PageShell) dan satu h2 per bagian. */}
+        <h3 className="kpi-group-title">{scopeLabel(kpi.data_mode)}</h3>
         {String(kpi.data_mode) === "demo" ? (
           <p className="kpi-group-note" data-testid="kpi-demo-note">
             Angka simulasi, bukan hasil lapangan.
@@ -333,9 +394,8 @@ export default function KPIDashboard({
           Dihitung dari <strong>bahan rencana</strong> dan catatan kirim, bukan
           porsi tersaji.
         </p>
-      {/* Grid kartu metrik tiga kolom (pola halaman KPI acuan).
-          Fase 4: tiap kartu = angka besar + bullet bar (hanya untuk metrik
-          yang memang punya skala, lihat lib/kpi.ts) + arah perbaikan. */}
+      {/* Grid datar: hanya kartu KPI, tanpa judul domain (permintaan pemilik
+          29 Okt 2026). Urutan kartu mengikuti `metrics[]` backend apa adanya. */}
       <div className="kpi-grid">
         {kpi.metrics.map((m: any) => {
           const shown = fmtValue(m.unit, m.value);
@@ -343,57 +403,40 @@ export default function KPIDashboard({
           const bullet = bulletOf(m);
           const arah = bullet ? directionLabel(bullet.direction) : null;
           const prov = provenanceLines(m);
-          const asal = klasifikasiAsalOf(m);
-          const est = estimateOf(m);
           const desc = metricDescription(m.name);
-          const estText = estimateLine(m);
-          const factText = factLine(m);
-          // Semua teks panjang kartu dikumpulkan di SATU lipatan per kartu.
-          // Yang tetap terlihat: nama, angka, bar skala, keadaan/arah/bukti,
-          // alasan `no_data`, dan asal baris historis. Sisanya (sampel,
-          // cakupan, sumber/periode/metode, definisi estimasi, baris fakta)
-          // dibaca sekali lalu mengganggu di setiap kartu.
-          const rincian = (
-            <details className="kpi-more">
-              <summary>Rincian angka</summary>
-              <p className="kpi-meta">
-                sampel {m.sample_count ?? 0}
-                {m.coverage !== null && m.coverage !== undefined
-                  ? ` · cakupan ${fmtCoverage(m.coverage)}`
-                  : ""}
-              </p>
-              {prov.length ? (
-                <dl>
-                  {prov.map((l) => (
-                    <div key={l.key} className="kpi-prov-row">
-                      <dt>{l.label}</dt>
-                      <dd>{l.value}</dd>
-                    </div>
-                  ))}
-                </dl>
-              ) : null}
-              {estText ? (
-                <p className="kpi-estimate" data-testid="kpi-estimate">
-                  {estText}
-                  {est?.definition ? (
-                    <span className="kpi-estimate-note"> — {est.definition}</span>
-                  ) : null}
-                </p>
-              ) : null}
-              {factText ? <p className="kpi-fact">{factText}</p> : null}
-            </details>
-          );
+          const buka = terpilih === String(m.name);
+          const alihkan = () => setTerpilih(buka ? null : String(m.name));
           return (
-            <article key={m.name} className={`kpi-card card kpi-${m.state}`}>
+            <article
+              key={m.name}
+              className={`kpi-card card kpi-${m.state}`}
+              /* SELURUH kartu yang bisa diklik (revisi 29 Okt 2026) — bukan hanya
+                 namanya. `details` di dalam kartu sudah dihapus, jadi tidak ada
+                 lagi segitiga buka-tutup dan tidak ada kontrol bersarang. */
+              role="button"
+              tabIndex={0}
+              aria-expanded={buka}
+              aria-controls="kpi-detail"
+              data-aktif={buka ? "true" : undefined}
+              onClick={alihkan}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " " || e.key === "Spacebar") {
+                  e.preventDefault();
+                  alihkan();
+                }
+              }}
+              ref={(el) => {
+                kartuRef.current[String(m.name)] = el;
+              }}
+            >
               <div className="kpi-card-top">
-                {/* Nama metrik di halaman KPI sengaja ENGLISH (istilah
-                    kanonik dari server), bukan terjemahan: istilah ini dipakai
-                    lintas laporan/Joule dan terjemahannya dulu membuat satu
-                    metrik punya dua nama. Terjemahan Indonesia tetap tersedia
-                    di `title` bila pembaca butuh artinya. */}
-                <p className="kpi-card-name" title={m.name} lang="en">
+                {/* Nama metrik sengaja ENGLISH (istilah kanonik dari server):
+                    istilah ini dipakai lintas laporan/Joule, dan terjemahannya
+                    dulu membuat satu metrik punya dua nama. Terjemahan Indonesia
+                    hidup di panel penjelasan. */}
+                <span className="kpi-card-name" title={m.name} lang="en">
                   {String(m.name)}
-                </p>
+                </span>
                 <MetricIcon name={m.name} />
               </div>
               {desc ? (
@@ -429,18 +472,20 @@ export default function KPIDashboard({
                   </span>
                 </div>
               ) : null}
-              {/* Satu baris keadaan: status + arah (dulu kalimat terpisah di
-                  barisnya sendiri) + tingkat bukti (wajib terbaca tanpa klik). */}
+              {/* Satu baris keadaan: status + arah + tingkat bukti (wajib
+                  terbaca tanpa klik). */}
               <p className="kpi-card-flags">
                 <span className={`kpi-state kpi-state-${m.state}`}>
                   {STATE_LABEL[m.state] ?? m.state}
                 </span>
+                {" "}
                 {trend && (
                   <span className={`kpi-trend ${trend}`}>
                     {m.trend === "up" ? "▲ naik" : m.trend === "down" ? "▼ turun" : "■ datar"}
                     {arah ? ` · ${arah}` : ""}
                   </span>
                 )}
+                {" "}
                 {prov.length ? (
                   <span className="kpi-prov-evidence">
                     Bukti:{" "}
@@ -450,25 +495,31 @@ export default function KPIDashboard({
                   </span>
                 ) : null}
               </p>
-              {m.reason && <p className="kpi-reason">{m.reason}</p>}
-              {/* Asal baris historis WAJIB terbaca tanpa klik (mengubah cara
-                  angka dibaca), jadi ia tetap di luar lipatan. */}
-              {prov.length && asal && (asal.basis === "historical_seed" || asal.basis === "campuran") ? (
-                <p className="kpi-meta kpi-basis-note" data-testid="kpi-basis">
-                  Basis data: {asal.text}
-                </p>
-              ) : null}
-              {prov.length ? (
-                <div className="kpi-prov" data-testid="kpi-provenance">
-                  {rincian}
-                </div>
-              ) : (
-                rincian
-              )}
+              {m.reason && <p className="kpi-reason">{rapikanTeksBackend(m.reason)}</p>}
             </article>
           );
         })}
       </div>
+
+      {/* Panel penjelasan tunggal, tepat di bawah grid kartu ("di bawah sub sub
+          KPI"). Satu metrik pada satu waktu; isinya berasal dari amplop yang
+          sama dengan kartu, jadi angkanya tidak bisa berbeda. */}
+      {terpilih
+        ? (() => {
+            const metrik = (kpi.metrics as any[]).find(
+              (x) => String(x?.name ?? "") === terpilih,
+            );
+            if (!metrik) return null;
+            return (
+              <KpiDetailPanel
+                metric={metrik}
+                windowKey={windowKey}
+                onClose={tutupPanel}
+                panelRef={panelRef}
+              />
+            );
+          })()
+        : null}
       </section>
     </section>
   );

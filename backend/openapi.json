@@ -1143,10 +1143,64 @@
         }
       }
     },
+    "/receipts/checklist": {
+      "get": {
+        "summary": "Receipt Checklist",
+        "description": "Daftar butir ceklis + bobot + tiga pilihan untuk satu komoditas.\n\nDok 05 §3: bobot dan faktor hidup di SERVER. Layar tidak menyimpan salinan\nangka itu, supaya perubahan bobot tidak membuat layar lama menghitung\nberbeda. Petunjuk suhu diambil dari profil komoditas (`commodity_limits`),\njadi telur/ayam/wortel (rantai dingin) dan beras (suhu ruang) tidak\ndipaksa memakai satu rentang yang sama.\n\n`commodity` dicocokkan lewat nama komoditas di tabel `commodities`; nama\nyang tidak dikenal tetap mengembalikan daftar butir tanpa petunjuk suhu\n(bukan galat — layar masih bisa menilai butir lain).",
+        "operationId": "receipt_checklist_receipts_checklist_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "commodity",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 60
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Commodity"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "title": "Response Receipt Checklist Receipts Checklist Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/receipts/menunggu": {
       "get": {
         "summary": "List Receipts Menunggu",
-        "description": "Catatan penerimaan yang SUDAH dicatat tetapi belum diputuskan.\n\nDipisah dari daftar batch penerimaan (20 Okt 2026): layar \"Penerimaan\nbarang\" hanya menawarkan barang yang BELUM dinilai/dicatat. Begitu catatan\ndibuat, batch itu keluar dari pilihan dan pindah ke antrean ini supaya\nkepala SPPG tetap bisa menyetujui/menolak tanpa mencari batch lagi.\n\nSatu baris per batch (catatan terbaru), di-scope ke lokasi pengguna bila\npengguna punya lokasi; pemantau tanpa lokasi melihat seluruh jaringan.",
+        "description": "Catatan penerimaan yang SUDAH dicatat tetapi belum diputuskan.\n\nDipisah dari daftar batch penerimaan (20 Okt 2026): layar \"Penerimaan\nbarang\" hanya menawarkan barang yang BELUM dinilai/dicatat. Begitu catatan\ndibuat, batch itu keluar dari pilihan dan pindah ke antrean ini supaya\nkepala SPPG tetap bisa menyetujui/menolak tanpa mencari batch lagi.\n\nSatu baris per batch (catatan terbaru), di-scope ke lokasi pengguna bila\npengguna punya lokasi; pemantau tanpa lokasi melihat seluruh jaringan.\n\nAntrean ini hanya memuat batch yang SUDAH AMAN secukupnya untuk diputuskan\n(evaluator `usable`) dan yang masa layaknya belum lewat (29 Okt 2026).\nKepala SPPG tinggal menyetujui atau menolak; barang yang buktinya belum\nlengkap tetap terlihat di kartu \"Batch perlu perhatian\" — bukan di sini.",
         "operationId": "list_receipts_menunggu_receipts_menunggu_get",
         "responses": {
           "200": {
@@ -1166,6 +1220,89 @@
             "HTTPBearer": []
           }
         ]
+      }
+    },
+    "/receipts/riwayat": {
+      "get": {
+        "summary": "List Receipts Riwayat",
+        "description": "Riwayat penerimaan barang per pemasok (Dok 05 §8.5, layar Pemasok).\n\nKenapa endpoint ini ada: `GET /receipts` hanya menjawab per BATCH, dan\n`GET /receipts/menunggu` hanya memuat catatan yang belum diputuskan. Layar\naudit pemasok butuh ketiganya sekaligus — yang sudah disetujui, yang\nditolak, dan yang menunggu — dalam satu tabel berurut waktu.\n\nYang dijanjikan bentuk balasannya:\n\n- satu baris per catatan penerimaan, terbaru dulu;\n- kg DIPESAN (`ordered_kg`, kuantitas batch) dan kg DITERIMA\n  (`received_kg`, hanya terisi bila disetujui) dua kolom terpisah — klien\n  tidak pernah mengurangkannya sendiri;\n- nilai rupiah dari `receipt_value` (harga satuan invoice PO), dan `None`\n  untuk batch tanpa ikatan PO (\"tidak tercatat\", bukan Rp 0);\n- `ringkasan` dihitung server dari SELURUH baris dalam cakupan, supaya\n  angka di kepala tabel tidak berubah saat pengguna memindah halaman.\n\nCakupannya sama dengan antrean `menunggu`: pengguna yang punya lokasi hanya\nmelihat penerimaan lokasinya; pemantau tanpa lokasi melihat seluruh jaringan.",
+        "operationId": "list_receipts_riwayat_receipts_riwayat_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "supplier_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Supplier Id"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "pattern": "^(menunggu|disetujui|ditolak)$"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "default": 25,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "title": "Response List Receipts Riwayat Receipts Riwayat Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
       }
     },
     "/cost/safe-delivered": {
@@ -1775,7 +1912,7 @@
     "/auth/demo-login": {
       "get": {
         "summary": "Demo Login Accounts",
-        "description": "Akun demo untuk layar login — TANPA token, tapi dua kunci harus aktif.\n\nHalaman login bersifat publik dan belum punya sesi, jadi `GET\n/auth/demo-accounts` (ber-token `bgn_monitor`) tidak bisa dipakainya. Pintu\nini dibuat khusus untuk itu, dan hanya terbuka bila `DEMO_MODE` aktif **dan**\n`DEMO_LOGIN_AUTOFILL` aktif (lihat `demo_login_autofill_aktif()`). Default\nkeduanya mati, sehingga instalasi nyata menjawab `{enabled:false, accounts:[]}`\ndan kata sandi tidak pernah keluar dari server.\n\nKonsekuensi yang harus disadari: selama dua kunci itu aktif, siapa pun yang\nbisa menjangkau backend demo dapat membaca sandi akun demo. Karena itu\n`DEMO_MODE` wajib `false` di luar sesi demo (Rules.md §1.4).",
+        "description": "Akun demo untuk layar login — TANPA token, tapi TIGA kunci harus aktif.\n\nHalaman login bersifat publik dan belum punya sesi, jadi `GET\n/auth/demo-accounts` (ber-token `bgn_monitor`) tidak bisa dipakainya. Pintu\nini dibuat khusus untuk itu, dan hanya terbuka bila `DEMO_MODE` aktif **dan**\n`DEMO_LOGIN_AUTOFILL` aktif (lihat `demo_login_autofill_aktif()`) **dan**\npemanggilnya lokal (lihat `boleh_autofill_dari()`). Default ketiganya mati,\nsehingga instalasi nyata menjawab `{enabled:false, accounts:[]}` dan kata\nsandi tidak pernah keluar dari server.\n\nKonsekuensi yang harus disadari: selama kunci-kunci itu aktif, proses lokal\nmana pun yang bisa menjangkau backend demo dapat membaca sandi akun demo.\nKarena itu `DEMO_MODE` wajib `false` di luar sesi demo (Rules.md §1.4).",
         "operationId": "demo_login_accounts_auth_demo_login_get",
         "responses": {
           "200": {
@@ -2690,10 +2827,55 @@
         ]
       }
     },
+    "/demo/agent/stream": {
+      "get": {
+        "summary": "Stream Demo Agent",
+        "description": "Siarkan langkah putaran agent saat langkah itu terjadi (text/event-stream).\n\nDipakai Demo Control agar log \"Proses Pengambilan Data\" bergerak seperti\nterminal, bukan muncul sekaligus setelah putaran selesai.\n\nKontrak penting:\n\n- Endpoint ini TIDAK menjalankan pipeline. Yang menjalankan tetap\n  `POST /demo/agent/run` dengan `run_token` yang sama; endpoint ini hanya\n  membaca kanal kemajuan. Satu klik tetap = satu putaran = satu keputusan.\n- `: siap` dikirim segera setelah kanal terbuka, sehingga klien tahu\n  kapan aman memulai POST (tanpa itu, langkah awal bisa terlewat).\n- Kanal ditutup di blok `finally`, termasuk saat peramban memutus koneksi.\n- Bila tidak ada langkah baru, komentar `: tunggu` dikirim tiap 15 detik\n  supaya proxy tidak memutus koneksi yang diam.",
+        "operationId": "stream_demo_agent_demo_agent_stream_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "run_token",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 8,
+              "maxLength": 64,
+              "title": "Run Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/demo/agent/commodities": {
       "get": {
         "summary": "List Agent Commodities",
-        "description": "Pilihan dropdown komoditas — nama yang ADA di database, bukan daftar karangan.\n\nPanel demo tidak boleh menawarkan komoditas yang tidak punya data: memilihnya\nhanya akan berakhir `409 tidak ada kandidat eligible`.",
+        "description": "Pilihan dropdown komoditas BESERTA kasus yang akan dihasilkannya.\n\nPanel demo tidak boleh menawarkan komoditas yang tidak punya data — memilihnya\nhanya berakhir `409 tidak ada kandidat eligible`. Karena itu balasan ini\nmembawa dua bentuk:\n\n* `commodities` — daftar nama (kontrak lama yang dipakai dropdown).\n* `kasus` — satu baris per komoditas: neraca pasokan/kebutuhan hari ini,\n  `status` (`shortage`/`surplus`/`balanced`/`tanpa_data`), dan\n  `bisa_dijalankan` (true hanya kalau ada kekurangan yang perlu dibeli).\n\nAngka diambil dari baris TERAKHIR yang sudah terjadi (bukan proyeksi) dan\ndihitung dengan `calculate_supply_gap` — rumus yang sama dengan `/balance`,\nsupaya label kasus di panel demo tidak pernah berbeda dari halaman balance.",
         "operationId": "list_agent_commodities_demo_agent_commodities_get",
         "responses": {
           "200": {
@@ -3660,6 +3842,60 @@
         ]
       }
     },
+    "/agent/feedback/rejections": {
+      "get": {
+        "tags": [
+          "agent"
+        ],
+        "summary": "Feedback Rejections",
+        "description": "Riwayat PENOLAKAN yang boleh dibaca langkah LEARN agent (baca-saja).\n\nKenapa ada (29 Okt 2026): data demo memuat kasus ditolak — penerimaan ayam\n300 kg yang ditolak saat serah terima dan 10 keputusan `rejected` di tiga\nkota — tetapi tidak ada satu pun jalan baca untuk agent. Gateway tool agent\nhanya punya tool pasokan/harga/rute/pengajuan, jadi LEARN hanya bisa\nmencatat penolakan yang kebetulan sedang diproses, bukan membaca pola yang\nsudah ada.\n\nEndpoint ini TIDAK menulis apa pun (`writes: false`) dan memakai cakupan\nlokasi yang sama dengan feed keputusan: peran SPPG melihat kotanya sendiri,\n`bgn_monitor` melihat nasional. `sumber` disebut apa adanya supaya pembaca\nbisa memeriksa sendiri tabel yang dibaca.",
+        "operationId": "feedback_rejections_agent_feedback_rejections_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "description": "Jumlah baris terbaru per jenis (keputusan, penerimaan).",
+              "default": 20,
+              "title": "Limit"
+            },
+            "description": "Jumlah baris terbaru per jenis (keputusan, penerimaan)."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "title": "Response Feedback Rejections Agent Feedback Rejections Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/decisions/{decision_id}/dossier": {
       "get": {
         "tags": [
@@ -4414,10 +4650,32 @@
         ]
       }
     },
+    "/integrations/gateway/tool-check": {
+      "get": {
+        "summary": "Cek Tool Gateway",
+        "description": "Bukti `app_uses_gateway`: aplikasi memanggil satu tool LEWAT Gateway.\n\nBedanya dengan `/integrations/status`: endpoint ini benar-benar memanggil\nMCP (initialize → tools/list → tools/call) dan mengembalikan hasil apa adanya.\nStatus `VERIFIED` hanya muncul bila Gateway menjawab dengan data; galat\ntransport dilaporkan `UNVERIFIED` + alasan, bukan 500 dan bukan hijau palsu.",
+        "operationId": "cek_tool_gateway_integrations_gateway_tool_check_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
     "/health": {
       "get": {
         "summary": "Health Check",
-        "description": "Health check endpoint backend.",
+        "description": "Health check endpoint backend.\n\n`forecast` menampilkan penghitung peramalan in-process (jumlah panggilan\nmodel, berapa kali cadangan dipakai, apakah SAP-RPT terkonfigurasi). Tidak\nada nilai rahasia di sini — hanya angka dan boolean.",
         "operationId": "health_check_health_get",
         "responses": {
           "200": {
@@ -4483,6 +4741,18 @@
               }
             ],
             "title": "Mode"
+          },
+          "run_token": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 64
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Run Token"
           }
         },
         "type": "object",
@@ -4741,7 +5011,14 @@
       "ForecastResponse": {
         "properties": {
           "forecast_qty_kg": {
-            "type": "number",
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Forecast Qty Kg"
           },
           "method": {
@@ -4749,15 +5026,51 @@
             "title": "Method"
           },
           "confidence": {
-            "type": "number",
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Confidence"
+          },
+          "source": {
+            "type": "string",
+            "title": "Source",
+            "default": "statistical_fallback"
+          },
+          "fallback_used": {
+            "type": "boolean",
+            "title": "Fallback Used",
+            "default": true
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "sample_count": {
+            "type": "integer",
+            "title": "Sample Count",
+            "default": 0
+          },
+          "cache_hit": {
+            "type": "boolean",
+            "title": "Cache Hit",
+            "default": false
           }
         },
         "type": "object",
         "required": [
-          "forecast_qty_kg",
-          "method",
-          "confidence"
+          "method"
         ],
         "title": "ForecastResponse"
       },
@@ -5210,6 +5523,33 @@
               }
             ],
             "title": "Other Note"
+          },
+          "answers": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Answers"
+          },
+          "accepted_kg": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 1000000.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Accepted Kg"
           }
         },
         "type": "object",
@@ -5347,6 +5687,47 @@
           "safety_status": {
             "type": "string",
             "title": "Safety Status"
+          },
+          "commodity": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Commodity"
+          },
+          "shelf_life_days": {
+            "anyOf": [
+              {
+                "type": "number",
+                "exclusiveMinimum": 0.0
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Shelf Life Days"
+          },
+          "storage_days": {
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0.0
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Storage Days"
           }
         },
         "type": "object",

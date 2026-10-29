@@ -267,8 +267,15 @@ def test_tanpa_ikatan_bukti_nilai_null_bukan_nol(ikatan):
         assert setuju.json()["accepted_value_idr"] is None
 
 
-def test_antrean_menunggu_membawa_kunci_nilai_kosong(ikatan):
-    """Kunci harus SELALU ada supaya UI tidak membedakan dua bentuk payload."""
+def test_antrean_menunggu_membawa_kunci_nilai_dan_perkiraan(ikatan):
+    """Kunci harus SELALU ada supaya UI tidak membedakan dua bentuk payload.
+
+    Sejak Dok 05 §8.2–§8.3 dipasang di kartu "Menunggu persetujuan", antrean
+    juga membawa ANGKA PERKIRAAN (kg × harga satuan PO) dan asal harganya:
+    kepala SPPG perlu tahu nilai yang akan masuk stok sebelum memutuskan.
+    `accepted_value_idr` tetap None — itu satu-satunya angka pembukuan dan baru
+    lahir saat persetujuan.
+    """
     with _client() as c:
         headers = _masuk(c, ikatan["email"])
         badan = _catat(c, headers, ikatan["batch_terikat"])
@@ -278,6 +285,13 @@ def test_antrean_menunggu_membawa_kunci_nilai_kosong(ikatan):
         assert baris, "catatan menunggu harus muncul di antrean"
         assert "accepted_value_idr" in baris[0]
         assert baris[0]["accepted_value_idr"] is None
+        # Angka perkiraan + asal harga, dihitung server (bukan layar).
+        assert baris[0]["batch_quantity_kg"] == ikatan["kg"]
+        assert baris[0]["unit_price_idr"] == pytest.approx(ikatan["harga"], abs=0.01)
+        assert baris[0]["estimated_value_idr"] == pytest.approx(
+            ikatan["kg"] * ikatan["harga"], abs=0.01
+        )
+        assert baris[0]["po_number"] == ikatan["po_number"]
 
 
 # --- Dokumen 05 S8.2-S8.3 -------------------------------------------------
@@ -329,3 +343,148 @@ def test_setelah_disetujui_nilai_perkiraan_menjadi_pembukuan(ikatan):
         hasil = setuju.json()
         assert hasil["accepted_value_idr"] == pytest.approx(perkiraan, abs=0.01)
         assert hasil["stock_kg"] == hasil["batch_quantity_kg"]
+
+
+# ===========================================================================
+# Skor ceklis (migrasi 044, Dok 05 §3–§5) — jalur `answers` + `accepted_kg`
+# ===========================================================================
+
+#: Jawaban semua-penuh; tes di bawah mengubah satu-dua butir saja.
+_PENUH = {
+    "suhu": "sesuai",
+    "kesegaran": "segar",
+    "kemasan": "utuh",
+    "kebersihan": "bersih",
+    "label": "lengkap",
+    "waktu": "tepat",
+}
+
+
+def _catat_dinilai(client, headers, batch_id: str, accepted_kg: float, **ubah):
+    jawaban = {**_PENUH, **ubah}
+    return client.post(
+        "/receipts",
+        headers=headers,
+        json={
+            "batch_id": batch_id,
+            "answers": jawaban,
+            "accepted_kg": accepted_kg,
+            "other_note": "cek timbangan",
+        },
+    )
+
+
+def test_ceklis_dinilai_menyimpan_skor_tujuh_butir_dan_putusannya(ikatan):
+    with _client() as c:
+        headers = _masuk(c, ikatan["email"])
+        resp = _catat_dinilai(c, headers, ikatan["batch_terikat"], 150.0)
+        assert resp.status_code == 201, resp.text
+        badan = resp.json()
+        # Semua butir penuh → 100 dan layak diterima.
+        assert badan["score"] == 100
+        assert badan["verdict"] == "pass"
+        assert badan["verdict_label"] == "Layak diterima"
+        assert badan["checklist_version"]
+        # Tujuh butir dengan bobot yang dijumlahkan = 100.
+        assert len(badan["points"]) == 7
+        assert sum(b["max_points"] for b in badan["points"]) == 100
+        # Butir "jumlah" datang dari timbangan, bukan dari kiriman klien.
+        jumlah = [b for b in badan["points"] if b["kunci"] == "jumlah"][0]
+        assert jumlah["opsi"] == "sesuai"
+        assert badan["answers"]["jumlah"] == "sesuai"
+        assert badan["ordered_kg"] == pytest.approx(150.0)
+        assert badan["accepted_kg"] == pytest.approx(150.0)
+
+
+def test_butir_kritis_menghasilkan_fail_dan_tidak_bisa_disetujui(ikatan):
+    with _client() as c:
+        headers = _masuk(c, ikatan["email"])
+        resp = _catat_dinilai(
+            c, headers, ikatan["batch_terikat"], 150.0, kemasan="bocor"
+        )
+        assert resp.status_code == 201, resp.text
+        badan = resp.json()
+        assert badan["score"] == 85
+        assert badan["verdict"] == "fail"
+        # Kalimat alasan wajib ada dan menyebut butirnya (§7).
+        assert "kemasan" in badan["advice"]
+        setuju = c.post(f"/receipts/{badan['id']}/approve", headers=headers)
+        assert setuju.status_code == 409, setuju.text
+        assert "receipt_verdict_fail" in setuju.text
+
+
+def test_berat_diterima_menentukan_stok_dan_nilai_bukan_berat_batch(ikatan):
+    with _client() as c:
+        headers = _masuk(c, ikatan["email"])
+        # Batch 150 kg; timbangan mencatat 140 kg (93,3%) → butir jumlah
+        # "kurang", dan nilainya memakai 140 kg, bukan 150 kg.
+        resp = _catat_dinilai(c, headers, ikatan["batch_terikat"], 140.0)
+        assert resp.status_code == 201, resp.text
+        badan = resp.json()
+        jumlah = [b for b in badan["points"] if b["kunci"] == "jumlah"][0]
+        assert jumlah["opsi"] == "kurang"
+        # 7 × 50 / 100 = 3,5 → 4 (HALF_UP), jadi 100 − 7 + 4 = 97
+        assert badan["score"] == 97
+        # 93,3% < 95% → turun ke perlu keputusan manual walau nilai tinggi.
+        assert badan["verdict"] == "needs_verification"
+        assert badan["nilai_diterima_idr"] == pytest.approx(140.0 * ikatan["harga"], abs=0.01)
+
+        setuju = c.post(f"/receipts/{badan['id']}/approve", headers=headers)
+        assert setuju.status_code == 200, setuju.text
+        hasil = setuju.json()
+        assert hasil["stock_kg"] == pytest.approx(140.0)
+        assert hasil["accepted_value_idr"] == pytest.approx(140.0 * ikatan["harga"], abs=0.01)
+
+
+@pytest.mark.parametrize(
+    "diterima, kode",
+    [(0.0, "berat_nol"), (170.0, "berat_lebih")],
+)
+def test_berat_tidak_wajar_ditolak_sebelum_menyimpan(ikatan, diterima, kode):
+    with _client() as c:
+        headers = _masuk(c, ikatan["email"])
+        resp = _catat_dinilai(c, headers, ikatan["batch_terikat"], diterima)
+        assert resp.status_code == 422, resp.text
+        assert kode in resp.text
+
+
+def test_berat_wajib_ada_bila_jawaban_dikirim(ikatan):
+    with _client() as c:
+        headers = _masuk(c, ikatan["email"])
+        resp = c.post(
+            "/receipts",
+            headers=headers,
+            json={"batch_id": ikatan["batch_terikat"], "answers": _PENUH},
+        )
+        assert resp.status_code == 422, resp.text
+        assert "berat diterima" in resp.text
+
+
+def test_jawaban_belum_lengkap_ditolak(ikatan):
+    with _client() as c:
+        headers = _masuk(c, ikatan["email"])
+        resp = c.post(
+            "/receipts",
+            headers=headers,
+            json={
+                "batch_id": ikatan["batch_terikat"],
+                "answers": {"suhu": "sesuai"},
+                "accepted_kg": 150.0,
+            },
+        )
+        assert resp.status_code == 422, resp.text
+
+
+def test_endpoint_cek_lengkap_membawa_bobot_dari_server(ikatan):
+    with _client() as c:
+        headers = _masuk(c, ikatan["email"])
+        resp = c.get("/receipts/checklist", headers=headers)
+        assert resp.status_code == 200, resp.text
+        data = resp.json()
+        assert data["total_bobot"] == 100
+        assert len(data["butir"]) == 7
+        assert [b["bobot"] for b in data["butir"]] == [25, 25, 15, 15, 8, 7, 5]
+        for butir in data["butir"]:
+            assert len(butir["opsi"]) == 3, butir["kunci"]
+        assert data["ambang"]["fail_max_score"] == 65
+        assert data["nama_putusan"]["needs_verification"] == "Perlu keputusan manual"

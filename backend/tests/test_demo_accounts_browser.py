@@ -144,3 +144,68 @@ def test_login_flag_aktif_tanpa_demo_mode_tetap_tertutup(client, monkeypatch):
     assert r.status_code == 200, r.text
     assert r.json() == {"enabled": False, "accounts": []}
     assert "Demo#" not in r.text
+
+
+# --- Kunci ketiga: pemanggil harus LOKAL (audit 2026-10-29, AUD-005) ----------------
+# Dua flag hanya menyatakan "demo mengizinkan autofill", bukan "siapa yang boleh
+# bertanya". Endpoint tanpa token + publish 0.0.0.0:8000 = sandi terbaca dari LAN.
+
+
+class _Req:
+    """Request palsu: hanya `.client.host` yang dibaca helper."""
+
+    class _C:
+        def __init__(self, host: str) -> None:
+            self.host = host
+
+    def __init__(self, host: str | None) -> None:
+        self.client = self._C(host) if host is not None else None
+
+
+def test_autofill_dari_host_remote_ditolak(monkeypatch):
+    from app.api.auth import boleh_autofill_dari
+
+    monkeypatch.delenv("DEMO_LOGIN_ALLOW_REMOTE", raising=False)
+
+    assert boleh_autofill_dari(_Req("192.168.1.20")) is False
+    assert boleh_autofill_dari(_Req("10.0.0.7")) is False
+    assert boleh_autofill_dari(_Req(None)) is False
+
+
+def test_autofill_dari_host_lokal_diizinkan(monkeypatch):
+    from app.api.auth import boleh_autofill_dari
+
+    monkeypatch.delenv("DEMO_LOGIN_ALLOW_REMOTE", raising=False)
+
+    assert boleh_autofill_dari(_Req("127.0.0.1")) is True
+    assert boleh_autofill_dari(_Req("::1")) is True
+    assert boleh_autofill_dari(_Req("testclient")) is True
+
+
+def test_autofill_remote_butuh_override_eksplisit(monkeypatch):
+    from app.api.auth import boleh_autofill_dari
+
+    monkeypatch.setenv("DEMO_LOGIN_ALLOW_REMOTE", "true")
+
+    assert boleh_autofill_dari(_Req("192.168.1.20")) is True
+
+    monkeypatch.setenv("DEMO_LOGIN_ALLOW_REMOTE", "false")
+    assert boleh_autofill_dari(_Req("192.168.1.20")) is False
+
+
+def test_autofill_gateway_container_diizinkan(monkeypatch):
+    """Browser demo di host masuk lewat gateway bridge, bukan 127.0.0.1.
+
+    Kalau ini salah, tombol akun demo di layar login mati saat demo dijalankan
+    dari laptop (terukur: container melihat `172.20.0.1`).
+    """
+    from app.api.auth import _ip_gateway, boleh_autofill_dari
+
+    monkeypatch.delenv("DEMO_LOGIN_ALLOW_REMOTE", raising=False)
+    gateway = _ip_gateway()
+    if gateway is None:  # host non-Linux: tidak ada /proc/net/route
+        return
+
+    assert boleh_autofill_dari(_Req(gateway)) is True
+    # Tetangga di subnet yang sama TIDAK otomatis diizinkan.
+    assert boleh_autofill_dari(_Req("192.168.1.20")) is False

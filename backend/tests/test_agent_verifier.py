@@ -130,6 +130,37 @@ def test_audit_mewarisi_verdict_flag_dan_tidak_memblokir() -> None:
     assert any("narasi" in warning for warning in finding.warnings)
 
 
+def test_audit_tidak_menuduh_angka_yang_ada_di_temuan_run() -> None:
+    """Angka dari fakta TEMUAN review bukan karangan — narasi ditulis dari situ.
+
+    Terukur 29 Okt 2026: `forecast_confidence` 0,5395775… hanya ada di temuan
+    `demand`, tidak di `/audit-facts`. Narasi supervisor yang menyebut "0,54"
+    dituduh `angka_bersitasi` tanpa sumber sehingga SETIAP putaran menjadi
+    `flagged`. Angka dari fakta temuan sekarang dihitung sebagai sumber.
+    """
+    run = _run(VerifyResult(verdict="pass"), narrative="forecast confidence 0,54 dari model")
+    # Temuan `demand` yang membawa angka tersebut di fakta server-nya.
+    run = run.model_copy(
+        update={
+            "findings": [
+                temuan.model_copy(
+                    update={"facts": {**temuan.facts, "forecast_confidence": 0.5395775539618725}}
+                )
+                if temuan.agent is AgentName.DEMAND
+                else temuan
+                for temuan in run.findings
+            ]
+        }
+    )
+
+    finding = VerifierWorker(model=_model_jawab("consistent")).audit(
+        run, fakta=FAKTA_KONSISTEN
+    )
+
+    checks = {cek["nama"]: cek for cek in finding.facts.get("checks", [])}
+    assert checks["angka_bersitasi"]["lulus"] is True
+
+
 def test_audit_sepakat_saat_fakta_dan_model_sahih() -> None:
     """Verdict `consistent` harus berasal dari fakta + jawaban model sahih."""
     run = _run(VerifyResult(verdict="pass"))

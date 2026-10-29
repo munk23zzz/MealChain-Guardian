@@ -148,7 +148,7 @@ export function fasePersetujuan({
       label: "Belum ada data approval",
       nada: "neutral",
       sebab:
-        "Ringkasan persetujuan belum diterima dari server. Tidak ada tombol yang " +
+        "Ringkasan persetujuan belum diterima. Tidak ada tombol yang " +
         "ditampilkan sampai datanya ada — UI tidak menyimpulkan sendiri.",
     };
   }
@@ -239,7 +239,7 @@ export function fasePersetujuan({
     nada: "warning",
     sebab:
       view.blocker[0] ??
-      "Server belum menyatakan keputusan ini boleh disetujui oleh peran Anda.",
+      "Keputusan ini belum dinyatakan boleh disetujui oleh peran Anda.",
   };
 }
 
@@ -276,7 +276,7 @@ export function tigaJawaban({
   } else if (progres) {
     dibutuhkan = `${progres} terpenuhi`;
   } else {
-    dibutuhkan = "Tidak ada peran yang kurang menurut server.";
+    dibutuhkan = "Tidak ada peran yang kurang.";
   }
 
   let setelah: string;
@@ -344,7 +344,7 @@ export function ledgerPenyetuju({
       jam: jam === "—" ? null : jam,
       catatan:
         baris.length === 0
-          ? "Backend belum mengirim baris persetujuan untuk keputusan ini."
+          ? "Belum ada baris persetujuan untuk keputusan ini."
           : null,
     };
   });
@@ -383,7 +383,7 @@ export function langkahPersetujuan({
   const alasanUmum =
     view.blocker[0] ??
     (fase.kode === "tidak_diketahui"
-      ? "Belum ada data approval dari server."
+      ? "Belum ada data persetujuan."
       : fase.sebab);
 
   // Untuk pengawas, "tidak tersedia" bukan karena jendela lewat atau approval

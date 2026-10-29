@@ -17,7 +17,7 @@
 import { safetyLabel } from "./bahasa";
 
 export const MISSING_LOCATION_REASON =
-  "Lokasi SPPG Anda belum terbaca dari identitas server (/auth/me). " +
+  "Lokasi SPPG Anda belum terbaca dari identitas akun. " +
   "Muat ulang halaman setelah login — Event 3 butuh lokasi tujuan yang jelas.";
 
 export type BatchLike = {

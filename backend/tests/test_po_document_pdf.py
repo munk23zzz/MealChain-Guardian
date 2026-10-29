@@ -61,6 +61,13 @@ def _kg_tes(nilai: float) -> str:
     return f"{(teks[:-2] if teks.endswith(',0') else teks)} kg"
 
 
+def _kuantitas_tes(nilai: float) -> str:
+    """Angka kolom "Jumlah" saja (satuan punya kolomnya sendiri sejak template
+    korporat 29 Okt 2026), tanpa ",0" yang dikarang."""
+    teks = _ribu(nilai, 1)
+    return teks[:-2] if teks.endswith(",0") else teks
+
+
 def _teks_pdf(isi: bytes) -> str:
     reader = PdfReader(io.BytesIO(isi))
     return "\n".join((halaman.extract_text() or "") for halaman in reader.pages)
@@ -200,9 +207,24 @@ def test_pdf_dokumen_minimal_terbentuk():
     assert "MC-TES" in teks
     assert "Beras" in teks
     assert _rupiah_tes(250000) in teks
-    assert _kg_tes(12.5) in teks
+    # Kolom "Jumlah" dan "Satuan" terpisah di template korporat (29 Okt 2026),
+    # jadi kuantitas diperiksa sebagai angka + satuan, bukan "12,5 kg".
+    assert _kuantitas_tes(12.5) in teks
+    assert "kg" in teks
     assert "SAP simulasi" in teks
     assert "Kepala Uji" in teks
+    # Template korporat: rincian pesanan + pengesahan ada, "Dasar persetujuan"
+    # (dihapus atas permintaan pemilik 29 Okt 2026) tidak boleh muncul lagi.
+    assert "Rincian pesanan" in teks
+    assert "Pengesahan" in teks
+    assert "Dasar persetujuan" not in teks
+    assert "Safe Delivered Cost" not in teks
+    # Seluruh keterangan di bawah tabel rincian dihapus 29 Okt 2026: catatan kaki
+    # "*", kalimat arti status, blok "Syarat & ketentuan", kalimat "Sumber angka".
+    assert "Syarat & ketentuan" not in teks
+    assert "Sumber angka" not in teks
+    assert "Status Draf berarti" not in teks
+    assert "Status Terkirim berarti" not in teks
 
 
 # ── 2. Route ────────────────────────────────────────────────────────────────
@@ -239,15 +261,23 @@ def test_pdf_untuk_po_yang_sudah_disetujui(client, monitor_headers):
     harga = float(po["price"])
     # Setiap angka yang tercetak harus bisa dilacak ke kolomnya.
     assert po["po_number"] in teks
-    assert _kg_tes(qty) in teks
-    assert _rupiah_tes(harga) in teks
+    assert _kuantitas_tes(qty) in teks
+    # Harga satuan tersimpan (invoice unit price) = total ÷ jumlah, jadi ia
+    # tercetak sebagai TOTAL, bukan baris "/kg" kedua di samping harga satuan
+    # bahan. Asersi lama menuntut harga itu tercetak mentah; template korporat
+    # 29 Okt 2026 menghapusnya supaya dokumen tidak memuat dua harga per kg.
     assert _rupiah_tes(round(harga * qty, 2)) in teks
     assert po["supplier_name"] in teks
     assert po["commodity_name"] in teks
+    # Ref keputusan pindah ke meta PO (template korporat); id-nya tetap wajib
+    # tercetak supaya dokumen bisa ditelusuri ke keputusannya.
     assert str(po["decision_id"]) in teks
     assert "SAP simulasi" in teks
-    # Status keputusan tampil sebagai kata, bukan enum mentah.
-    assert po_document.status_keputusan_label(po["decision_status"]) in teks
+    # Status PO tampil sebagai kata, bukan enum mentah. Status KEPUTUSAN tidak
+    # lagi dicetak: blok "Dasar persetujuan" (yang memuatnya) dihapus 29 Okt
+    # 2026; jejaknya kini hanya "Ref. keputusan" di meta + blok pengesahan.
+    assert po_document.status_po_label(po["status"]) in teks
+    assert "Dasar persetujuan" not in teks
 
 
 def test_po_tanpa_keputusan_tidak_punya_pdf(client, monitor_headers):
@@ -336,3 +366,121 @@ def test_cakupan_sppg_tidak_bisa_unduh_po_lokasi_lain(client, auth_headers):
 
     resp = client.get(f"/sap/purchase-orders/{nomor}/pdf", headers=auth_headers)
     assert resp.status_code == 404, resp.text
+
+
+def test_template_korporat_rincian_memuat_bahan_transportasi_penanganan():
+    """Template PO korporat: satu tabel rincian berisi tiga komponen tagihan.
+
+    Urutan baris (bahan -> transportasi -> penanganan -> total) adalah kontrak
+    tampilan yang diminta pemilik 29 Okt 2026; kalau urutannya berubah, pembaca
+    dokumen pembelian melihat komponen risiko/tambahan sebelum bahan.
+    """
+    isi = po_document.bangun_pdf(
+        {
+            "po_number": "MC-UJI-TEMPLATE",
+            "status": "submitted",
+            "created_at": datetime(2026, 10, 29, 3, 0, tzinfo=timezone.utc),
+            "ordered_quantity": 200.0,
+            "price": 29421.0,
+            "total": 5884200.0,
+            "material_number": "MAT-TELUR",
+            "commodity_name": "Telur",
+            "location_name": "Jakarta",
+            "supplier_name": "CV Contoh",
+            "commercial_cost": {
+                "purchase_total": "5700000.00",
+                "transport_total": "34200.00",
+                "handling_total": "150000.00",
+                "invoice_total": "5884200.00",
+                "invoice_unit_price": "29421.00",
+                "sdc_total": None,
+                "sdc_unit_price": None,
+                "expected_loss": None,
+                "freshness_risk": None,
+                "safety_penalty": None,
+                "risk_method": {"kind": "simulated_policy", "version": "sdc-policy-1"},
+            },
+            "keputusan": {"id": "kep-1", "status": "executed"},
+            "persetujuan": [],
+            "dibuat_pada": datetime(2026, 10, 29, 4, 0, tzinfo=timezone.utc),
+        }
+    )
+    teks = _teks_pdf(isi)
+    posisi = [
+        teks.index("Bahan — Telur"),
+        teks.index("Transportasi"),
+        teks.index("Penanganan"),
+        teks.index("Total PO (bahan + transportasi + penanganan)"),
+    ]
+    assert posisi == sorted(posisi), "urutan komponen pada rincian pesanan berubah"
+    # Nilai per komponen = angka yang tercatat, bukan angka baru.
+    assert _rupiah_tes(5700000) in teks
+    assert _rupiah_tes(34200) in teks
+    assert _rupiah_tes(150000) in teks
+    # Harga satuan bahan diturunkan (5.700.000 / 200) dan tetap tampil angkanya.
+    assert _rupiah_tes(28500) in teks
+    # Catatan kaki bertanda "*" (harga satuan TURUNAN, lumpsum/ls, selisih)
+    # dihapus 29 Okt 2026 atas permintaan pemilik: rincian pesanan tidak lagi
+    # ditemani keterangan apa pun di bawah tabel.
+    assert "TURUNAN" not in teks
+    assert "lumpsum" not in teks
+
+
+
+# ── 4. Tautan PDF publik untuk Joule (29 Okt 2026) ──────────────────────────
+#
+# Joule hanya mengirim teks: tidak ada token login dan tidak ada lampiran. Satu
+# tautan berumur pendek dipakai supaya juri bisa membuka dokumen yang sedang
+# dibaca asisten — tanpa membuka akses lain.
+
+
+def test_detail_po_mengirim_tautan_pdf_yang_bisa_dibuka_tanpa_token(client, monitor_headers):
+    po = _po_disertifikasi()
+    assert po is not None, "DB demo tidak punya PO dari keputusan approved/executed"
+
+    resp = client.get(
+        f"/sap/purchase-orders/{po['po_number']}/detail", headers=monitor_headers
+    )
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["boleh_pdf"] is True
+    tautan = body["pdf_url"]
+    assert tautan and "/public/purchase-orders/" in tautan and "?t=" in tautan
+
+    # Tautan yang sama, TANPA header Authorization.
+    token = tautan.split("?t=", 1)[1]
+    unduh = client.get(f"/public/purchase-orders/{po['po_number']}/pdf?t={token}")
+    assert unduh.status_code == 200, unduh.text
+    assert unduh.content.startswith(b"%PDF")
+    assert unduh.headers["cache-control"] == "no-store"
+    assert unduh.headers["referrer-policy"] == "no-referrer"
+
+
+def test_tautan_pdf_menolak_token_palsu_nomor_lain_dan_kedaluwarsa(client, monitor_headers):
+    po = _po_disertifikasi()
+    assert po is not None
+    nomor = po["po_number"]
+
+    token_nomor_lain = po_document.token_pdf("MC-NOMOR-LAIN")
+    assert (
+        client.get(f"/public/purchase-orders/{nomor}/pdf?t={token_nomor_lain}").status_code
+        == 401
+    )
+    assert client.get(f"/public/purchase-orders/{nomor}/pdf?t=bukan-token").status_code == 401
+    assert client.get(f"/public/purchase-orders/{nomor}/pdf").status_code == 401
+
+    lampau = datetime.now(timezone.utc) - timedelta(minutes=30)
+    kedaluwarsa = po_document.token_pdf(nomor, sekarang=lampau)
+    resp = client.get(f"/public/purchase-orders/{nomor}/pdf?t={kedaluwarsa}")
+    assert resp.status_code == 401, resp.text
+    assert not resp.content.startswith(b"%PDF")
+
+
+def test_tautan_pdf_tetap_menolak_po_tanpa_keputusan(client):
+    nomor = _po_tanpa_keputusan()
+    if nomor is None:
+        pytest.skip("DB demo tidak punya PO impor tanpa keputusan")
+    token = po_document.token_pdf(nomor)
+    resp = client.get(f"/public/purchase-orders/{nomor}/pdf?t={token}")
+    assert resp.status_code == 409, resp.text
+    assert not resp.content.startswith(b"%PDF")

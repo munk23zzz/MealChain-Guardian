@@ -20,6 +20,7 @@ import {
 } from "../lib/api";
 import { draftUserUpdate, roleLabel } from "../lib/settings";
 import ScrollHint from "./ScrollHint";
+import PageHeader from "./PageHeader";
 
 type AdminUser = {
   id: string;
@@ -120,18 +121,15 @@ export default function SettingsPanel({ token }: { token: string }) {
 
   return (
     <div className="settings">
-      <div className="settings-head">
-        <div>
-          <h1 className="settings-title">Pengaturan</h1>
-          <p className="settings-sub">
-            Kelola pengguna SPPG dan daftar lokasi. Perubahan berlaku untuk
-            keputusan BERIKUTNYA — keputusan lama tidak diubah.
-          </p>
-        </div>
-        <button type="button" className="settings-refresh" onClick={() => void load()}>
-          Muat ulang
-        </button>
-      </div>
+      <PageHeader
+        title="Pengaturan"
+        description="Kelola pengguna SPPG dan daftar lokasi. Perubahan berlaku untuk keputusan BERIKUTNYA — keputusan lama tidak diubah."
+        meta={
+          <button type="button" className="settings-refresh" onClick={() => void load()}>
+            Muat ulang
+          </button>
+        }
+      />
 
       {notice && (
         <p className="settings-notice" role="status" aria-live="polite">

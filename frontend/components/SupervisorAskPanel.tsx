@@ -36,7 +36,7 @@ export default function SupervisorAskPanel({ token }: { token: string | null }) 
     } catch (e) {
       setJawab(null);
       setError(
-        e instanceof Error ? e.message : "Pertanyaan gagal dijawab backend."
+        e instanceof Error ? e.message : "Pertanyaan gagal dijawab."
       );
     } finally {
       setMemuat(false);

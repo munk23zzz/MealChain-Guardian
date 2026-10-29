@@ -809,7 +809,13 @@ export function costFacts(decision: unknown): FactRow[] {
     ["purchase", "Harga beli", "harga/kg × jumlah"],
     ["transport", "Logistik", "linehaul antar SPPG + angkut pemasok"],
     ["handling", "Penanganan", "biaya bongkar-muat tetap"],
-    ["expected_loss", "Potensi susut", "purchase × laju susut × (1 − kesegaran)"],
+    [
+      "expected_loss",
+      "Potensi susut",
+      // Konsep Performance & Audit (29 Okt 2026): susut = fungsi WAKTU, bukan
+      // kesegaran. Kesegaran hanya menambah risiko, bukan susut gudang.
+      "purchase × laju susut × (hari simpan ÷ umur simpan)",
+    ],
     ["freshness_risk", "Risiko kesegaran", "penalti bila kesegaran < 0,60"],
     ["safety_penalty", "Penalti keamanan", "penalti bila status belum terverifikasi"],
   ];
@@ -825,25 +831,11 @@ export function costFacts(decision: unknown): FactRow[] {
       : null,
   }));
 
-  // Pecahan angkut hanya muncul bila backend memang mengirimnya (keputusan baru).
-  const leg = breakdown.transport_supplier_leg;
-  const linehaul = breakdown.transport_linehaul;
-  if (leg !== undefined || linehaul !== undefined) {
-    const at = rows.findIndex((r) => r.label === "Logistik");
-    rows.splice(
-      at + 1,
-      0,
-      {
-        label: "Angkut pemasok → SPPG",
-        value: leg === undefined ? DASH : idr(leg),
-        hint: supplierLegHint(breakdown),
-      },
-      {
-        label: "Angkut antar SPPG",
-        value: linehaul === undefined ? DASH : idr(linehaul),
-      }
-    );
-  }
+  // Pecahan angkut (pemasok → SPPG, antar SPPG) tidak lagi dirender sebagai
+  // baris tersendiri (permintaan pemilik 29 Okt 2026): dua baris itu memecah
+  // "Logistik" menjadi potongan yang tidak dipakai saat membaca bukti. Nilai
+  // `logistics` tetap satu baris, dan `supplierLegHint` tetap tersedia untuk
+  // pemakai lain.
 
   // Total hanya sah bila rincian yang ada menjumlah ke sana. Kalau tidak
   // (baris lama tanpa komponen), total ditandai — bukan ditampilkan seolah

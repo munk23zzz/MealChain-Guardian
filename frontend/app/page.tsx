@@ -17,6 +17,7 @@ import {
   evaluateSafety,
   fetchPendingReceipts,
   fetchReceipts,
+  fetchReceiptChecklist,
   login,
   recordReceipt,
   rejectReceipt,
@@ -70,6 +71,7 @@ import { useToday } from "../lib/hooks/useToday";
 import { errorMessage, MAP_TRUCK_POLL_MS } from "../lib/query";
 import { useSupervisorHealth } from "../lib/hooks/useSupervisorHealth";
 import {
+  DECISION_PAGE_SIZE,
   commodityOptions,
   filterDecisions,
   tableSummary,
@@ -79,11 +81,14 @@ import {
 import {
   FEED_WINDOWS,
   FEED_WINDOW_DEFAULT,
+  feedWindowHint,
   feedWindowHintBilaBerbeda,
   feedWindowLabel,
   type FeedWindowKey,
 } from "../lib/decisions-window";
+import { executionOverview, needsAttention } from "../lib/agent-execution";
 import {
+  FEED_SCOPE_ACTION,
   FEED_SCOPE_ALL,
   FEED_SORT_LABELS,
   feedChips,
@@ -96,6 +101,7 @@ import {
 import { useQueryClient } from "@tanstack/react-query";
 import { formatDateTime } from "../lib/datetime";
 import SettingsPanel from "../components/SettingsPanel";
+import FeedEmptyState from "../components/FeedEmptyState";
 import LocationNetworkBoard from "../components/LocationNetworkBoard";
 import Pager from "../components/Pager";
 import { paginate } from "../lib/pagination";
@@ -132,13 +138,13 @@ import PeriodPicker from "../components/PeriodPicker";
 import SupervisorAskPanel from "../components/SupervisorAskPanel";
 import SupervisorStatusLine from "../components/SupervisorStatusLine";
 import AgentTraceViewer from "../components/AgentTraceViewer";
-import DecisionPicker from "../components/DecisionPicker";
 import { defaultAgentLogId } from "../lib/agent-swarm";
 import DemoControlPanel from "../components/DemoControlPanel";
 import DemoSessionBanner from "../components/DemoSessionBanner";
 import { mapHeaderSubtitle } from "../lib/overview-copy";
 import DecisionChain from "../components/DecisionChain";
 import PageHeader from "../components/PageHeader";
+import PageShell from "../components/PageShell";
 import SectionJump from "../components/SectionJump";
 import ProcurementToday from "../components/ProcurementToday";
 import { overviewSections } from "../lib/section-jump";
@@ -173,14 +179,16 @@ import SupplyDemandPanel from "../components/SupplyDemandPanel";
 import FoodSafetyBoard from "../components/FoodSafetyBoard";
 import SupplierBoard from "../components/SupplierBoard";
 import { runOf, type QualityRun } from "../lib/agent-quality";
-import {
-  AKUN_DEMO_CADANGAN,
-  kelompokkanAkun,
-  muatAkunDemo,
-  type AkunDemo,
-} from "../lib/demo-accounts";
 import { defaultEvidenceId } from "../lib/evidence";
-import { decisionGroups, statusWord, typeWord } from "../lib/decision-picker";
+import {
+  PAGE_TITLES,
+  locationNetworkHint,
+  locationNetworkTitle,
+} from "../lib/navigation";
+import {
+  AGENT_LOG_SECTION_IDS,
+  agentLogSections,
+} from "../lib/section-jump";
 
 const APPROVER_ROLES = new Set(["sppg_head", "sppg_nutritionist"]);
 
@@ -289,20 +297,6 @@ export default function Home() {
   }, []);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  // Akun demo untuk tombol login (27 Okt 2026). Sandi tidak ditanam di bundel:
-  // ia datang dari `GET /auth/demo-login`, yang hanya menjawab bila server
-  // menyalakan DEMO_MODE + DEMO_LOGIN_AUTOFILL. Kalau tidak, daftar cadangan
-  // tetap mengisi email dan operator mengetik sandi.
-  const [akunDemo, setAkunDemo] = useState<AkunDemo[]>(AKUN_DEMO_CADANGAN);
-  useEffect(() => {
-    let batal = false;
-    muatAkunDemo().then((akun) => {
-      if (!batal) setAkunDemo(akun);
-    });
-    return () => {
-      batal = true;
-    };
-  }, []);
   const [loginError, setLoginError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   // PRD 2.4 (arah Roy 2026-10-09): navigasi = 5 tab sesuai 7 screen PRD
@@ -321,7 +315,16 @@ export default function Home() {
   const [logQuery, setLogQuery] = useState("");
   const [logCommodity, setLogCommodity] = useState<string | null>(null);
   const [logVerification, setLogVerification] = useState<VerificationKey>("all");
+  // Triage Agent Log (UI-1): hanya keputusan yang ditandai verifikator atau
+  // lewat tenggat. Saringan ini bekerja pada baris yang sudah dimuat untuk
+  // periode terpilih — bukan panggilan server baru, jadi angkanya sama dengan
+  // yang terlihat di tabel.
+  const [logAttention, setLogAttention] = useState(false);
   const [logPage, setLogPage] = useState(1);
+  // Saringan tahap dari chip strip pipeline (Tahap 4 redesign, 29 Okt 2026).
+  // Disimpan di halaman karena dua komponen berbeda memakainya: chip ada di
+  // panel, sedangkan daftar langkah yang disaring ada di bawahnya.
+  const [logStage, setLogStage] = useState<string | null>(null);
   const [mapCommodity, setMapCommodity] = useState("telur");
   // Lokasi aktif yang disorot di peta, dipilih dari dropdown top bar.
   const [activeLocation, setActiveLocation] = useState<string | null>(null);
@@ -492,18 +495,30 @@ export default function Home() {
     () => verificationCounts(agentLogRows),
     [agentLogRows]
   );
-  const agentLogSummary = tableSummary({
-    shown: agentLogFiltered.length,
-    total: agentLogRows.length,
-    query: logQuery,
-    commodity: logCommodity,
-    verification: logVerification,
-  });
   const supervisorHealth = useSupervisorHealth(token, tab === "agent-log");
   // Dibungkus useMemo: literal `[]` baru setiap render akan membuat useMemo
   // turunan (sampel → run/pemasok) dihitung ulang tanpa perlu.
   const decisions = useMemo(() => decisionsQuery.data?.items ?? [], [decisionsQuery.data]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  // Tabel keputusan adalah SATU-SATUNYA pemilih setelah pemilih di kepala
+  // halaman dihapus (29 Okt 2026). Kalau keputusan terpilih (dipilih otomatis
+  // saat tab dibuka, atau lewat tautan `?keputusan=`) berada di halaman lain,
+  // baris "Dipilih" tidak terlihat sama sekali — jadi halaman digeser ke baris
+  // yang memuatnya.
+  //
+  // Penjaga `pageShownFor`: pergeseran hanya terjadi saat ID TERPILIH berubah.
+  // Tanpa itu, setiap penyegaran data (daftar tersaring diganti objek baru)
+  // akan menarik pengguna kembali dari halaman yang sedang ia buka — terukur di
+  // aplikasi hidup: pindah ke halaman 1 lalu data di-seed ulang = kembali ke 2.
+  const pageShownFor = useRef<string | null>(null);
+  useEffect(() => {
+    if (!selectedId || tab !== "agent-log") return;
+    if (pageShownFor.current === selectedId) return;
+    const indeks = agentLogFiltered.findIndex((row) => row.decision_id === selectedId);
+    if (indeks < 0) return;
+    pageShownFor.current = selectedId;
+    setLogPage(Math.floor(indeks / DECISION_PAGE_SIZE) + 1);
+  }, [selectedId, agentLogFiltered, tab]);
   // 28 Okt 2026 (permintaan pemilik): "detail & jejak agen" dibuka sebagai POPUP
   // di atas halaman yang sedang dipakai, bukan dengan berpindah tab. Alasannya
   // praktis: pengguna yang mengklik kartu ke-7 dari feed kehilangan posisi
@@ -632,6 +647,26 @@ export default function Home() {
     commodityBalance.byCommodity,
     batches,
   ]);
+  // UI-1 Agent Log (29 Okt 2026): ringkasan eksekusi + saringan triage.
+  // Keduanya dihitung dari baris yang SAMA dengan tabel (hasil `/decisions`
+  // periode terpilih) — bukan panggilan server baru dan bukan angka karangan.
+  const agentLogOverview = useMemo(
+    () => (now ? executionOverview(agentLogRows, now) : null),
+    [agentLogRows, now]
+  );
+  const agentLogShown = useMemo(() => {
+    // `now` belum siap (render server): jangan saring apa pun, karena
+    // "lewat tenggat" tidak bisa dinilai tanpa jam acuan.
+    if (!logAttention || !now) return agentLogFiltered;
+    return agentLogFiltered.filter((row) => needsAttention(row, now));
+  }, [agentLogFiltered, logAttention, now]);
+  const agentLogSummary = tableSummary({
+    shown: agentLogShown.length,
+    total: agentLogRows.length,
+    query: logQuery,
+    commodity: logCommodity,
+    verification: logVerification,
+  });
   // 19 Okt 2026: daftar keputusan sering tiba SETELAH tab dibuka (muat awal),
   // sehingga handler SideNav di atas tidak menemukan apa pun dan tab terbuka
   // dengan "Pilih keputusan" padahal daftarnya sudah berisi. Efek ini menjadi
@@ -718,6 +753,19 @@ export default function Home() {
     await Promise.all([todayQuery.refetch(), mapQuery.refetch()]);
     return { safety, freshness };
   };
+
+  // Dua loader untuk kartu Penerimaan barang. Identitasnya HARUS stabil
+  // (deps `token` saja): fungsi inline membuat FoodSafetyBoard memuat ulang
+  // antrean persetujuan dan daftar ceklis pada setiap render — terukur
+  // 29 Okt 2026: 30 permintaan dalam 10 detik (15 + 15) selagi tab terbuka.
+  const loadReceiptChecklist = useCallback(
+    (komoditas: string) => fetchReceiptChecklist(komoditas, token ?? ""),
+    [token]
+  );
+  const loadPendingReceiptsStabil = useCallback(
+    () => fetchPendingReceipts(token ?? ""),
+    [token]
+  );
 
   // Persetujuan penerimaan (migrasi 026): server menulis stok, lalu Overview,
   // Hari Ini, dan feed keputusan diambil ulang — layar tidak menambah angka
@@ -976,11 +1024,9 @@ export default function Home() {
   }
 
   if (!token) {
-    // 27 Okt 2026: satu klik peran mengisi email DAN sandi (bila server
-    // menyalakan DEMO_MODE + DEMO_LOGIN_AUTOFILL). Sandi tidak pernah ditanam
-    // di bundel; `GET /auth/demo-accounts` tetap ber-token admin dan tidak
-    // dipanggil halaman publik ini.
-    const { utama: demoAccounts, kota: demoKota } = kelompokkanAkun(akunDemo);
+    // 29 Okt 2026: blok akun demo dihapus dari login (permintaan pemilik).
+    // Halaman publik hanya memuat form email + sandi; tidak ada label peran
+    // yang dicetak dan tidak ada panggilan ke endpoint demo.
     return (
       <main className="login-shell">
         {/* Panel brand: dunia subject — rantai dingin SPPG, angka dari data demo asli */}
@@ -1026,52 +1072,6 @@ export default function Home() {
             <button className="button login-submit" type="submit" disabled={submitting}>
               {submitting ? "Memeriksa…" : "Masuk"}
             </button>
-            <div className="demo-block">
-              {/* Demo accounts jadi inline text-link — bukan chip/kartu
-                  (arah Roy 2026-10-10: login jangan penuh "item"). */}
-              <p className="demo-hint">Demo:</p>
-              <p className="demo-links">
-                {demoAccounts.map((acc, i) => (
-                  <span key={acc.email}>
-                    {i > 0 && " · "}
-                    <button
-                      type="button"
-                      className="demo-link"
-                      onClick={() => {
-                        setEmail(acc.email);
-                        // Sandi terisi bila server menyalakan autofill demo;
-                        // kalau tidak, `acc.password` undefined → kolom kosong.
-                        setPassword(acc.password ?? "");
-                        setLoginError(null);
-                      }}
-                    >
-                      {acc.label}
-                    </button>
-                  </span>
-                ))}
-              </p>
-              {/* Approver Kota lain — supaya alur dua approval bisa dicoba di
-                  Bandung/Surabaya, bukan hanya di Jakarta. */}
-              <p className="demo-hint demo-hint-kota">Kota lain:</p>
-              <p className="demo-links">
-                {demoKota.map((acc, i) => (
-                  <span key={acc.email}>
-                    {i > 0 && " · "}
-                    <button
-                      type="button"
-                      className="demo-link"
-                      onClick={() => {
-                        setEmail(acc.email);
-                        setPassword(acc.password ?? "");
-                        setLoginError(null);
-                      }}
-                    >
-                      {acc.label}
-                    </button>
-                  </span>
-                ))}
-              </p>
-            </div>
           </form>
         </section>
       </main>
@@ -1190,7 +1190,7 @@ export default function Home() {
     title?: string;
     roles?: string[];
   }[] = [
-    { id: "today", label: "Hari Ini" },
+    { id: "today", label: "Today" },
     { id: "overview", label: "Overview" },
     // Dokumen 03 §3/§5 (28 Okt 2026): halaman gabungan jaringan + pasokan &
     // permintaan satu lokasi. Untuk nutritionist — yang menurut §5 tidak
@@ -1199,11 +1199,8 @@ export default function Home() {
     // gizi satu lokasi, dan tombol lokasinya tetap ada di dalamnya.
     {
       id: "location-network",
-      label: role === "sppg_nutritionist" ? "Pasokan & Kebutuhan" : "Location Network",
-      title:
-        role === "sppg_nutritionist"
-          ? "Pasokan, kebutuhan, dan batch satu lokasi"
-          : "Siapa kekurangan, siapa kelebihan, apa yang dialihkan, dan apa yang terbuang",
+      label: locationNetworkTitle(role),
+      title: locationNetworkHint(role),
     },
     {
       // Angka = jumlah yang PERLU DI-APPROVE, bukan seluruh keputusan yang
@@ -1215,19 +1212,19 @@ export default function Home() {
       // kedaluwarsa dilaporkan terpisah: ia bukan pekerjaan yang bisa
       // diselesaikan, hanya usulan lama yang tidak pernah dimajukan.
       title: perluKeputusan
-        ? `${perluKeputusan} rekomendasi perlu tindakan${lewatTenggat ? ` · ${lewatTenggat} lewat tenggat` : ""}${drafLewat ? ` · ${drafLewat} draf usulan kedaluwarsa` : ""}`
+        ? `${perluKeputusan} recommendations need action${lewatTenggat ? ` · ${lewatTenggat} past due` : ""}${drafLewat ? ` · ${drafLewat} expired drafts` : ""}`
         : lewatTenggat
-          ? `Tidak ada yang bisa ditindak · ${lewatTenggat} lewat tenggat`
+          ? `Nothing actionable · ${lewatTenggat} past due`
           : drafLewat
-            ? `Tidak ada yang bisa ditindak · ${drafLewat} draf usulan kedaluwarsa`
-            : "Tidak ada rekomendasi yang perlu tindakan",
+            ? `Nothing actionable · ${drafLewat} expired drafts`
+            : "No recommendations need action",
     },
-    { id: "evidence", label: "Decision & Evidence" },
-    { id: "safety", label: "Keamanan Pangan" },
-    { id: "suppliers", label: "Pemasok" },
-    { id: "agent-log", label: "Agent Log" },
-    { id: "kpi-kualitas", label: "KPI & Kualitas Agen" },
-    { id: "settings", label: "Pengaturan", roles: Array.from(MANAGE_ROLES) },
+    { id: "evidence", label: PAGE_TITLES.evidence },
+    { id: "safety", label: PAGE_TITLES.safety },
+    { id: "suppliers", label: PAGE_TITLES.suppliers },
+    { id: "agent-log", label: PAGE_TITLES.agentLog },
+    { id: "kpi-kualitas", label: "Performance & Audit" },
+    { id: "settings", label: PAGE_TITLES.settings, roles: Array.from(MANAGE_ROLES) },
     ...(isApprover
       ? [{ id: "demo-control" as const, label: "Demo Control" }]
       : []),
@@ -1414,37 +1411,36 @@ export default function Home() {
                 peran → strip KPI → banner lokasi kritis → kartu filter →
                 peta (2/3) + grafik stok (1/3) → kartu Status Lokasi.
                 Angka dihitung dari data peta real (mapData), tanpa karangan. */}
-            <section
-              className="overview-header jump-target"
+            <PageHeader
               id="ov-ringkas"
-              aria-label="Ringkasan peta pasokan"
-            >
-              <div className="overview-header-main">
-                <h1>Overview Pasokan &amp; Distribusi</h1>
-                <p className="overview-header-sub">
-                  {mapData
-                    ? mapHeaderSubtitle((mapData.locations ?? []).length)
-                    : "Memuat kondisi pasokan semua lokasi SPPG…"}
-                </p>
-              </div>
-              <div className="overview-header-status">
-                <span
-                  className="overview-demo-chip"
-                  title="Data contoh untuk demo, bukan data operasional produksi"
-                >
-                  Data simulasi
-                </span>
-                <span className="overview-live-pill" title="Diperbarui setiap 5 detik">
-                  <span className="overview-live-dot" aria-hidden="true" />
-                  Sinkron otomatis
-                </span>
-                {mapUpdatedAt !== null && (
-                  <span className="overview-updated" aria-live="polite">
-                    {syncLabel(mapUpdatedAt)}
+              className="jump-target"
+              ariaLabel="Ringkasan peta pasokan"
+              title="Overview Pasokan & Distribusi"
+              description={
+                mapData
+                  ? mapHeaderSubtitle((mapData.locations ?? []).length)
+                  : "Memuat kondisi pasokan semua lokasi SPPG…"
+              }
+              meta={
+                <>
+                  <span
+                    className="overview-demo-chip"
+                    title="Data contoh untuk demo, bukan data operasional produksi"
+                  >
+                    Data simulasi
                   </span>
-                )}
-              </div>
-            </section>
+                  <span className="overview-live-pill" title="Diperbarui setiap 5 detik">
+                    <span className="overview-live-dot" aria-hidden="true" />
+                    Sinkron otomatis
+                  </span>
+                  {mapUpdatedAt !== null && (
+                    <span className="overview-updated" aria-live="polite">
+                      {syncLabel(mapUpdatedAt)}
+                    </span>
+                  )}
+                </>
+              }
+            />
 
             {/* Navigasi bagian (komponen bersama): Overview delapan blok dalam
                 satu gulungan — peta, kiriman, kecukupan, telemetri. Daftarnya
@@ -1831,7 +1827,7 @@ export default function Home() {
 
         {tab === "recommendations" && (
           <>
-            <section className="feed-section">
+            <section>
               <PageHeader
                 title="Recommendation Feed"
                 // Satu kalimat (29 Okt 2026). Versi sebelumnya 259 karakter dan
@@ -1856,7 +1852,7 @@ export default function Home() {
                 }
               />
               {error && (
-                <p className="status-danger">
+                <p className="status-danger" role="alert">
                   Gagal memuat data: {error}{" "}
                   <button
                     type="button"
@@ -1889,185 +1885,212 @@ export default function Home() {
 
                   {/* Cari + urutkan: sebelumnya tidak ada sama sekali, jadi 126
                       kartu hanya bisa dipindai satu per satu. */}
-                  <div className="feed-toolbar">
-                    <div className="feed-field feed-field-search">
-                      <label htmlFor="feed-search">Cari rekomendasi</label>
-                      <input
-                        id="feed-search"
-                        type="search"
-                        value={feedQuery}
-                        placeholder="Jenis, status, komoditas, atau ID keputusan…"
-                        onChange={(e) => {
-                          setFeedQuery(e.target.value);
-                          setFeedPage(1);
-                        }}
-                      />
-                    </div>
-                    <div className="feed-field feed-field-sort">
-                      <label htmlFor="feed-sort">Urutkan</label>
-                      <select
-                        id="feed-sort"
-                        value={feedSort}
-                        onChange={(e) => {
-                          setFeedSort(e.target.value as FeedSort);
-                          setFeedPage(1);
-                        }}
-                      >
-                        {(["urgency", "due", "newest"] as FeedSort[]).map((mode) => (
-                          <option key={mode} value={mode}>
-                            {FEED_SORT_LABELS[mode]}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                  </div>
-
-                  {/* Pemilih periode (permintaan pemilik 24 Okt 2026).
-                      Memakai kontrol yang SAMA dengan pemilih periode KPI
-                      (`.kpi-period` + `.commodity-pill` + `aria-pressed`)
-                      supaya dua tempat tidak punya bahasa visual berbeda.
-                      Tombol asli, bukan div: bisa Tab + Enter, dan keadaan
-                      aktif diumumkan ke pembaca layar — bukan hanya warna. */}
-                  <div
-                    className="kpi-period feed-period"
-                    role="group"
-                    aria-label="Periode rekomendasi"
-                  >
-                    <span className="kpi-period-label">Periode:</span>
-                    {FEED_WINDOWS.map((w) => {
-                      const aktif = w.key === feedWindow;
-                      return (
-                        <button
-                          key={w.key}
-                          type="button"
-                          className={`commodity-pill kpi-period-pill${
-                            aktif ? " is-active" : ""
-                          }`}
-                          data-window={w.key}
-                          aria-pressed={aktif}
-                          title={w.hint}
-                          onClick={() => {
-                            setFeedWindow(w.key);
+                  {/* Tahap 1 (30 Okt 2026): EMPAT baris kendali disatukan
+                      jadi satu pita — pencarian+urutan, pemilih periode, chip
+                      status, dan baris hitungan. Sebelumnya tiap blok membawa
+                      margin sendiri (12+12+24+12 px) sehingga sepuluh kartu
+                      pertama terdorong ke bawah lipatan layar. Urutan DOM
+                      tidak berubah, jadi urutan Tab dan pembaca layar tetap
+                      sama seperti sebelumnya. */}
+                  <div className="feed-kendali">
+                    <div className="feed-toolbar">
+                      <div className="feed-field feed-field-search">
+                        <label htmlFor="feed-search">Cari rekomendasi</label>
+                        <input
+                          id="feed-search"
+                          type="search"
+                          value={feedQuery}
+                          placeholder="Jenis, status, komoditas, atau ID keputusan…"
+                          onChange={(e) => {
+                            setFeedQuery(e.target.value);
+                            setFeedPage(1);
+                          }}
+                        />
+                      </div>
+                      <div className="feed-field feed-field-sort">
+                        <label htmlFor="feed-sort">Urutkan</label>
+                        <select
+                          id="feed-sort"
+                          value={feedSort}
+                          onChange={(e) => {
+                            setFeedSort(e.target.value as FeedSort);
                             setFeedPage(1);
                           }}
                         >
-                          {w.label}
-                        </button>
-                      );
-                    })}
-                    {/* Petunjuk hanya bila menambah arti (29 Okt 2026): untuk
-                        "7 hari" ia berbunyi "7 hari terakhir" — kalimat yang
-                        sama dua kali, dan di layar terbaca seperti chip keempat
-                        yang tidak bisa ditekan. */}
-                    {feedWindowHintBilaBerbeda(feedWindow) && (
-                      <span className="feed-period-hint">
-                        {feedWindowHintBilaBerbeda(feedWindow)}
-                      </span>
-                    )}
-                  </div>
+                          {(["urgency", "due", "newest"] as FeedSort[]).map((mode) => (
+                            <option key={mode} value={mode}>
+                              {FEED_SORT_LABELS[mode]}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
 
-                  {/* Filter status: semua status punya chip + count (traceable;
-                      EXPIRED tetap ada, tidak pernah disembunyikan by default).
-                      Label bahasa manusia + aria-pressed supaya pembaca layar
-                      tahu mana yang sedang aktif. */}
-                  <div className="feed-filters" role="group" aria-label="Filter status">
-                    {feedChipList.map((chip) => (
-                      <button
-                        key={chip.id}
-                        type="button"
-                        aria-pressed={feedScope === chip.id}
-                        className={`filter-chip${
-                          feedScope === chip.id ? " filter-chip-active" : ""
-                        }`}
-                        onClick={() => {
-                          setFeedScope(feedScope === chip.id ? FEED_SCOPE_ALL : chip.id);
-                          setFeedPage(1);
-                        }}
-                      >
-                        {/* Huruf pertama dikapitalkan di sini, bukan di
-                            lib: `feedChips` sengaja mengembalikan label apa
-                            adanya (dipakai juga sebagai kata kunci pencarian
-                            dan diuji huruf kecil). Tanpa ini deretan chip
-                            terbaca "Perlu tindakan · menunggu persetujuan ·
-                            ditandai verifier" — satu baris dengan tiga gaya
-                            huruf awal. */}
-                        {chip.label.charAt(0).toUpperCase() + chip.label.slice(1)}
-                        <span className="legend-count">{chip.count}</span>
-
-                      </button>
-                    ))}
-                  </div>
-
-                  <div className="feed-status-row">
-                    {/* Angka "Menampilkan 10 dari 17" hanya dicetak saat ada
-                        saringan/pencarian (29 Okt 2026). Tanpa saringan ia
-                        persis mengulang "1–10 dari 17" di pager 40 px di
-                        bawahnya, sedangkan pembaca layar tetap perlu tahu
-                        rentang yang tampil — karena itu saat tidak menyaring
-                        barisnya `sr-only`, bukan dihapus. */}
-                    <p
-                      className={`feed-status${feedFilterActive ? "" : " sr-only"}`}
-                      role="status"
-                      aria-atomic="true"
+                    {/* Pemilih periode (permintaan pemilik 24 Okt 2026).
+                        Memakai kontrol yang SAMA dengan pemilih periode KPI
+                        (`.kpi-period` + `.commodity-pill` + `aria-pressed`)
+                        supaya dua tempat tidak punya bahasa visual berbeda.
+                        Tombol asli, bukan div: bisa Tab + Enter, dan keadaan
+                        aktif diumumkan ke pembaca layar — bukan hanya warna. */}
+                    <div
+                      className="kpi-period feed-period"
+                      role="group"
+                      aria-label="Periode rekomendasi"
                     >
-                      {feedSummary({
-                        shown: feedCards.length,
-                        total: feedWindowDecisions.length,
-                        scope: feedScope,
-                        query: feedQuery,
+                      <span className="kpi-period-label">Periode:</span>
+                      {FEED_WINDOWS.map((w) => {
+                        const aktif = w.key === feedWindow;
+                        return (
+                          <button
+                            key={w.key}
+                            type="button"
+                            className={`commodity-pill kpi-period-pill${
+                              aktif ? " is-active" : ""
+                            }`}
+                            data-window={w.key}
+                            aria-pressed={aktif}
+                            title={w.hint}
+                            onClick={() => {
+                              setFeedWindow(w.key);
+                              setFeedPage(1);
+                            }}
+                          >
+                            {w.label}
+                          </button>
+                        );
                       })}
-                    </p>
-                    {feedFilterActive && (
-                      <button
-                        type="button"
-                        className="feed-reset"
-                        onClick={() => {
-                          setFeedScope(FEED_SCOPE_ALL);
-                          setFeedQuery("");
-                          setFeedPage(1);
-                        }}
-                      >
-                        Kosongkan filter
-                      </button>
-                    )}
-                  </div>
-
-                  {feedCards.length === 0 ? (
-                    <div className="empty-state feed-empty">
-                      {feedFilterActive ? (
-                        <p>
-                          Tidak ada rekomendasi yang cocok dengan filter atau
-                          kata kunci ini. Coba kata lain, atau kosongkan filter
-                          untuk melihat seluruh {feedWindowDecisions.length}{" "}
-                          rekomendasi pada periode{" "}
-                          {feedWindowLabel(feedWindow).toLowerCase()}.
-                        </p>
-                      ) : (
-                        <>
-                          <p>
-                            Tidak ada rekomendasi pada periode{" "}
-                            <strong>{feedWindowLabel(feedWindow).toLowerCase()}</strong>
-                            {feedWindowHintBilaBerbeda(feedWindow)
-                              ? ` (${feedWindowHintBilaBerbeda(feedWindow)}).`
-                              : "."}
-                          </p>
-                          {feedWindow !== "30d" && (
-                            <button
-                              type="button"
-                              className="feed-reset"
-                              onClick={() => {
-                                setFeedWindow("30d");
-                                setFeedPage(1);
-                              }}
-                            >
-                              Lihat 1 bulan terakhir
-                            </button>
-                          )}
-                        </>
+                      {/* Petunjuk hanya bila menambah arti (29 Okt 2026): untuk
+                          "7 hari" ia berbunyi "7 hari terakhir" — kalimat yang
+                          sama dua kali, dan di layar terbaca seperti chip keempat
+                          yang tidak bisa ditekan. */}
+                      {feedWindowHintBilaBerbeda(feedWindow) && (
+                        <span className="feed-period-hint">
+                          {feedWindowHintBilaBerbeda(feedWindow)}
+                        </span>
                       )}
                     </div>
+
+                    {/* Filter status: semua status punya chip + count (traceable;
+                        EXPIRED tetap ada, tidak pernah disembunyikan by default).
+                        Label bahasa manusia + aria-pressed supaya pembaca layar
+                        tahu mana yang sedang aktif. */}
+                    <div className="feed-filters" role="group" aria-label="Filter status">
+                      {feedChipList.map((chip) => {
+                        /* Tahap 2 (30 Okt 2026): chip adalah RINGKASAN yang juga
+                           bisa ditekan. Tiga hal yang dijaga di sini:
+                           1. chip berangka 0 dinonaktifkan — mengkliknya hanya
+                              memindahkan pengguna ke daftar kosong, dan angkanya
+                              tetap terlihat supaya statusnya tidak "hilang";
+                           2. `aria-label` menyebut cakupan + jumlah, karena
+                              pembaca layar tidak membaca angka di samping label;
+                           3. chip pertama ("Perlu tindakan") ditandai `data-utama`
+                              untuk penekanan tipografi, bukan warna baru.
+                           Pengumuman perubahan TIDAK memakai live region baru:
+                           `feed-status` (role="status" aria-atomic) sudah
+                           mengabarkan "Menampilkan X dari Y · filter: …" saat
+                           chip ditekan. Dua live region bersaing berisik di
+                           pembaca layar dan sulit diuji. */
+                        const aktif = feedScope === chip.id;
+                        const habis = chip.count === 0;
+                        return (
+                        <button
+                          key={chip.id}
+                          type="button"
+                          aria-pressed={aktif}
+                          /* Chip yang sedang aktif tidak boleh terkunci mati
+                             walau angkanya 0 — pengguna harus tetap bisa
+                             melepasnya (dan "Kosongkan filter" tetap ada). */
+                          disabled={habis && !aktif}
+                          aria-label={`Saring daftar ke ${chip.label}: ${chip.count} rekomendasi`}
+                          data-utama={chip.id === FEED_SCOPE_ACTION}
+                          className={`filter-chip${aktif ? " filter-chip-active" : ""}${
+                            habis && !aktif ? " filter-chip-kosong" : ""
+                          }`}
+                          onClick={() => {
+                            setFeedScope(aktif ? FEED_SCOPE_ALL : chip.id);
+                            setFeedPage(1);
+                          }}
+                        >
+                          {/* Huruf pertama dikapitalkan di sini, bukan di
+                              lib: `feedChips` sengaja mengembalikan label apa
+                              adanya (dipakai juga sebagai kata kunci pencarian
+                              dan diuji huruf kecil). Tanpa ini deretan chip
+                              terbaca "Perlu tindakan · menunggu persetujuan ·
+                              ditandai verifier" — satu baris dengan tiga gaya
+                              huruf awal. */}
+                          {chip.label.charAt(0).toUpperCase() + chip.label.slice(1)}
+                          <span className="legend-count">{chip.count}</span>
+                        </button>
+                        );
+                      })}
+                    </div>
+
+                    <div className="feed-status-row">
+                      {/* Angka "Menampilkan 10 dari 17" hanya dicetak saat ada
+                          saringan/pencarian (29 Okt 2026). Tanpa saringan ia
+                          persis mengulang "1–10 dari 17" di pager 40 px di
+                          bawahnya, sedangkan pembaca layar tetap perlu tahu
+                          rentang yang tampil — karena itu saat tidak menyaring
+                          barisnya `sr-only`, bukan dihapus. */}
+                      <p
+                        className={`feed-status${feedFilterActive ? "" : " sr-only"}`}
+                        role="status"
+                        aria-atomic="true"
+                      >
+                        {feedSummary({
+                          shown: feedCards.length,
+                          total: feedWindowDecisions.length,
+                          scope: feedScope,
+                          query: feedQuery,
+                        })}
+                      </p>
+                      {feedFilterActive && (
+                        <button
+                          type="button"
+                          className="feed-reset"
+                          onClick={() => {
+                            setFeedScope(FEED_SCOPE_ALL);
+                            setFeedQuery("");
+                            setFeedPage(1);
+                          }}
+                        >
+                          Kosongkan filter
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+
+                  {feedCards.length === 0 ? (
+                    <FeedEmptyState
+                      filterActive={feedFilterActive}
+                      windowKey={feedWindow}
+                      windowLabel={feedWindowLabel(feedWindow)}
+                      windowHint={feedWindowHintBilaBerbeda(feedWindow)}
+                      totalInWindow={feedWindowDecisions.length}
+                      onResetFilter={() => {
+                        setFeedScope(FEED_SCOPE_ALL);
+                        setFeedQuery("");
+                        setFeedPage(1);
+                      }}
+                      onWidenWindow={() => {
+                        setFeedWindow("30d");
+                        setFeedPage(1);
+                      }}
+                      onRetry={() => void decisionsQuery.refetch()}
+                    />
                   ) : (
-                    <div className="feed">
+                    <section className="feed" aria-labelledby="feed-judul">
+                      {/* Tahap 3 (30 Okt 2026): daerah daftar diberi satu judul
+                          h2 (sr-only, tidak menambah teks di layar) supaya judul
+                          kartu yang kini <h3> tidak melompati tingkat heading —
+                          h1 → h3 adalah kegagalan urutan heading. Komentar ini
+                          sengaja berada DI DALAM elemen: di posisi sebelumnya
+                          (tepat setelah `(` cabang ternary) ia bukan JSX dan
+                          membuat berkas gagal di-parse. */}
+                      <h2 className="sr-only" id="feed-judul">
+                        Daftar rekomendasi
+                      </h2>
                       {feedCards.map((d) => {
                         // Tombol "Persetujuan" hanya untuk yang benar-benar
                         // boleh menyetujui — peran pemantau dan keputusan yang
@@ -2092,7 +2115,7 @@ export default function Home() {
                           </div>
                         );
                       })}
-                    </div>
+                    </section>
                   )}
 
                   <Pager
@@ -2127,7 +2150,6 @@ export default function Home() {
           ) : null}
           <DecisionEvidence
             purchaseOrders={purchaseOrders.data}
-            traces={detail.loading ? null : traces}
             decisions={decisions}
             selected={selected}
             selectedId={selectedId}
@@ -2180,7 +2202,7 @@ export default function Home() {
             now={now}
             commodities={COMMODITIES}
             onCommodityChange={setMapCommodity}
-            heading={role === "sppg_nutritionist" ? "Pasokan & Kebutuhan" : "Location Network"}
+            heading={locationNetworkTitle(role)}
             // Kalimat kepala peran lain memakai bawaan komponen (satu sumber
             // teks): dulu kalimat yang sama ditulis dua kali di sini dan di
             // komponen, dan keduanya sempat berbeda.
@@ -2215,11 +2237,12 @@ export default function Home() {
             onRecheck={safetyRecheck}
             onRepropose={safetyRepropose}
             onTriggerDisruption={safetyTriggerDisruption}
-            onRecordReceipt={(batchId, checked, catatan) =>
-              recordReceipt(batchId, checked, catatan, token ?? "")
+            onRecordReceipt={(batchId, checked, catatan, dinilai) =>
+              recordReceipt(batchId, checked, catatan, token ?? "", dinilai)
             }
             loadReceipts={(batchId) => fetchReceipts(batchId, token ?? "")}
-            loadPendingReceipts={() => fetchPendingReceipts(token ?? "")}
+            loadChecklist={loadReceiptChecklist}
+            loadPendingReceipts={loadPendingReceiptsStabil}
             onApproveReceipt={receiptApprove}
             onRejectReceipt={receiptReject}
             canApprove={role === "sppg_head"}
@@ -2290,25 +2313,28 @@ export default function Home() {
             melihat observability; pilih decision di dropdown bila belum
             ada yang terpilih. */}
         {tab === "agent-log" && (
-          <section className="agent-log-section">
-            <PageHeader
-              title="Agent Activity Log"
-              description="Pilih satu keputusan, lalu klik satu tahap untuk melihat tool dan catatannya. Keadaan jejak ditulis apa adanya dari trace."
-              meta={
-                <DecisionPicker
-                  id="pilih-keputusan-log"
-                  ariaLabel="Pilih keputusan"
-                  groups={decisionGroups(decisions, now)}
-                  value={selectedId}
-                  onChange={(decisionId) => setSelectedId(decisionId)}
-                />
-              }
-            />
+          <PageShell
+            className="agent-log-section"
+            sections={agentLogSections()}
+            jumpAriaLabel="Bagian halaman Agent Activity Log"
+            title={PAGE_TITLES.agentLog}
+            description="Pilih keputusan, klik satu tahap, lihat tool dan catatannya."
+          >
 
             {/* Urutan baca dokumen `06-agent-log.md` §4.3: pencarian → periode →
                 tabel keputusan → keadaan trace → strip tahap → langkah rinci →
                 konteks (agent, supervisor, status model) → integritas. Semua yang
                 bergantung pada satu keputusan berada SETELAH pemilihnya. */}
+            {/* Satu bilah filter (29 Okt 2026): pencarian, komoditas, dan periode
+                dulu tiga blok bertumpuk (158 px + 28 px + jarak). Kini satu kartu
+                — periode duduk sebaris dengan field, chip status + kalimat cakupan
+                di bawahnya. */}
+            <div className="jump-target" id={AGENT_LOG_SECTION_IDS.pilih}>
+            {/* Tahap 1 redesign (29 Okt 2026): delapan blok dulu bertumpuk tanpa
+                judul kelompok. Kini tiga kelompok bertajuk — Pilih keputusan,
+                Langkah & model, Integritas — supaya pembaca tahu di mana ia
+                berada tanpa membaca paragraf penghubung. */}
+            <h2 className="log-section-title" id="log-pilih-judul">Pilih keputusan</h2>
             <ModuleSearch
               query={logQuery}
               onQuery={(value) => {
@@ -2325,44 +2351,64 @@ export default function Home() {
                 setLogVerification(value);
                 setLogPage(1);
               }}
+              attention={logAttention}
+              onAttention={(value) => {
+                setLogAttention(value);
+                setLogPage(1);
+              }}
+              attentionCount={agentLogOverview?.attention ?? 0}
               commodities={agentLogCommodities}
               counts={agentLogCounts}
               total={agentLogRows.length}
-            />
-
-            <PeriodPicker
-              value={logWindow}
-              onChange={(value) => {
-                setLogWindow(value);
-                setLogPage(1);
-              }}
+              shown={agentLogShown.length}
+              period={
+                <PeriodPicker
+                  value={logWindow}
+                  onChange={(value) => {
+                    setLogWindow(value);
+                    setLogPage(1);
+                  }}
+                />
+              }
             />
 
             <AgentActivityPanel
               role={role}
-              decisions={agentLogFiltered}
+              decisions={agentLogShown}
               total={agentLogRows.length}
               page={logPage}
               onPage={setLogPage}
               selectedId={selectedId}
-              onSelect={(decisionId) => setSelectedId(decisionId)}
+              onSelect={(decisionId) => {
+                setSelectedId(decisionId);
+                // Keputusan berganti = saringan tahap lama tidak berlaku lagi.
+                setLogStage(null);
+              }}
               summary={agentLogSummary}
               steps={detail.loading ? null : traces}
               ledger={detail.loading ? null : detail.ledger}
+              overview={agentLogOverview}
+              periodLabel={feedWindowHint(logWindow)}
+              now={now}
+              loading={agentLogQuery.isPending}
               onOpenEvidence={() => setTab("evidence")}
+              stageFilter={logStage}
+              onStageFilter={setLogStage}
             />
+            </div>
 
-            {/* §2.9: tanya-jawab hanya untuk peran non-approver. */}
-            {role && !APPROVER_ROLES.has(role) ? (
-              <SupervisorAskPanel token={token} />
-            ) : null}
-
-            <p className="agent-log-connector">
-              Panel di atas melaporkan APA yang tercatat. Bagian berikut menampilkan
-              langkah rinci, status model, dan integritas ledger — bukan penilaian
-              benar atau salah.
-            </p>
-
+            <div className="jump-target" id={AGENT_LOG_SECTION_IDS.langkah}>
+            {/* Judul kelompok + status supervisor sebaris (permintaan pemilik
+                29 Okt 2026: "Agent supervisor" kurang pas kalau jadi kartu
+                sendiri di samping roster). Statusnya menerangkan keadaan jejak,
+                jadi tempatnya di kepala kelompok, bukan sebagai blok ketiga. */}
+            <div className="log-section-head">
+              <h2 className="log-section-title" id="log-langkah-judul">Langkah &amp; model</h2>
+              <SupervisorStatusLine
+                health={supervisorHealth.data ?? null}
+                loading={supervisorHealth.isLoading}
+              />
+            </div>
             <AgentRunSummary
               providers={providersFromTraces(traces)}
               traceCount={traces.length}
@@ -2372,20 +2418,36 @@ export default function Home() {
             <AgentTraceViewer
               steps={traces}
               decisionId={selected?.decision_id ?? null}
+              createdAt={selected?.created_at ?? null}
               now={now}
+              stageFilter={logStage}
+              onClearStageFilter={() => setLogStage(null)}
             />
 
+            {/* Roster dua agent (Tahap 5); status supervisor sudah pindah ke
+                kepala kelompok di atas. */}
             <AgentRoster />
 
-            <SupervisorStatusLine
-              health={supervisorHealth.data ?? null}
-              loading={supervisorHealth.isLoading}
-            />
+            </div>
 
             {selected ? (
-              <IntegrityPanel token={token ?? ""} decisionId={selected.decision_id} />
+              <div className="jump-target" id={AGENT_LOG_SECTION_IDS.integritas}>
+                <h2 className="log-section-title" id="log-integritas-judul">Integritas</h2>
+                <IntegrityPanel token={token ?? ""} decisionId={selected.decision_id} />
+              </div>
             ) : null}
-          </section>
+
+            {/* §2.9: tanya-jawab untuk peran non-approver — PALING BAWAH halaman
+                (Tahap 6 redesign). Ia alat bantu penjelajahan, bukan langkah
+                pertama: sebelumnya ia duduk di antara pemilih keputusan dan
+                tabel, sehingga pembaca yang baru membuka halaman melihat kotak
+                tanya-jawab sebelum melihat satu keputusan pun. */}
+            {role && !APPROVER_ROLES.has(role) ? (
+              <div className="agent-log-ask">
+                <SupervisorAskPanel token={token} />
+              </div>
+            ) : null}
+          </PageShell>
         )}
         </div>
       </div>

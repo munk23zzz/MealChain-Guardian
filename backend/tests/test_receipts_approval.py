@@ -9,9 +9,13 @@ Kontrak yang dikunci (keputusan pemilik, 20 Okt 2026):
 4. Penolakan wajib beralasan dan tidak menulis stok.
 5. Hanya `sppg_head` yang memutuskan; batch harus di lokasi sendiri.
 6. Barang berstatus keamanan `fail` tidak boleh disetujui.
+7. Batch yang masa layaknya sudah lewat tidak lagi ditawarkan di antrean
+   "Menunggu persetujuan" (permintaan pemilik, 29 Okt 2026).
 """
 
 from __future__ import annotations
+
+from datetime import UTC, datetime, timedelta
 
 import pytest
 from sqlalchemy import create_engine, text
@@ -151,6 +155,96 @@ def test_antrean_menunggu_hanya_berisi_catatan_yang_belum_diputuskan(auth_header
             assert tolak.status_code == 200, tolak.text
             sesudah = c.get("/receipts/menunggu", headers=auth_headers).json()["items"]
             assert all(i["batch_id"] != batch_id for i in sesudah)
+    finally:
+        _bersihkan(receipt_ids, [])
+
+
+def test_antrean_menyembunyikan_batch_yang_sudah_kedaluwarsa(auth_headers):
+    """Batch yang masa layaknya lewat tidak ditawarkan lagi untuk disetujui.
+
+    Permintaan pemilik (29 Okt 2026): barang kedaluwarsa tidak boleh muncul di
+    "Menunggu persetujuan" — menyetujuinya hanya menambah stok yang tak boleh
+    dipakai. Catatan tetap tersimpan (riwayat), jadi yang diuji adalah daftar
+    antreannya, bukan penghapusan data.
+    """
+    batch_id, _loc, _com, _kg = _batch()
+    receipt_ids: list[str] = []
+    engine = _db()
+    try:
+        with _client() as c:
+            badan = _catat(c, auth_headers, batch_id)
+            receipt_ids.append(badan["id"])
+
+            sebelum = c.get("/receipts/menunggu", headers=auth_headers).json()["items"]
+            assert any(i["batch_id"] == batch_id for i in sebelum), (
+                "prasyarat: muncul saat masih layak"
+            )
+
+            with engine.begin() as conn:
+                asli = conn.execute(
+                    text("SELECT usable_until FROM batches WHERE id = :id"), {"id": batch_id}
+                ).scalar_one()
+                conn.execute(
+                    text(
+                        "UPDATE batches SET usable_until = :lewat WHERE id = :id"
+                    ),
+                    {"lewat": datetime.now(UTC) - timedelta(days=2), "id": batch_id},
+                )
+            try:
+                sesudah = c.get("/receipts/menunggu", headers=auth_headers).json()["items"]
+                assert all(i["batch_id"] != batch_id for i in sesudah), (
+                    "kedaluwarsa harus disembunyikan"
+                )
+            finally:
+                with engine.begin() as conn:
+                    conn.execute(
+                        text("UPDATE batches SET usable_until = :asli WHERE id = :id"),
+                        {"asli": asli, "id": batch_id},
+                    )
+    finally:
+        _bersihkan(receipt_ids, [])
+
+
+def test_antrean_hanya_memuat_batch_yang_sudah_aman(auth_headers):
+    """Antrean keputusan hanya berisi barang yang sudah lolos (usable).
+
+    Permintaan pemilik (29 Okt 2026): "Menunggu persetujuan" hanya menampilkan
+    yang sudah aman — tinggal setujui atau tolak. Barang `on_hold` (belum
+    diuji / bukti suhu kurang) tetap BOLEH dicatat, tetapi tidak ditawarkan
+    untuk disetujui karena `/approve` pasti menolaknya (409).
+    """
+    engine = _db()
+    with engine.begin() as conn:
+        baris = conn.execute(
+            text(
+                "SELECT b.id FROM batches b JOIN locations l ON l.id = b.location_id "
+                "WHERE l.name = 'Jakarta' AND b.safety_status = 'pending' "
+                "AND b.usable_until > now() AND b.quarantine_status = 'none' "
+                "ORDER BY b.id LIMIT 1"
+            )
+        ).first()
+    if baris is None:
+        pytest.skip("tidak ada batch `pending` di Jakarta pada data uji")
+    batch_id = str(baris[0])
+
+    receipt_ids: list[str] = []
+    try:
+        with _client() as c:
+            badan = _catat(c, auth_headers, batch_id)
+            receipt_ids.append(badan["id"])
+            assert badan["status"] == "menunggu"
+
+            antrean = c.get("/receipts/menunggu", headers=auth_headers).json()["items"]
+            assert all(i["batch_id"] != batch_id for i in antrean), (
+                "batch on_hold tidak boleh ditawarkan untuk disetujui"
+            )
+
+            # Bukti bahwa penolakan bukan karena catatan hilang: keputusan
+            # langsung ke endpoint tetap dijawab 409 dengan sebabnya.
+            tolak = c.post(
+                f"/receipts/{badan['id']}/approve", headers=auth_headers, json={}
+            )
+            assert tolak.status_code == 409, tolak.text
     finally:
         _bersihkan(receipt_ids, [])
 

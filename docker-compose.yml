@@ -61,9 +61,9 @@ services:
       # `/auth/demo-login` hanya mengirim sandi demo bila DEMO_MODE DAN flag ini
       # sama-sama aktif. Nyalakan hanya di mesin demo, jangan di instalasi nyata.
       DEMO_LOGIN_AUTOFILL: ${DEMO_LOGIN_AUTOFILL:-false}
-      # Tujuh worker Agent (27 Okt 2026): `off` = murni deterministik,
-      # `advisory` = model memperkaya ringkasan tanpa boleh mengubah status/blokir.
-      WORKER_AGENT_MODE: ${WORKER_AGENT_MODE:-off}
+      # Tujuh worker Agent (27 Okt 2026): `advisory` bawaan = model ikut menalar
+      # untuk kesembilan agent; `off` = murni deterministik.
+      WORKER_AGENT_MODE: ${WORKER_AGENT_MODE:-advisory}
       WORKER_AGENT_MODEL: ${WORKER_AGENT_MODEL:-}
       DEBUG: ${DEBUG:-false}
       # P4: review 7 worker agent — default MATI agar perilaku lama tidak berubah.

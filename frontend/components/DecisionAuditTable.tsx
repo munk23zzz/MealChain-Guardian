@@ -10,21 +10,22 @@
 // memakai label manusia, dan baris yang dipilih ditandai `aria-current` +
 // kelas visual (bukan warna saja).
 
+import { klikBaris } from "../lib/baris-klik";
+import Pager from "./Pager";
+import { isOverdue } from "../lib/agent-execution";
 import {
+  DECISION_PAGE_SIZE,
+  labelVerifikasi,
   decisionTypeLabel,
-  pageCount,
-  pageSlice,
   statusLabel,
   verificationState,
   type AuditDecision,
 } from "../lib/decision-table";
+import { paginate } from "../lib/pagination";
 
-const VERIF_LABEL: Record<string, string> = {
-  terverifikasi: "terverifikasi",
-  menunggu: "menunggu",
-  ditolak: "ditolak",
-  lainnya: "—",
-};
+/* Label lama mencetak kunci mentah ("menunggu") di sebelah "Menunggu
+   persetujuan" — dua gaya label di satu baris. Sejak audit 29 Okt 2026 label
+   hidup di `labelVerifikasi` (satu tempat, bisa diuji). */
 
 function kg(nilai: number | null | undefined): string {
   if (nilai === null || nilai === undefined || !Number.isFinite(nilai)) return "—";
@@ -61,6 +62,7 @@ export default function DecisionAuditTable({
   selectedId,
   onSelect,
   summary,
+  now = null,
 }: {
   rows: ReadonlyArray<AuditDecision>;
   total: number;
@@ -69,9 +71,10 @@ export default function DecisionAuditTable({
   selectedId: string | null;
   onSelect: (decisionId: string) => void;
   summary: string;
+  /** Jam acuan untuk menandai baris yang lewat tenggat; `null` = tidak ditandai. */
+  now?: Date | null;
 }) {
-  const halaman = pageSlice(rows, page);
-  const jumlahHalaman = pageCount(rows.length);
+  const halaman = paginate(rows, page, DECISION_PAGE_SIZE);
 
   return (
     <section className="aa-table-wrap" aria-labelledby="aa-table-title">
@@ -93,65 +96,94 @@ export default function DecisionAuditTable({
           periode ini tetap {total}.
         </p>
       ) : (
-        <div className="aa-table-scroll">
-          <table className="aa-table">
+        <div className="board-table-wrap aa-table-scroll">
+          <table className="location-table aa-table">
             <caption className="aa-sr">
               Keputusan pada periode terpilih. Memilih satu baris menampilkan
               jejak langkah agent di bawahnya.
             </caption>
             <thead>
               <tr>
-                <th scope="col">Jenis</th>
-                <th scope="col">Komoditas</th>
+                {/* Urutan kolom (Tahap 3 redesign, 29 Okt 2026): yang paling
+                    menentukan tindakan lebih dulu — Status, lalu Tenggat, lalu
+                    bukti (Verifikasi). Identitas keputusan ada di kolom keempat
+                    karena dipakai untuk MENGENALI baris, bukan untuk memutuskan. */}
                 <th scope="col">Status</th>
+                <th scope="col">Tenggat</th>
                 <th scope="col">Verifikasi</th>
-                <th scope="col" className="aa-col-num">
+                <th scope="col">Keputusan</th>
+                <th scope="col">Komoditas</th>
+                <th scope="col" className="num">
                   Kuantitas
                 </th>
-                <th scope="col" className="aa-col-num">
+                <th scope="col" className="num">
                   Biaya aman
                 </th>
-                <th scope="col">Kedaluwarsa</th>
                 <th scope="col">
                   <span className="aa-sr">Aksi</span>
                 </th>
               </tr>
             </thead>
             <tbody>
-              {halaman.map((row) => {
+              {halaman.items.map((row) => {
                 const dipilih = row.decision_id === selectedId;
                 const verif = verificationState(row);
+                // Baris yang DITOLAK ditandai merah (permintaan pemilik
+                // 29 Okt 2026): penolakan adalah keadaan yang benar-benar
+                // gugur, bukan sekadar peringatan — dan harus terbaca sekilas
+                // tanpa membaca lencana status.
+                const kelasBaris = [
+                  row.status === "rejected" ? "aa-row-rejected" : null,
+                  dipilih ? "aa-row-selected" : null,
+                ]
+                  .filter(Boolean)
+                  .join(" ");
                 return (
                   <tr
                     key={row.decision_id}
-                    className={dipilih ? "aa-row-selected" : undefined}
+                    className={kelasBaris || undefined}
                     aria-current={dipilih ? "true" : undefined}
+                    /* Klik baris = pilih keputusan (29 Okt 2026). Tombol di
+                       kolom terakhir tetap ada dan tetap jalur papan ketik. */
+                    data-klik-baris="true"
+                    onClick={(e) => klikBaris(e, () => onSelect(row.decision_id))}
                   >
-                    <td>
-                      <span className="aa-cell-title">
-                        {decisionTypeLabel(row.decision_type)}
-                      </span>
-                      <span className="aa-cell-sub">
-                        {row.decision_id.slice(0, 8)}
-                        {row.target_location_name ? ` · ${row.target_location_name}` : ""}
-                      </span>
-                    </td>
-                    <td>{row.commodity_name ?? "—"}</td>
-                    <td>
+                    <td className="aa-col-status">
                       <span className={`aa-status aa-status-${row.status}`}>
                         {statusLabel(row.status)}
                       </span>
                     </td>
-                    <td className={`aa-verif aa-verif-${verif}`}>
-                      {VERIF_LABEL[verif] ?? "—"}
+                    <td className="aa-col-waktu">
+                      {waktu(row.expires_at)}
+                      {now && isOverdue(row, now) ? (
+                        <span className="aa-late" title="Masih menunggu tindakan padahal tenggatnya sudah lewat">
+                          lewat tenggat
+                        </span>
+                      ) : null}
                     </td>
-                    <td className="aa-col-num">{kg(row.quantity_kg)}</td>
-                    <td className="aa-col-num">{rupiah(row.safe_delivered_cost)}</td>
-                    <td>{waktu(row.expires_at)}</td>
+                    <td className={`aa-verif aa-verif-${verif}`}>
+                      {labelVerifikasi(verif)}
+                    </td>
                     <td>
+                      <span className="cell-stack">
+                        <span className="cell-name">
+                          {decisionTypeLabel(row.decision_type)}
+                        </span>
+                        <span className="cell-meta">
+                          {row.decision_id.slice(0, 8)}
+                          {row.target_location_name
+                            ? ` · ${row.target_location_name}`
+                            : ""}
+                        </span>
+                      </span>
+                    </td>
+                    <td>{row.commodity_name ?? "—"}</td>
+                    <td className="num">{kg(row.quantity_kg)}</td>
+                    <td className="num">{rupiah(row.safe_delivered_cost)}</td>
+                    <td className="aa-col-action">
                       <button
                         type="button"
-                        className={`aa-row-btn${dipilih ? " is-active" : ""}`}
+                        className="board-link aa-row-link"
                         aria-pressed={dipilih}
                         onClick={() => onSelect(row.decision_id)}
                       >
@@ -166,29 +198,7 @@ export default function DecisionAuditTable({
         </div>
       )}
 
-      {jumlahHalaman > 1 ? (
-        <div className="aa-pager" role="group" aria-label="Halaman keputusan">
-          <button
-            type="button"
-            className="aa-pager-btn"
-            disabled={page <= 1}
-            onClick={() => onPage(page - 1)}
-          >
-            Sebelumnya
-          </button>
-          <span className="aa-pager-info">
-            Halaman {Math.min(page, jumlahHalaman)} dari {jumlahHalaman}
-          </span>
-          <button
-            type="button"
-            className="aa-pager-btn"
-            disabled={page >= jumlahHalaman}
-            onClick={() => onPage(page + 1)}
-          >
-            Berikutnya
-          </button>
-        </div>
-      ) : null}
+      <Pager page={halaman} onChange={onPage} label="daftar keputusan" />
     </section>
   );
 }

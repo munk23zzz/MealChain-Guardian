@@ -67,44 +67,12 @@ describe("kerapian — penanda lipatan seragam", () => {
   });
 });
 
-describe("kerapian — kepala keputusan: label menempel judulnya", () => {
-  it("label & judul dibungkus satu blok grid (bukan dua baris yang direntang tetangga)", () => {
-    const hero = blok(globals, ".evidence-hero");
-    expect(hero).toMatch(/"head\s+next"/);
-    expect(hero).not.toContain('"eyebrow');
-    const kepala = blok(globals, ".evidence-hero-head");
-    expect(kepala).toContain("grid-area: head");
-    expect(kepala).toMatch(/gap:\s*var\(--space-1\)/);
-  });
-
-  it("markup: label lalu judul, di dalam satu pembungkus", () => {
-    const html = renderToStaticMarkup(
-      <DecisionEvidence
-        decisions={[{ decision_id: "d1", decision_type: "regional_balance", status: "pending_approval" }] as any}
-        selected={{
-          decision_id: "d1",
-          decision_type: "regional_balance",
-          status: "pending_approval",
-          quantity_kg: 600,
-          created_at: "2026-10-07T02:16:47Z",
-          expires_at: "2026-10-20T02:16:47Z",
-        }}
-        selectedId="d1"
-        onSelect={() => {}}
-        chain={[]}
-        summary={{ quantity_kg: 600, commodity: "telur", approval_requirement: { min_approvals: 2 } }}
-        supplierContext={null}
-        role="sppg_head"
-        token="t"
-        now={new Date("2026-10-20T01:00:00Z")}
-      />,
-    );
-    expect(html).toMatch(
-      /class="evidence-hero-head"[^>]*>\s*<p class="evidence-hero-eyebrow"[\s\S]*?<h2 class="evidence-hero-title"/,
-    );
-  });
-});
-
+// Tahap 8 (29 Okt 2026): blok `describe.skip` "kepala keputusan: label menempel
+// judulnya" DIHAPUS. Blok itu memaku `.evidence-hero` / `.evidence-hero-head` /
+// `.evidence-hero-eyebrow` — kelas yang sudah tidak ada di stylesheet, sehingga
+// tidak ada cara menghidupkannya tanpa mengarang. Penggantinya nyata:
+// `evidence-tahap1-kepala.test.tsx` memaku kepala versi baru (grid dua kolom,
+// penanda status, pemilih di dalam <header>).
 
 describe("kerapian — stepper jalur persetujuan sudah tidak ada", () => {
   it("aturan stepper (rata tengah, penanda, garis sambung) tercabut dari dossier", () => {

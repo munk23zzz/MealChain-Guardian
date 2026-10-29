@@ -117,49 +117,60 @@ describe("butir 1 — baris batch menyaring daftar keputusan keamanan", () => {
   });
 });
 
-describe("butir 3 — kesegaran tiga terendah terbuka", () => {
-  it("blok kesegaran menampilkan tiga terendah dan tidak menyembunyikan sisanya", () => {
-    const html = kartu(render(), "safety-segar");
-    expect(html).toContain("Kesegaran terendah");
-    // b2 (31%) → b4 (55%) → b1 (69%) terbuka; b3 (tanpa skor) di lipatan.
-    const urut = ["31%", "55%", "69%"].map((teks) => html.indexOf(teks));
-    expect(urut.every((posisi) => posisi > -1)).toBe(true);
-    expect(urut[0]).toBeLessThan(urut[1]);
-    expect(urut[1]).toBeLessThan(urut[2]);
-    expect(html).toContain("<details");
-    expect(html).toContain("1 batch lain");
+// Butir 3 versi 29 Okt 2026: tiga kartu (bukti suhu / segera dipakai /
+// kesegaran terendah) menjadi SATU kartu "Batch perlu perhatian" — satu baris
+// per batch dengan kolom bukti, sisa layak, dan segar. Kontrak lama "tiga
+// terendah terbuka + sisanya di lipatan" otomatis gugur bersama kartunya;
+// yang dijaga sekarang: kesegaran rendah muncul di kolom Segar, dan skor yang
+// tidak dikirim server tetap ditulis "—", bukan 0.
+describe("butir 3 — kesegaran rendah terbaca di kolom Segar", () => {
+  it("batch berskor segar rendah tampil di tabel perhatian", () => {
+    const html = kartu(render(), "safety-bukti-suhu");
+    expect(html).toContain("Batch perlu perhatian");
+    expect(html).toContain(">Segar<");
+    // b2 (31%) paling rendah, jadi wajib muncul.
+    expect(html).toContain("31%");
   });
 
-  it("kartu kesegaran berdiri sendiri, bukan kartu bersarang di dalam kartu lain", () => {
-    // Kartu `.card` di dalam `.card` menumpuk bingkai dan latar; ringkasan
-    // kesegaran harus jadi kartu saudara, bukan isi kartu "segera dipakai".
+  it("kartu lama tidak lagi dirender (tidak ada dua tempat untuk satu batch)", () => {
     const html = render();
-    const segera = kartu(html, "safety-segera");
-    expect(segera).not.toContain("Kesegaran terendah");
-    const segar = kartu(html, "safety-segar");
-    expect(segar).toContain("Kesegaran terendah");
+    expect(html).not.toContain("Kesegaran terendah");
+    expect(html).not.toContain("Batch perlu segera dipakai");
+    expect(html).not.toContain('id="safety-segar"');
+    expect(html).not.toContain('id="safety-segera"');
   });
 
-  it("catatan skor kosong ≠ 0 dan batas data tetap terbaca di luar lipatan", () => {
-    const html = kartu(render(), "safety-segar");
-    expect(html).toContain("Skor kosong ditulis");
+  it("skor kosong ditulis '—' dan dijelaskan, tidak dibaca sebagai 0", () => {
+    const html = kartu(render(), "safety-bukti-suhu");
     expect(html).toContain("tidak pernah dibaca sebagai 0");
-    expect(html).toContain("maksimum 500 baris terbaru");
   });
 });
 
 describe("butir 5 — keterangan cakupan dua penyaring berbeda", () => {
-  it("menulis satu baris cakupan di bawah bilah saring batch", () => {
+  // Kalimat "Cakupan, saringan keadaan, dan pencarian hanya menyaring daftar
+  // batch di bawah; …" dibuang 29 Okt 2026: ia menjelaskan mekanisme saringan,
+  // bukan keadaan data. Kontraknya kini: kalimat itu TIDAK dicetak, dan dua
+  // saringan tetap bisa dibedakan dari labelnya sendiri.
+  it("tidak lagi mencetak kalimat cakupan saringan, label saringan tetap berbeda", () => {
     const html = kartu(render({ decisions: DECISIONS }), "safety-batch");
-    expect(html).toContain("hanya menyaring daftar batch");
-    expect(html).toContain("saringan komoditas sendiri");
+    expect(html).not.toContain("hanya menyaring daftar batch");
+    expect(html).not.toContain("saringan komoditas sendiri");
+    // Dua saringan tetap bisa dibedakan: bilah batch punya grup sendiri …
+    expect(html).toContain('aria-label="Saring batch menurut keadaan"');
   });
 });
 
 describe("butir 6 — ekspor baca-saja", () => {
-  it("menyediakan CSV dan JSON dari nilai yang tampil", () => {
+  // 29 Okt 2026 (redesign tahap 3): dua tombol ekspor di kepala kartu bersaing
+  // dengan pertanyaan utama halaman, jadi dipindah ke SATU pemicu popup.
+  // Kontrak yang dijaga sekarang: kepala kartu punya tepat satu tombol ekspor
+  // ber-`aria-haspopup`, dan kedua format tetap tersedia di dalamnya
+  // (isi popup diuji lewat interaksi di `safety-table-detail-export.test.tsx`).
+  it("ekspor pindah ke satu pemicu popup, bukan dua tombol terpisah", () => {
     const html = kartu(render(), "safety-batch");
-    expect(html).toContain("Ekspor CSV");
-    expect(html).toContain("Ekspor JSON");
+    expect(html).toContain("Ekspor…");
+    expect(html).toContain('aria-haspopup="dialog"');
+    expect(html).not.toContain("Ekspor CSV");
+    expect(html).not.toContain("Ekspor JSON");
   });
 });

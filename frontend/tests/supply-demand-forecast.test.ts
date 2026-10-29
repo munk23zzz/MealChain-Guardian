@@ -47,6 +47,45 @@ describe("buildForecastView", () => {
     expect(buildForecastView(null)).toBeNull();
     expect(buildForecastView(undefined)).toBeNull();
   });
+
+  it("menampilkan sumber SAP-RPT-1.6 apa adanya", () => {
+    const view = buildForecastView({
+      forecast_qty_kg: 2166.92,
+      method: "sap_rpt_1_6",
+      confidence: 0.9956,
+      source: "SAP-RPT-1.6",
+      fallback_used: false,
+    });
+    expect(view!.source).toBe("SAP-RPT-1.6");
+    expect(view!.sourceLabel).toBe("SAP-RPT-1.6");
+    expect(view!.fallbackUsed).toBe(false);
+    // Keyakinan model 0,9956 dibaca sebagai probabilitas model, BUKAN "dasar
+    // tipis" (aturan itu hanya untuk cadangan statistik).
+    expect(view!.confidenceLabel).toBe("keyakinan 99.6%");
+    expect(view!.note).toBeNull();
+  });
+
+  it("menyebut sumber cadangan dan alasannya bila model gagal", () => {
+    const view = buildForecastView({
+      forecast_qty_kg: 2100,
+      method: "statistical_fallback",
+      confidence: 1,
+      source: "statistical_fallback",
+      fallback_used: true,
+      reason: "provider peramalan gagal; pakai cadangan",
+    });
+    expect(view!.sourceLabel).toBe("cadangan statistik");
+    expect(view!.fallbackUsed).toBe(true);
+    // Sumbernya memang statistik, jadi tidak ada klaim "cadangan dipakai" —
+    // itu hanya relevan bila label sumber masih mengaku model.
+    expect(view!.note).toBeNull();
+  });
+
+  it("menyatakan sumber yang tidak dilaporkan alih-alih menebak", () => {
+    const view = buildForecastView({ forecast_qty_kg: 10, method: "statistical_fallback" });
+    expect(view!.source).toBeNull();
+    expect(view!.sourceLabel).toBe("sumber tidak dilaporkan");
+  });
 });
 
 describe("buildSupplyDemandDetail — kartu perkiraan", () => {

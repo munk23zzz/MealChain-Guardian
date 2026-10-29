@@ -253,7 +253,7 @@ data, bukan regresi kode. Jalankan suite setelah template dibangun (125 batch).
 | Decision & Evidence | 57 bukti keputusan (SAP PO + inspeksi manusia), 28 baris approval |
 | Keamanan Pangan | Jaringan: 3 gagal uji (740 kg), 2 batch ditahan (540 + 180 kg), 5 penerimaan menunggu, 15 `needs_verification` dari 125 batch |
 | Surplus & Limbah | 2 surplus / 8 shortage wortel; 1 pasangan 208 kg; 83 disposal event |
-| Pemasok | 61 pemasok; 2 eksklusi aktif, 2 usulan, 1 ditolak, 1 dicabut; 36 hygiene, 17 HACCP, 8 tanpa sertifikat |
+| Pemasok | 60 pemasok; 2 eksklusi aktif, 2 usulan, 1 ditolak, 1 dicabut; 35 hygiene, 17 HACCP, 8 tanpa sertifikat |
 | Agent Log | 118 jejak |
 | KPI & Kualitas Agen | 7 metrik tersedia untuk 1 bulan; 6 metrik tersedia untuk hari ini |
 | Demo Control | Siapkan data, Akhiri sesi, Segarkan ke hari ini, purge |

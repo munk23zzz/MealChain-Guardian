@@ -64,6 +64,54 @@ const PAYLOAD = {
   ],
 };
 
+describe("ShipmentBoard — kepala papan (S3, 29 Okt 2026)", () => {
+  it("menampilkan tautan ke daftar pemasok hanya bila diminta", () => {
+    const dengan = renderToStaticMarkup(
+      <ShipmentBoard routes={PAYLOAD} tautan={{ href: "#supplier-daftar", label: "Ke daftar pemasok" }} />
+    );
+    expect(dengan).toContain('class="shipment-head-link" href="#supplier-daftar"');
+    expect(dengan).toContain(">Ke daftar pemasok</a>");
+    const tanpa = renderToStaticMarkup(<ShipmentBoard routes={PAYLOAD} />);
+    expect(tanpa).not.toContain("shipment-head-link");
+  });
+
+  it("tanpa kiriman tapi dengan pesan kosong: kartu tetap tampil (jangkar tidak kosong)", () => {
+    const html = renderToStaticMarkup(
+      <ShipmentBoard routes={{ routes: [] }} empty="Belum ada kiriman aktif di jaringan." />
+    );
+    expect(html).toContain("Belum ada kiriman aktif di jaringan.");
+    expect(html).toContain("Papan kiriman");
+  });
+
+  it("tooltip jalur tidak lagi menjelaskan mekanisme penghitungan", () => {
+    const html = renderToStaticMarkup(<ShipmentBoard routes={PAYLOAD} />);
+    expect(html).not.toContain("sinkronisasi rute");
+    expect(html).not.toContain("papan ini dibuka");
+    expect(html).toContain("dihitung dari jalur jalan yang tersimpan");
+  });
+});
+
+describe("ShipmentBoard — label sel untuk mode kartu (S3)", () => {
+  it("setiap sel data punya data-label yang sama dengan judul kolomnya", () => {
+    const html = renderToStaticMarkup(<ShipmentBoard routes={PAYLOAD} />);
+    for (const label of [
+      "Tujuan",
+      "Muatan",
+      "Jalur",
+      "Berangkat",
+      "Estimasi tiba",
+      "Sisa",
+      "Masa layak",
+      "Mutu",
+      "Keadaan",
+    ]) {
+      expect(html, `sel ${label} tidak berlabel`).toContain(`data-label="${label}"`);
+    }
+    // Nama pemasok adalah judul kartu (th scope=row) — tidak perlu label sendiri.
+    expect(html).toContain('<th scope="row" class="shipment-cell-name">');
+  });
+});
+
 describe("ShipmentBoard", () => {
   it("SSR: sepuluh kolom Arah B ada, satu baris per kiriman", () => {
     const html = renderToStaticMarkup(<ShipmentBoard routes={PAYLOAD} />);
@@ -82,7 +130,7 @@ describe("ShipmentBoard", () => {
       expect(html).toContain(`>${kolom}</th>`);
     }
     expect(html).toContain("Papan kiriman");
-    expect(html).toContain("2 kiriman · 1 di jalan · 1 tanpa laporan server");
+    expect(html).toContain("2 kiriman · 1 di jalan · 1 tanpa laporan");
     expect(html.match(/<tr>/g)?.length).toBe(3); // 1 kepala + 2 baris
   });
 

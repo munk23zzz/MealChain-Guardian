@@ -1,0 +1,139 @@
+/* Kartu "Batch perlu perhatian" — satu tabel, teks seminimal mungkin.
+ *
+ * Yang dijaga: tabel bisa dipindai tanpa membaca kalimat. Kolom "Kenapa" satu
+ * baris (terpotong), alasan utuh ada di tooltip. Tidak ada warna di luar token.
+ */
+
+.meter {
+  display: flex;
+  gap: 2px;
+  height: 8px;
+  margin: 2px 0 8px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: var(--surface-sunken);
+}
+
+.segmen {
+  flex-grow: 1;
+  flex-basis: 0;
+  background: var(--line-strong);
+}
+
+.segmen[data-tone="ok"] {
+  background: var(--ok-ink);
+}
+
+.segmen[data-tone="warn"] {
+  background: var(--warn-ink);
+}
+
+.segmen[data-tone="danger"] {
+  background: var(--danger-ink);
+}
+
+.segmen[data-tone="muted"] {
+  background: var(--line-strong);
+}
+
+.ringkas {
+  margin: 0 0 10px;
+  font-size: var(--fs-2);
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+
+
+.bungkus {
+  overflow-x: auto;
+}
+
+.tabel {
+  table-layout: fixed;
+  width: 100%;
+}
+
+.tabel th:nth-child(1) {
+  width: 26%;
+}
+
+.tabel th:nth-child(2) {
+  width: 19%;
+}
+
+.tabel th:nth-child(3) {
+  width: 16%;
+}
+
+.tabel th:nth-child(4) {
+  width: 11%;
+}
+
+.tabel th:nth-child(5) {
+  width: 28%;
+}
+
+.selBatch {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.komoditas {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+/* Kode batch: delapan karakter pertama. Tanpa ini, dua baris "wortel" tidak
+ * bisa dibedakan saat satu batch punya beberapa masalah. */
+.kode {
+  font-family: var(--font-data);
+  font-size: var(--fs-1);
+  font-weight: 500;
+  color: var(--ink-subtle);
+}
+
+.tabel td {
+  padding: 7px 10px;
+}
+
+.tabel th {
+  padding: 0 10px 6px;
+}
+
+.lokasi {
+  font-size: var(--fs-1);
+  color: var(--ink-muted);
+}
+
+.sisa,
+.segar {
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.kenapa {
+  font-size: var(--fs-1);
+  color: var(--ink-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.kosong {
+  color: var(--line-strong);
+}
+
+.kaki {
+  margin: 8px 0 0;
+}
+
+@media (max-width: 760px) {
+  .tabel {
+    table-layout: auto;
+    min-width: 560px;
+  }
+}

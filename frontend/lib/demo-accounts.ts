@@ -55,3 +55,25 @@ export async function muatAkunDemo(): Promise<AkunDemo[]> {
   }
   return AKUN_DEMO_CADANGAN;
 }
+
+/**
+ * Sandi untuk satu email demo, bila server memberikannya.
+ *
+ * `null` = sandi belum/tidak tersedia (autofill mati, permintaan belum selesai,
+ * atau email tidak ada di daftar). Dipakai layar login untuk mengisi kolom sandi
+ * begitu daftar bersandi tiba — operator yang menekan tombol demo lebih dulu
+ * tidak lagi berakhir dengan kolom kosong dan galat 401.
+ */
+export function passwordDemoUntuk(akun: AkunDemo[], email: string): string | null {
+  return akun.find((satu) => satu.email === email)?.password ?? null;
+}
+
+/**
+ * Apakah server mengirim sandi demo sama sekali.
+ *
+ * `false` berarti tombol demo hanya mengisi email; layar login WAJIB
+ * mengatakannya (bukan membiarkan kolom sandi kosong tanpa penjelasan).
+ */
+export function sandiDemoTersedia(akun: AkunDemo[]): boolean {
+  return akun.some((satu) => Boolean(satu.password));
+}

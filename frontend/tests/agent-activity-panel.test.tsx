@@ -1,7 +1,7 @@
 // Kontrak render modul Agent Activity (dokumen 06-agent-log §2–§4).
 //
 // Diuji per komponen, sesuai pembagian dokumen:
-// - `AgentPipelinePanel`: banner tiga keadaan, strip 9 chip, baris ACT/ledger,
+// - `AgentPipelinePanel`: banner tiga keadaan, strip 10 chip, baris ACT/ledger,
 //   provenance, tautan Safety & Evidence.
 // - `DecisionAuditTable`: keterangan pemilih, kolom, "—" untuk nilai kosong,
 //   tombol baris, paginasi.
@@ -13,6 +13,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
 import AgentPipelinePanel from "../components/AgentPipelinePanel";
+import { PIPELINE_STAGES } from "../lib/pipeline-stages";
 import DecisionAuditTable from "../components/DecisionAuditTable";
 import AgentRoster from "../components/AgentRoster";
 import AgentRunSummary from "../components/AgentRunSummary";
@@ -82,14 +83,17 @@ describe("AgentPipelinePanel — banner tiga keadaan", () => {
 });
 
 describe("AgentPipelinePanel — strip sembilan tahap", () => {
-  it("sembilan chip urut pipeline, ringkasan menghitung ACT sebagai jejak", () => {
+  it("sepuluh chip urut pipeline, ringkasan menghitung ACT sebagai jejak", () => {
     const html = pipe();
-    expect(html.match(/class="aa-stage /g)).toHaveLength(9);
+    expect(html.match(/class="aa-stage /g)).toHaveLength(PIPELINE_STAGES.length);
     const urutan = ["DETECT", "VERIFY", "TRACE", "PREDICT", "OPTIMIZE", "DECIDE", "SUPERVISE", "ACT", "LEARN"];
     const posisi = urutan.map((kode) => html.indexOf(`>${kode}<`));
     expect(posisi.every((p) => p > -1)).toBe(true);
     expect([...posisi].sort((a, b) => a - b)).toEqual(posisi);
-    expect(html).toContain("3 dari 9 tahap punya jejak tercatat");
+    // Ringkasan "N dari M tahap punya jejak" PINDAH ke kepala panel (Tahap 4
+    // redesign 29 Okt 2026) — diuji di `agent-log-redesign-kontrak.test.tsx`.
+    // Di strip ia tidak boleh tercetak dua kali.
+    expect(html).not.toContain("tahap punya jejak tercatat");
   });
 
   it("ACT hanya punya blok ledger → 'tercatat di Ledger' + dasar ledger_blocks", () => {
@@ -176,11 +180,13 @@ describe("DecisionAuditTable", () => {
     );
   });
 
-  it("kolom mengikuti dokumen dan label jenis diterjemahkan", () => {
+  it("kolom mengikuti urutan triage: Status → Tenggat → bukti → identitas", () => {
     const html = table();
-    for (const kolom of ["Jenis", "Komoditas", "Status", "Verifikasi", "Kuantitas", "Biaya aman", "Kedaluwarsa"]) {
-      expect(html).toContain(`>${kolom}<`);
-    }
+    const kolom = ["Status", "Tenggat", "Verifikasi", "Keputusan", "Komoditas", "Kuantitas", "Biaya aman"];
+    for (const nama of kolom) expect(html).toContain(`>${nama}<`);
+    // Urutannya dijaga, bukan hanya keberadaannya (Tahap 3 redesign 29 Okt 2026).
+    const posisi = kolom.map((nama) => html.indexOf(`>${nama}<`));
+    expect(posisi).toEqual([...posisi].sort((a, b) => a - b));
     expect(html).toContain("Pengadaan dari pemasok");
     expect(html).toContain("Penyeimbangan pasokan regional");
   });
@@ -227,7 +233,9 @@ describe("ModuleSearch", () => {
       />
     );
     expect(html).toContain("daftar keputusan");
-    expect(html).toContain("bukan pada langkah trace");
+    // Teks dipendekkan pada Tahap 2 redesign (29 Okt 2026): kalimatnya tetap
+    // menyatakan hal yang sama — filter menyaring daftar keputusan, bukan trace.
+    expect(html).toContain("bukan langkah trace");
   });
 
   it("filter status punya jumlah + aria-pressed", () => {

@@ -78,55 +78,56 @@ function render(extra: Record<string, unknown> = {}) {
   );
 }
 
+/** Keliling lingkaran cincin (r=40 pada viewBox 100×100) — dasar dasharray. */
+const KELILING_CINCIN = 2 * Math.PI * 40;
+
+/** Panjang busur ke-n sebagai persen keliling: bukti busur = angka cakupan. */
+function busurPct(html: string, ke = 1): number {
+  const semua = [...html.matchAll(/class="rc-arc"[^>]*stroke-dasharray="([\d.]+) /g)].map((m) =>
+    Number(m[1])
+  );
+  const nilai = semua[ke - 1];
+  if (nilai === undefined) throw new Error(`busur ke-${ke} tidak ada (total ${semua.length})`);
+  return (nilai / KELILING_CINCIN) * 100;
+}
+
 describe("AdequacyColumns — mode komoditas", () => {
-  it("menggambar 4 kolom, satu per komoditas, dengan angka cakupan di atas", () => {
+  it("menggambar satu donat berisi 4 komoditas, dengan total di tengah", () => {
     const html = render();
-    expect(html.match(/class="ac-col /g)).toHaveLength(4);
+    // Satu diagram; wortel (tanpa kebutuhan) tidak jadi irisan tapi tetap
+    // punya baris legenda, jadi 3 busur + 4 baris.
+    expect(html.match(/class="cd-arc /g)).toHaveLength(3);
+    expect(html.match(/class="cd-row /g)).toHaveLength(4);
     expect(html).toContain("Kecukupan pasokan");
     expect(html).toContain("Bandung");
-    expect(html).toContain("ac-value");
-    // Angka cakupan ditulis apa adanya dari modul murni.
+    expect(html).toContain("cd-total-angka");
+    // Angka cakupan per komoditas tetap tercetak di legenda.
     expect(html).toContain("65%");
   });
 
-  it("batang tumbuh dari bawah, tingginya = cakupan, tanpa segmen kualitas", () => {
+  it("besar irisan = kg yang dihitung; tiap komoditas punya warna sendiri", () => {
     const html = render();
-    // telur 700/1.080 = 64,8% — angka ini yang dipakai sebagai tinggi isi.
-    expect(html).toMatch(/class="ac-fill ac-tone-[a-z]+" style="height:6[45][\d.]*%"/);
-    // Beras 900/500 = 180% → mentok 100%, ditandai "is-over".
-    expect(html).toMatch(/class="ac-fill ac-tone-[a-z]+" style="height:100%"/);
-    expect(html).toContain("is-over");
-    // Satu arti per batang: tidak ada lagi segmen kualitas di dalam batang.
+    const busur = [...html.matchAll(/class="cd-arc [^"]*"[^>]*stroke-dasharray="([\d.]+) /g)].map((m) =>
+      Number(m[1])
+    );
+    expect(busur).toHaveLength(3);
+    expect(busur.every((b) => b > 0)).toBe(true);
+    // Irisan terbesar (beras 900 kg) jauh lebih besar dari yang terkecil (ayam).
+    expect(Math.max(...busur)).toBeGreaterThan(Math.min(...busur) * 2);
+    // Warna = identitas komoditas, bukan warna status.
+    expect(html).toContain("sr-komod-blue");
+    expect(html).toContain("sr-komod-amber");
     expect(html).not.toContain("ac-seg");
   });
 
-  it("kebutuhan = kotak penuh, tanpa garis acuan tambahan di dalamnya", () => {
+  it("komoditas tanpa kebutuhan tetap punya baris legenda bernada 'belum tercatat'", () => {
     const html = render();
-    // Satu kotak per kolom; garis putus-putus di puncak sudah dihapus supaya
-    // tidak ada dua acuan yang harus ditafsirkan.
-    expect(html.match(/class="ac-track/g)).toHaveLength(4);
-    expect(html).not.toContain("ac-ref");
-    expect(html).not.toContain("ac-demand");
-  });
-
-  it("kekurangan = sisa kotak yang kosong, tanpa lapisan tambahan", () => {
-    const html = render();
-    // Tidak ada jalur/lapisan pucat: ruang kosong di dalam kotak itu sendiri
-    // yang berarti kekurangan. Ini yang dulu membingungkan.
-    expect(html).not.toContain("ac-miss");
-    expect(html).not.toContain("ac-cover");
-    // telur 64,8% → batang berhenti di 64,8%, sisanya kosong.
-    expect(html).toMatch(/style="height:6[45][\d.]*%"/);
-  });
-
-  it("kolom tanpa kebutuhan tidak digambar sebagai 0% dan tetap diberi nama", () => {
-    const html = render();
-    expect(html).toContain("ac-track-empty");
-    expect(html).toMatch(/ac-name">wortel</);
-    // "belum tercatat", bukan "0 kg layak" — stok 0 yang jujur beda dari tak ada data.
-    // Sejak redesign "simple" catatan kg tidak dicetak; teksnya hidup di aria-label.
-    expect(html).toMatch(/aria-label="wortel:[^"]*belum tercatat/);
-    expect(html).toMatch(/aria-label="wortel:[^"]*—/);
+    // wortel tidak punya kebutuhan: tidak digambar sebagai irisan 0%, tetapi
+    // namanya tidak boleh hilang dari legenda.
+    expect(html).toMatch(/cd-name">wortel</);
+    expect(html).toContain("belum tercatat");
+    // Kalimat lengkapnya tetap dibawa pembaca layar.
+    expect(html).toMatch(/wortel:[^"]*belum tercatat/);
   });
 
   it("kolom bisa diklik untuk menampilkan komoditas di peta", () => {
@@ -138,7 +139,7 @@ describe("AdequacyColumns — mode komoditas", () => {
   it("tanpa onSelect tetap dirender sebagai grup statis (bukan tombol mati)", () => {
     const html = render();
     expect(html).not.toContain("Tampilkan di peta");
-    expect(html).toContain('role="group"');
+    expect(html).toContain('role="img"');
   });
 
   it("pil lensa tampil dengan pilihan awal sesuai peran", () => {
@@ -183,7 +184,7 @@ describe("AdequacyColumns — mode lokasi", () => {
     },
   ];
 
-  it("judul dan sumbu berganti, batang memakai nada cakupan", () => {
+  it("judul dan sumbu berganti, cincin memakai nada cakupan", () => {
     const html = renderToStaticMarkup(
       <AdequacyColumns
         mode="location"
@@ -194,9 +195,9 @@ describe("AdequacyColumns — mode lokasi", () => {
     );
     expect(html).toContain("Pasokan per Lokasi");
     expect(html).toContain("telur");
-    // Batang mode lokasi memakai satu warna status, bukan segmen.
-    expect(html).toContain("ac-fill ac-tone-danger");
-    expect(html).toContain("ac-fill ac-tone-safe");
+    // Cincin mode lokasi memakai satu warna status per lokasi, bukan segmen.
+    expect(html).toContain("rc-item ac-tone-danger");
+    expect(html).toContain("rc-item ac-tone-safe");
   });
 
   it("tanpa lokasi: pesan jelas, bukan bidang kosong", () => {
@@ -223,13 +224,31 @@ describe("kartu sederhana (permintaan pemilik: simple, tidak banyak teks)", () =
     expect(teks.length).toBeLessThan(320);
     expect(teks).not.toContain("Tinggi batang =");
     expect(teks).not.toContain("garis dalam batang");
-    expect(render()).not.toContain("ac-foot");
+    // Dasar kartu boleh punya baris keterangan (legenda garis acuan), tetapi
+    // hanya itu: satu baris pendek, tanpa paragraf.
+    const foot = (html: string) => {
+      const awal = html.indexOf('class="ac-foot"');
+      return awal < 0 ? null : html.slice(awal, html.indexOf("</div>", awal));
+    };
+    // Bentuk donat tidak punya kaki bergaris acuan; keterangannya satu baris
+    // caption di bawah diagram.
+    const caption = (html: string) => {
+      const awal = html.indexOf('class="cd-caption"');
+      return awal < 0 ? null : html.slice(awal, html.indexOf("</p>", awal));
+    };
+    void foot;
+    const kaki = caption(render());
+    expect(kaki).not.toBeNull();
+    expect(kaki!).toContain("irisan = kg yang dihitung");
+    expect(kaki!).toContain("warna = komoditas");
+    expect(kaki!).not.toContain("<p");
   });
 
   it("rincian panjang tetap ada untuk pembaca layar & tooltip", () => {
     const html = render();
-    // aria-label tiap kolom tetap menyebut kebutuhan dan selisih.
-    expect(html).toMatch(/aria-label="ayam: stok layak[^"]*kebutuhan/);
+    // Kalimat lengkap tiap komoditas dibawa aria donat (bukan aria-label per
+    // kolom lagi): kebutuhan dan selisih tetap disebut.
+    expect(html).toMatch(/ayam: stok layak[^"]*kebutuhan/);
     // Sub menyimpan keterangan lengkap di title.
     expect(html).toMatch(/title="Bandung · 4 komoditas ·[^"]*dihitung/);
   });
@@ -256,7 +275,7 @@ describe("CSS kartu bar vertikal", () => {
   const css = readFileSync(path.join(AKAR, "app/adequacy-columns.css"), "utf8");
 
   it("plot tumbuh mendatar, batang tumbuh ke atas dari dasar kotak", () => {
-    expect(css).toMatch(/\.ac-plot\s*\{[^}]*grid-auto-flow:\s*column/);
+    expect(css).toMatch(/\.ac-plot\s*\{[^}]*repeat\(var\(--ac-kolom/);
     expect(css).toMatch(/\.ac-fill\s*\{[^}]*position:\s*absolute/);
     expect(css).toMatch(/\.ac-fill\s*\{[^}]*bottom:\s*0/);
     // Satu warna status, bukan tumpukan segmen.
@@ -264,7 +283,7 @@ describe("CSS kartu bar vertikal", () => {
   });
 
   it("tinggi plot dipatok supaya kartu tidak membengkak", () => {
-    expect(css).toMatch(/\.ac-track\s*\{[^}]*height:\s*144px/);
+    expect(css).toMatch(/\.ac-track\s*\{[^}]*height:\s*168px/);
   });
 
   it("tanpa gradasi: semua isian warna solid (permintaan pemilik 28 Okt 2026)", () => {
@@ -272,14 +291,68 @@ describe("CSS kartu bar vertikal", () => {
     // Panel surplus memakai bahasa yang sama: warna solid, kedalaman dari bayangan.
     const sr = readFileSync(path.join(AKAR, "app/surplus-regions.css"), "utf8");
     expect(sr).not.toMatch(/gradient/);
-    // Segmen komoditas panel mewarisi gradasi dari `.sa-seg`; di sini dinetralkan.
-    expect(sr).toMatch(/\.sr-seg\s*\{[^}]*background-image:\s*none/);
   });
 
   it("memakai bahasa soft UI: kartu membulat, bayangan lembut, tanpa garis keras", () => {
     expect(css).toMatch(/\.adequacy-columns\s*\{[^}]*border-radius:\s*var\(--radius-dock\)/);
     expect(css).toMatch(/\.adequacy-columns\s*\{[^}]*box-shadow:\s*var\(--shadow-2\)/);
     expect(css).not.toMatch(/border-bottom:\s*1px solid var\(--line-strong\)/);
+  });
+});
+
+describe("geometri plot kolom (redesign 29 Okt 2026)", () => {
+  const css = readFileSync(path.join(AKAR, "app/adequacy-columns.css"), "utf8");
+
+  it("satu bidang plot: track transparan, bukan empat kotak terbenam", () => {
+    const track = css.match(/\.ac-track\s*\{([^}]*)\}/);
+    expect(track, "blok .ac-track hilang").not.toBeNull();
+    // Latar transparan — kotak terbenam membuat plot terbaca sebagai kolom formulir.
+    expect(track![1]).toMatch(/background:\s*transparent/);
+    expect(track![1]).not.toContain("--surface-sunken");
+    expect(track![1]).not.toContain("shadow-inset");
+  });
+
+  it("garis acuan di puncak track + sumbu di dasarnya", () => {
+    // Garis putus-putus = 100% (kebutuhan / wilayah terbesar).
+    expect(css).toMatch(/\.ac-track\s*\{[^}]*border-top:\s*1\.5px dashed/);
+    expect(css).toMatch(/\.ac-track\s*\{[^}]*border-bottom:\s*1px solid/);
+    // Kolom tanpa jarak supaya garis acuan & sumbu menyambung satu garis.
+    expect(css).toMatch(/\.ac-plot\s*\{[^}]*gap:\s*0/);
+  });
+
+  it("pita angka dipatok supaya garis acuan semua kolom satu ketinggian", () => {
+    expect(css).toMatch(/\.ac-value\s*\{[^}]*height:\s*28px/);
+    expect(css).not.toMatch(/\.ac-value\s*\{[^}]*min-height/);
+  });
+
+  it("batang memakai satu warna solid per status tanpa celah kotak", () => {
+    const fill = css.match(/\.ac-fill\s*\{([^}]*)\}/);
+    expect(fill![1]).toMatch(/left:\s*20%/);
+    expect(fill![1]).toMatch(/right:\s*20%/);
+    // Sudut atas membulat lewat token (gerbang radius menolak nilai mentah).
+    expect(fill![1]).toMatch(/border-radius:\s*var\(--radius-chip\)/);
+  });
+
+  it("teks selisih memakai tinta status (AA), batang memakai warna terpisah", () => {
+    // Satu variabel untuk dua peran adalah bug aksesibilitas: campuran batang
+    // 88% hanya 3–4:1, sedangkan teks 12 px wajib >= 4,5:1.
+    expect(css).toMatch(/\.ac-gap\s*\{[^}]*color:\s*var\(--ac-ink/);
+    for (const tone of ["safe", "warning", "danger", "muted"]) {
+      const blok = css.match(new RegExp(`\\.ac-tone-${tone}\\s*\\{([^}]*)\\}`));
+      expect(blok, `blok .ac-tone-${tone} hilang`).not.toBeNull();
+      expect(blok![1]).toContain("--ac-bar");
+      expect(blok![1]).toContain("--ac-ink");
+    }
+  });
+
+  it("pasokan melebihi kebutuhan ditandai caret di atas garis acuan", () => {
+    expect(css).toMatch(/\.ac-col\.is-over \.ac-fill::after/);
+    expect(css).toMatch(/\.ac-track\s*\{[^}]*overflow:\s*visible/);
+  });
+
+  it("kolom dibatasi lebarnya: satu kolom tidak boleh selebar kartu", () => {
+    expect(css).toMatch(/\.ac-plot\s*\{[^}]*repeat\(var\(--ac-kolom[^)]*\),\s*minmax\(0,\s*140px\)\)/);
+    expect(css).toMatch(/\.ac-plot\s*\{[^}]*justify-content:\s*center/);
   });
 });
 

@@ -42,11 +42,11 @@ tabel kosong atau angka 0 yang terbaca seolah tidak ada masalah.
 
 | Berkas | Isi |
 |---|---|
-| `a2a_server/server.py` | Aplikasi A2A (kartu agen, 13 skill, `/health`) + executor |
-| `a2a_server/mealchain_client.py` | Klien HTTP baca-saja ke API v0.2.0 (`/batches`, `/balance/map`, `/kpi`, `/decisions`, `/sap/purchase-orders`, `/price`, `/demand`, `/waste/summary`, `/supplier-exclusions`, `/supplier-routes`, `/integrations/status`, `/ledger/verify`, `/receipts`), kegagalan eksplisit |
+| `a2a_server/server.py` | Aplikasi A2A (kartu agen, 14 skill, `/health`) + executor |
+| `a2a_server/mealchain_client.py` | Klien HTTP baca-saja ke API v0.2.0 (`/batches`, `/balance/map`, `/kpi`, `/decisions`, `/sap/purchase-orders`, `/price`, `/demand`, `/waste/summary`, `/supplier-exclusions`, `/supplier-routes`, `/integrations/status`, `/ledger/verify`, `/receipts`, `/batches/{id}`), kegagalan eksplisit |
 | `a2a_server/report.py` | Perender markdown murni (tabel, format angka Indonesia) |
 | `a2a_server/manifest.yml`, `runtime.txt`, `.cfignore` | Deklarasi deploy Cloud Foundry |
-| `joule/` | Capability Joule: `da.sapdas.yaml`, `capability.sapdas.yaml`, 13 scenario, 1 function |
+| `joule/` | Capability Joule: `da.sapdas.yaml`, `capability.sapdas.yaml`, 14 scenario, 1 function |
 | `scripts/probe_ai_core.py` | Probe kredensial + model AI Core (`gpt-5.4`, `sap-rpt-1.6`) — jalur terpisah |
 | `scripts/uji-semua-skill.py` | Bukti ujung-ke-ujung: 11 skill dijawab dari backend hidup + angka laporan disilang ke Postgres |
 | `docs/runbook-cf-joule.md` | **Langkah manual Roy**: CF CLI → keybroker → `cf push` → Destination → `joule deploy` |
@@ -184,6 +184,24 @@ Semua kredensial diisi lewat `cf set-env` / environment lokal — **tidak pernah
   `bash sap-joule/scripts/tunnel-untuk-cf.sh` (tunnel baru → uji dari internet → `cf set-env` →
   restage → pastikan `reachable:true`). Untuk demo yang tidak boleh putus, pakai tunnel bernama atau
   backend di VPS — bukan quick tunnel.
+
+### Status verifikasi (29 Okt 2026) — 14 skill = 14 scenario
+
+- Skill baru `batch_detail` menutup celah "hal detail": Joule sekarang membaca
+  `GET /batches/{id}` (jumlah, status keamanan **tersimpan vs hasil evaluasi** yang ditampilkan
+  terpisah, kelayakan pakai + langkah berikutnya, skor kesegaran, masa layak, karantina,
+  kebijakan suhu komoditas beserta versi/jenisnya, kecukupan bukti observasi suhu). Sebelumnya
+  Joule hanya melihat baris daftar `/batches` tanpa kebijakan maupun hasil evaluasi.
+- Kebijakan demo ditandai **"kebijakan simulasi (belum divalidasi pemilik domain)"** di jawaban
+  chat, supaya rentang suhu/shelf life tidak terbaca sebagai regulasi resmi.
+- Id pendek 8 karakter dari tabel chat dipetakan ke id lengkap; tanpa id, Joule meminta id dan
+  menampilkan kandidat batch — tidak mengarang rincian.
+- `capability.sapdas.yaml` → `metadata.version: 1.5.0` (minor: kemampuan bertambah).
+- `pytest a2a_server/tests -q` → **209 passed, 14 skipped** (`test_batch_detail.py` 13 tes baru:
+  routing, pemisahan dua status, label kebijakan simulasi, id pendek, batch tak ditemukan).
+- `scripts/uji-semua-skill.py` terhadap backend hidup → **SEMUA OK**, termasuk dua pemeriksaan
+  baru (rincian batch memuat kebijakan suhu; dua baris status tidak disamakan) dan silang angka
+  ke DB (133 batch, 4.059 blok ledger, 17 PO, 2 eksklusi, 469,7 kg limbah).
 
 ### Status verifikasi (22 Okt 2026) — 13 skill = 13 scenario
 

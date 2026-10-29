@@ -6,6 +6,7 @@ import {
   type EvidenceRef, type SupplierContext, type SupplierExclusion,
 } from "../lib/supplier-exclusions";
 import { safetyLabel } from "../lib/bahasa";
+import { exclusionStatusLabel } from "../lib/suppliers-board";
 import styles from "./SupplierExclusionPanel.module.css";
 
 type Props = {
@@ -55,15 +56,15 @@ function RestorationForm({ exclusion, supplier, disabled, submit, token }: {
           <input type="checkbox" checked={selected.includes(evidenceKey(ref))} onChange={event => setSelected(current => event.target.checked ? [...current, evidenceKey(ref)] : current.filter(key => key !== evidenceKey(ref)))} />
           <span>{ref.type}: {ref.id}</span>
         </label>)}
-        {!available.length && <p>Belum ada bukti baru pada keputusan ini. Bukti exclusion lama tidak dapat digunakan kembali.</p>}
+        {!available.length && <p>Belum ada bukti baru pada keputusan ini. Bukti eksklusi lama tidak dapat digunakan kembali.</p>}
       </fieldset>
       <label className={styles.field}><span>Jenis bukti tersimpan</span><select value={referenceType} onChange={event => {
         const value = event.target.value;
         if (value === "batch" || value === "incident" || value === "decision") setReferenceType(value);
       }}><option value="batch">Batch</option><option value="incident">Insiden suhu (DecisionEvidence)</option><option value="decision">Keputusan dengan bukti batch</option></select></label>
       <label className={styles.field}><span>ID bukti tersimpan (opsional bila memilih di atas)</span><input value={referenceId} onChange={event => setReferenceId(event.target.value)} aria-invalid={invalidReference} placeholder="UUID bukti baru" /></label>
-      <p>ID harus sudah tersimpan dan terkait supplier ini; server memvalidasi relasinya. Form ini tidak membuat bukti baru.</p>
-      {invalidReference && <p className={styles.error}>{oldId ? "Bukti exclusion lama tidak dapat digunakan kembali." : "ID bukti harus berupa UUID yang valid."}</p>}
+      <p>ID harus sudah tersimpan dan terkait pemasok ini. Form ini tidak membuat bukti baru.</p>
+      {invalidReference && <p className={styles.error}>{oldId ? "Bukti eksklusi lama tidak dapat digunakan kembali." : "ID bukti harus berupa UUID yang valid."}</p>}
       <button className="button button-secondary" type="submit" disabled={disabled || invalidReference || !reason.trim() || !refs.length}>Ajukan pemulihan</button>
     </fieldset>
   </form>;
@@ -100,12 +101,12 @@ export function SupplierExclusionView({ context, role, token, onCreated, tanpaCa
     const created = await submit(async () => {
       const result = await proposeSupplierExclusion({ supplier_id: supplier.id, scope_location_id: scope, reason: reason.trim(), evidence_refs: supplier.evidence_refs }, token);
       return result.source_decision_id;
-    }, "Usulan exclusion dibuat dan menunggu verifikasi serta approval manusia.");
+    }, "Usulan eksklusi dibuat dan menunggu verifikasi serta persetujuan.");
     if (created) setReason("");
   }
 
-  return <section className={styles.panel} aria-label="Supplier exclusion" aria-busy={busy}>
-    <div className={styles.header}><h3>Supplier governance</h3><span className={styles.badge}>Lingkup lokal · SPPG</span></div>
+  return <section className={styles.panel} aria-label="Usulan eksklusi pemasok" aria-busy={busy}>
+    <div className={styles.header}><h3>Tata kelola pemasok</h3><span className={styles.badge}>Lingkup lokal · SPPG</span></div>
     <p>
       SPPG penerima:{" "}
       {context.scope_location_id ? `#${String(context.scope_location_id).slice(0, 8)}` : "tidak tersedia"}.
@@ -117,30 +118,30 @@ export function SupplierExclusionView({ context, role, token, onCreated, tanpaCa
       </p>
     )}
     {context.suppliers.map(item => <div className={styles.record} key={item.id}>
-      <strong>{item.name}</strong><span>Supplier: {item.id}</span>
+      <strong>{item.name}</strong><span>Kode pemasok: {item.id}</span>
       {item.batches.map(batch => <span key={batch.id}>Batch {batch.id} · Keamanan: <strong>{safetyLabel(batch.safety_status) ?? "status belum ada"}</strong></span>)}
     </div>)}
     {context.reason_unavailable && <p>{context.reason_unavailable}</p>}
     {!canMutate && <p>Hanya Kepala SPPG atau Ahli Gizi pada SPPG tujuan yang berwenang mengusulkan. Tampilan ini hanya baca.</p>}
-    {canMutate && <form onSubmit={submitExclusion} className={styles.form} aria-label="Usulan exclusion">
+    {canMutate && <form onSubmit={submitExclusion} className={styles.form} aria-label="Usulan eksklusi">
       <fieldset disabled={busy} className={styles.fields}>
-        <label className={styles.field}><span>Supplier</span><select value={supplierId} onChange={event => { setSupplierId(event.target.value); setReason(""); }}>
+        <label className={styles.field}><span>Pemasok</span><select value={supplierId} onChange={event => { setSupplierId(event.target.value); setReason(""); }}>
           {context.suppliers.map(item => <option value={item.id} key={item.id}>{item.name}</option>)}
         </select></label>
-        <label className={styles.field}><span>Alasan exclusion</span><textarea required maxLength={4000} value={reason} onChange={event => setReason(event.target.value)} /></label>
+        <label className={styles.field}><span>Alasan eksklusi</span><textarea required maxLength={4000} value={reason} onChange={event => setReason(event.target.value)} /></label>
         <p>Bukti tersimpan: {supplier?.evidence_refs.map(evidenceKey).join(", ") || "tidak tersedia"}</p>
-        <button className="button" type="submit" disabled={busy || !reason.trim() || !supplier?.evidence_refs.length}>Ajukan exclusion</button>
+        <button className="button" type="submit" disabled={busy || !reason.trim() || !supplier?.evidence_refs.length}>Ajukan eksklusi</button>
       </fieldset>
-      {!tanpaCatatan && <p>Usulan hanya masuk approval. Tidak ada auto execute.</p>}
+      {!tanpaCatatan && <p>Usulan hanya masuk antrean persetujuan — tidak ada yang dijalankan otomatis.</p>}
     </form>}
     {context.exclusions.map(exclusion => {
       const linkedSupplier = context.suppliers.find(item => item.id === exclusion.supplier_id);
       const canRestore = canMutate && exclusion.status === "active" && exclusion.scope_location_id === context.scope_location_id && linkedSupplier;
       return <article className={styles.record} key={exclusion.id}>
-        <strong>{exclusion.status === "active" ? "Exclusion aktif" : `Exclusion ${exclusion.status}`} · {linkedSupplier?.name ?? exclusion.supplier_id}</strong>
-        <span>Scope: {exclusion.scope_location_id}</span><span>{exclusion.reason}</span>
-        <span>Bukti exclusion: {exclusion.evidence_refs.map(evidenceKey).join(", ")}</span>
-        <button type="button" className={styles.link} disabled={busy} onClick={() => onCreated(exclusion.source_decision_id)}>Lihat keputusan exclusion</button>
+        <strong>Eksklusi {exclusionStatusLabel(exclusion.status).toLowerCase()} · {linkedSupplier?.name ?? exclusion.supplier_id}</strong>
+        <span>Lingkup: {exclusion.scope_location_id}</span><span>{exclusion.reason}</span>
+        <span>Bukti eksklusi: {exclusion.evidence_refs.map(evidenceKey).join(", ")}</span>
+        <button type="button" className={styles.link} disabled={busy} onClick={() => onCreated(exclusion.source_decision_id)}>Lihat keputusan eksklusi</button>
         {exclusion.restoration_decision_id && <button type="button" className={styles.link} disabled={busy} onClick={() => { if (exclusion.restoration_decision_id) onCreated(exclusion.restoration_decision_id); }}>Lihat keputusan pemulihan</button>}
         {exclusion.revocation_reason && <span>Alasan pencabutan: {exclusion.revocation_reason}</span>}
         {canRestore && <RestorationForm exclusion={exclusion} supplier={linkedSupplier} disabled={busy} submit={submit} token={token} />}

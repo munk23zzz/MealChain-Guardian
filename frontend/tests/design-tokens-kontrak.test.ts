@@ -22,7 +22,18 @@ const app = join(__dirname, "..", "app");
 const baca = (nama: string) => readFileSync(join(app, nama), "utf8");
 const tanpaKomentar = (isi: string) => isi.replace(/\/\*[\s\S]*?\*\//g, "");
 
-const berkas = ["globals.css", "theme-ext.css", "map-console.css", "supply-adequacy.css", "evidence-dossier.css"];
+// S6 (29 Okt 2026): lembar gaya khas halaman Pemasok ikut diaudit di sini, bukan
+// hanya globals.css — dua berkas itu tumbuh di luar globals dan luput dari
+// kontrak tipografi/palet.
+const berkas = [
+  "globals.css",
+  "theme-ext.css",
+  "map-console.css",
+  "supply-adequacy.css",
+  "evidence-dossier.css",
+  "supplier-summary.css",
+  "supplier-receipts.css",
+];
 const isiBersih = Object.fromEntries(berkas.map((f) => [f, tanpaKomentar(baca(f))]));
 const semuaCss = Object.values(isiBersih).join("\n");
 
@@ -109,6 +120,25 @@ describe("kontrak token CSS", () => {
       }
     }
     expect(liar, "font-family literal di luar @font-face").toEqual([]);
+  });
+
+  it("blok .summary-*, .directory-*, .register-*, .receipt-* memakai token ukuran", () => {
+    // Lantai 12 px sudah dijaga tes sebelumnya; ini menjaga hal lain: ukuran di
+    // dalam komponen Pemasok harus lewat skala (--fs-1..--fs-8) supaya tidak ada
+    // nilai 13/15/17 px yang menyelinap dan memutus tangga tipografi.
+    const mentah: string[] = [];
+    const sumber = [isiBersih["globals.css"], isiBersih["supplier-summary.css"], isiBersih["supplier-receipts.css"]];
+    for (const isi of sumber) {
+      for (const m of Array.from(isi.matchAll(/([^{}]+)\{([^{}]*)\}/g))) {
+        const selektor = m[1].trim().replace(/\s+/g, " ");
+        if (!/\.(summary|directory|register|receipt)-/.test(selektor)) continue;
+        for (const ukuran of Array.from(m[2].matchAll(/font-size:\s*([^;]+);/g))) {
+          const nilai = ukuran[1].trim();
+          if (!nilai.startsWith("var(--fs-")) mentah.push(`${selektor} → ${nilai}`);
+        }
+      }
+    }
+    expect(mentah, "font-size di luar skala token").toEqual([]);
   });
 
   it("pager menyempit di ≤720 px: nomor halaman disembunyikan", () => {

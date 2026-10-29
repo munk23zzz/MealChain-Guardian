@@ -134,13 +134,13 @@ export default function SupplierReceipts({
               <tbody>
                 {halamanData.items.map((row) => (
                   <tr key={row.id}>
-                    <td>
+                    <td data-label="Waktu">
                       <span className="cell-stack">
                         <span className="cell-name">{row.at}</span>
                         <span className="cell-meta">{row.checkedLabel}</span>
                       </span>
                     </td>
-                    <td>
+                    <td data-label="Pemasok">
                       <span className="cell-stack">
                         <span className="cell-name">{row.supplier}</span>
                         <span className="cell-meta">
@@ -148,13 +148,13 @@ export default function SupplierReceipts({
                         </span>
                       </span>
                     </td>
-                    <td className="num">
+                    <td className="num" data-label="kg dipesan / diterima">
                       <span className="cell-stack">
                         <span className="cell-name">{row.orderedLabel}</span>
                         <span className="cell-meta">diterima {row.receivedLabel}</span>
                       </span>
                     </td>
-                    <td>
+                    <td data-label="Putusan">
                       <span className="cell-stack">
                         <span className="receipt-pill" data-tone={row.tone}>
                           {row.statusLabel}
@@ -162,7 +162,7 @@ export default function SupplierReceipts({
                         {row.note ? <span className="cell-meta">{row.note}</span> : null}
                       </span>
                     </td>
-                    <td className="num">
+                    <td className="num" data-label="Nilai diterima">
                       <span className="cell-stack">
                         <span className="cell-name" data-status={row.valueStatus}>
                           {row.valueLabel}

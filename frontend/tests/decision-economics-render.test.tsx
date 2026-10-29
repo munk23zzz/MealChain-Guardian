@@ -51,14 +51,14 @@ describe("DecisionEconomics — biaya PO vs SDC", () => {
 
   it("penalti risiko tidak muncul di blok PO", () => {
     const po = potong(render(PAYLOAD), "po");
-    expect(po).not.toContain("Expected loss");
+    expect(po).not.toContain("Susut gudang");
     expect(po).not.toContain("Risiko kesegaran");
     expect(po).not.toContain("Penalti keamanan");
   });
 
   it("blok SDC memuat penalti dan total SDC", () => {
     const sdc = potong(render(PAYLOAD), "sdc");
-    expect(sdc).toContain("Expected loss");
+    expect(sdc).toContain("Susut gudang");
     expect(sdc).toContain("Risiko kesegaran");
     expect(sdc).toContain("Penalti keamanan");
     expect(sdc).toContain("Total SDC");
@@ -72,11 +72,14 @@ describe("DecisionEconomics — biaya PO vs SDC", () => {
     expect(sdc.toLowerCase()).not.toContain("harga beli");
   });
 
-  it("menampilkan sumber dan versi metode risiko", () => {
+  it("tidak lagi mencetak sumber dan versi metode risiko", () => {
+    // Pemilik 29 Okt 2026: kalimat "Dasar risiko: ... versi sdc-policy-1"
+    // dihapus dari kartu biaya — jalur berkas bukan informasi pembaca bukti.
     const html = render(PAYLOAD);
-    expect(html).toContain("Kebijakan simulasi");
-    expect(html).toContain("sdc-policy-1");
-    expect(html).toContain("safe_delivered_cost");
+    expect(html).not.toContain("Kebijakan simulasi");
+    expect(html).not.toContain("sdc-policy-1");
+    expect(html).not.toContain("safe_delivered_cost");
+    expect(html).not.toContain("Dasar risiko");
   });
 });
 

@@ -123,6 +123,9 @@ def test_semua_scenario_menargetkan_fungsi_yang_sama(scenario):
         "direktori_pemasok",
         "antrean_penerimaan",
         "status_karantina",
+        # 29 Okt 2026: rincian keamanan satu batch (suhu, kebijakan, bukti) — sebelumnya
+        # Joule hanya bisa melihat baris daftar `/batches`.
+        "detail_batch",
     }
     for nama, isi in scenario.items():
         assert isi["target"] == {"name": "mealchain_query_function", "type": "function"}, nama
@@ -152,6 +155,7 @@ def test_setiap_skill_jembatan_punya_scenario(scenario):
         "supplier_risk": "risiko_pemasok",
         "receipts_queue": "antrean_penerimaan",
         "quarantine_status": "status_karantina",
+        "batch_detail": "detail_batch",
         "decision_evidence": "bukti_keputusan",
         "system_status": "status_sistem",
     }

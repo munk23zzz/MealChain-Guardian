@@ -18,7 +18,7 @@ pengganti pemeriksa:
 - Model gagal/timeout/JSON rusak → temuan deterministik dipertahankan dan
   alasannya dicatat (`unavailable` / `invalid`). Tidak pernah jadi error 500.
 
-Saklar: `WORKER_AGENT_MODE=off|advisory` (default `off`) dan `WORKER_AGENT_MODEL`
+Saklar: `WORKER_AGENT_MODE=off|advisory` (default `advisory`) dan `WORKER_AGENT_MODEL`
 (model id; kosong → lapisan ini tidak pernah aktif).
 
 Sembilan agent, satu pintu resolusi (27 Okt 2026). Lapisan ini melayani tujuh
@@ -52,7 +52,7 @@ import json
 import os
 import re
 from collections.abc import Callable, Mapping
-from decimal import Decimal, InvalidOperation
+from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from pathlib import Path
 from time import monotonic
 
@@ -165,10 +165,11 @@ def _region_dari_env(env: Mapping[str, str] | None = None) -> str:
 
 
 def mode_dari_env(env: Mapping[str, str] | None = None) -> str:
-    """Mode lapisan penalaran. Default `off`; nilai asing juga jatuh ke `off`."""
+    """Mode lapisan penalaran. Default `advisory` (otomatis untuk 9 agent);
+    `off` eksplisit mematikan, nilai asing juga jatuh ke default."""
     sumber: Mapping[str, str] = os.environ if env is None else env
     nilai = (sumber.get(ENV_MODE) or "").strip().lower()
-    return nilai if nilai in MODE_SAH else MODE_OFF
+    return nilai if nilai in MODE_SAH else MODE_ADVISORY
 
 
 def kunci_model_untuk(agent: str | None) -> str:
@@ -486,6 +487,28 @@ def _angka_fakta(facts: dict, ringkasan: str) -> set[Decimal]:
     return _angka(mentah) | _angka(ringkasan)
 
 
+#: Presisi pembulatan yang masih dianggap "angka yang sama" dengan fakta.
+#: Model bahasa membulatkan: fakta `-5.708053…` wajar ditulis "5,7%". Tanpa
+#: toleransi ini satu-satunya agent yang fakta-nya berdesimal panjang (`price`)
+#: selalu ditolak `model_angka_baru` dan tampak deterministik, padahal modelnya
+#: dipanggil dan menjawab benar (terukur 29 Okt 2026).
+_PRESISI_PEMBULATAN: tuple[Decimal, ...] = (Decimal("1"), Decimal("0.1"), Decimal("0.01"))
+
+
+def _dikenal(nilai: Decimal, dikenal: set[Decimal]) -> bool:
+    """`True` bila `nilai` sama dengan fakta, termasuk versi bulatnya (≤2 desimal)."""
+    if nilai in dikenal:
+        return True
+    for presisi in _PRESISI_PEMBULATAN:
+        for fakta in dikenal:
+            try:
+                if nilai == fakta.quantize(presisi, rounding=ROUND_HALF_UP):
+                    return True
+            except InvalidOperation:  # angka terlalu besar untuk presisi ini
+                continue
+    return False
+
+
 def _hasil_reasoning(
     finding: AgentFinding,
     *,
@@ -630,8 +653,11 @@ def terapkan_penalaran(
     ringkasan = data.get("summary")
     ringkasan = ringkasan.strip() if isinstance(ringkasan, str) else ""
     if ringkasan:
-        # Guard 2 — anti-karang angka.
-        baru = _angka(ringkasan) - _angka_fakta(finding.facts, finding.summary)
+        # Guard 2 — anti-karang angka. Angka dianggap "baru" hanya bila tidak
+        # sama dengan fakta MANA PUN, termasuk versi bulatnya (≤2 desimal):
+        # menulis "5,7%" untuk fakta -5.708053… bukan mengarang.
+        fakta_angka = _angka_fakta(finding.facts, finding.summary)
+        baru = {nilai for nilai in _angka(ringkasan) if not _dikenal(nilai, fakta_angka)}
         if baru:
             return _hasil_reasoning(
                 finding,

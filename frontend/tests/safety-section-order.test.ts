@@ -22,19 +22,19 @@ const AKAR = join(__dirname, "..");
 /**
  * Urutan jangkar Keamanan Pangan sebagaimana dirender.
  *
- * `safety-bukti-suhu` dipasang di dalam `TemperatureEvidenceCard`, jadi yang
- * dicatat di sini adalah POSISI pemakaian komponennya (`<TemperatureEvidenceCard`),
- * bukan id yang tertulis di berkas itu sendiri.
+ * `safety-bukti-suhu` dipasang di dalam `BatchPerhatianCard`, jadi yang dicatat
+ * di sini adalah POSISI pemakaian komponennya (`<BatchPerhatianCard`), bukan id
+ * yang tertulis di berkas itu sendiri.
  */
 function urutanDiHalaman(): string[] {
   const isi = readFileSync(join(AKAR, "components/FoodSafetyBoard.tsx"), "utf8");
-  const pola = /id="(safety-[a-z-]+)"|anchor="(safety-[a-z-]+)"|<TemperatureEvidenceCard/g;
+  const pola = /id="(safety-[a-z-]+)"|anchor="(safety-[a-z-]+)"|<BatchPerhatianCard/g;
   const hasil: string[] = [];
   for (const cocok of Array.from(isi.matchAll(pola))) {
     const id =
       cocok[1] ??
       cocok[2] ??
-      (cocok[0] === "<TemperatureEvidenceCard" ? SAFETY_SECTION_IDS.bukti : undefined);
+      (cocok[0] === "<BatchPerhatianCard" ? SAFETY_SECTION_IDS.bukti : undefined);
     if (!id || hasil.includes(id)) continue;
     hasil.push(id);
   }

@@ -64,13 +64,13 @@ export function anchorNote(ledger: LedgerCoverage | null | undefined): string | 
   const anchor = ledger?.anchor;
   if (!anchor) return null;
   if (anchor.match === false) {
-    const alasan = anchor.reason ?? "isi checkpoint tidak sama dengan database";
+    const alasan = anchor.reason ?? "isi checkpoint tidak sama dengan catatan aslinya";
     return `Anchor eksternal TIDAK cocok — riwayat ledger mungkin ditulis ulang. ${alasan}`;
   }
   if (anchor.match === null) {
     return anchor.configured
-      ? "Checkpoint eksternal belum dibuat — jalankan scripts/ledger_anchor.py agar integritas bisa diperiksa dari luar database."
-      : "Anchor eksternal dimatikan (LEDGER_ANCHOR_PATH kosong) — integritas hanya diperiksa di dalam database.";
+      ? "Checkpoint eksternal belum dibuat — integritas baru diperiksa di dalam."
+      : "Anchor eksternal belum dipasang — integritas hanya diperiksa di dalam.";
   }
   const tinggi = anchor.height;
   return typeof tinggi === "number"
