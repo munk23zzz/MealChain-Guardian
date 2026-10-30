@@ -336,6 +336,12 @@ async def _ikat_sumber(
             # Batch kasus tidak lengkap / pemasoknya campur: jangan mengarang
             # binding. Guard execute akan menolak dengan alasan yang sebenarnya.
             return False
+        # Guard 30 Okt 2026: id bukti binding deterministik, jadi penyemian
+        # ulang pada dataset yang sama menabrak `decision_evidence_pkey`.
+        if await db.get(
+            DecisionEvidence, uuid.uuid5(decision.id, "bukti:allocation_binding")
+        ) is not None:
+            return True
         db.add(
             DecisionEvidence(
                 id=uuid.uuid5(decision.id, "bukti:allocation_binding"),
@@ -380,6 +386,10 @@ async def _ikat_sumber(
     ).scalars().first()
     if batch is None:
         return False
+    if await db.get(
+        DecisionEvidence, uuid.uuid5(decision.id, "bukti:allocation_binding")
+    ) is not None:
+        return True
     db.add(
         DecisionEvidence(
             # Id deterministik: menyemai ulang tidak menggandakan bukti binding.
@@ -428,6 +438,23 @@ async def _add_trace(
             step_at=(acuan or datetime.now(timezone.utc)) - timedelta(minutes=minutes_ago),
         )
     )
+
+
+async def _tambah_keputusan(db: AsyncSession, baris: Decision) -> None:
+    """Tambahkan keputusan kasus demo; ADOPSI bila ID kanonnya sudah ada.
+
+    ID kasus replay diturunkan dari (mode, dataset_version, kasus, kota) — BUKAN
+    dari sesi. Dua sesi replay pada dataset yang sama karena itu menghasilkan ID
+    yang sama, dan INSERT kedua menabrak `decisions_pkey` (terukur 30 Okt 2026:
+    penyemian ulang gagal 500). Baris itu memang dataset yang sama, jadi yang
+    benar adalah memindahkan kepemilikannya ke sesi yang sedang menyemai —
+    bukan menggandakan baris atau menghapus milik sesi lain.
+    """
+    ada = await db.get(Decision, baris.id)
+    if ada is None:
+        db.add(baris)
+        return
+    ada.demo_session_id = baris.demo_session_id
 
 
 def _decision(
@@ -588,6 +615,15 @@ async def _seed_demo_cases(
         from app.services import demo_purge
 
         await demo_purge.purge_session(db, demo_session_id)
+        # 30 Okt 2026 — TIDAK ada "bersihkan kasus sesi berakhir" di sini.
+        # Percobaan sebelumnya menyapu SELURUH baris sesi lain di kota yang sama
+        # karena keputusan kasus ber-ID deterministik; akibatnya menyemai sesi
+        # kedua (atau mereset sesi pertama) menghapus keputusan sesi lain —
+        # padahal status `ended` bukan tanda "boleh dimusnahkan". Tabrakan ID
+        # sudah ditangani di dua tempat yang tepat: `purge_session` (anak dulu,
+        # induk kemudian) dan filter `filter_hapus` di bawah, yang hanya
+        # menimpa baris ber-`dataset_version` SAMA — dataset yang identik,
+        # bukan data sesi bermode lain.
         await db.flush()
     if demo_session_id is None:
         # Jalur lama (template/`/demo/refresh`): hapus ulang per kota.
@@ -832,7 +868,7 @@ async def _seed_demo_cases(
         ttl_minutes=-60,  # kedaluwarsa (sudah lewat, keputusan mati)
         rejection_reason=f"Kuota SPPG {target.name} penuh minggu ini — coba skema bertahap.",
     )
-    db.add(v1)
+    await _tambah_keputusan(db, v1)
     await db.flush()
     created.append(v1.id)
     # Bukti penolakan iterasi 1: kuota SPPG penuh. Tanpa baris ini kartu
@@ -877,7 +913,7 @@ async def _seed_demo_cases(
         supersedes=v1.id,
         rejection_reason="Harga per kg naik 12% dari referensi — negosiasi ulang dulu.",
     )
-    db.add(v2)
+    await _tambah_keputusan(db, v2)
     await db.flush()
     created.append(v2.id)
     # Bukti penolakan: harga kutipan 12% di atas referensi — alasan kartu ini
@@ -914,7 +950,7 @@ async def _seed_demo_cases(
         verified_by="verifier_agent",
         verifier_note="consistent",
     )
-    db.add(v3)
+    await _tambah_keputusan(db, v3)
     await db.flush()
     created.append(v3.id)
     # Bukti binding: tanpa ini v3 tertahan "pemasok tidak dikenal" pada dataset
@@ -936,7 +972,7 @@ async def _seed_demo_cases(
         verified_by="verifier_agent",
         verifier_note="consistent",
     )
-    db.add(s1)
+    await _tambah_keputusan(db, s1)
     await db.flush()
     created.append(s1.id)
     await _ikat_sumber(db, s1, sekarang)
@@ -958,7 +994,7 @@ async def _seed_demo_cases(
         verified_by="verifier_agent",
         verifier_note="flagged",
     )
-    db.add(j1)
+    await _tambah_keputusan(db, j1)
     await db.flush()
     created.append(j1.id)
     # Bukti tuduhan: kutipan 40% di bawah referensi PIHPS. `konsisten=False`
@@ -994,7 +1030,7 @@ async def _seed_demo_cases(
         ttl_minutes=-45,
         rejection_reason=f"Rute menuju {target.name} terganggu banjir — cari sumber alternatif.",
     )
-    db.add(g1)
+    await _tambah_keputusan(db, g1)
     await db.flush()
     created.append(g1.id)
     # Bukti penolakan logistik: status rute + perkiraan tunda — kartu ini ditolak
@@ -1037,7 +1073,7 @@ async def _seed_demo_cases(
         verified_by="verifier_agent",
         verifier_note="consistent",
     )
-    db.add(g2)
+    await _tambah_keputusan(db, g2)
     await db.flush()
     created.append(g2.id)
     await _ikat_sumber(db, g2, sekarang)
@@ -1229,7 +1265,7 @@ async def _seed_demo_cases(
             verified_by="verifier_agent",
             verifier_note="consistent",
         )
-        db.add(keputusan)
+        await _tambah_keputusan(db, keputusan)
         await db.flush()
         created.append(keputusan.id)
         # Binding memakai waktu EVALUASI: batch replay memang berjangkar, dan
@@ -1332,6 +1368,12 @@ async def _seed_demo_cases(
                     "sdc": float(baris.safe_delivered_cost),
                 }
 
+    # 30 Okt 2026 — fakta KPI hari ini & besok ikut lahir saat "Muat kasus",
+    # bukan lewat skrip terpisah. Baris dicap sesi cetakan supaya terbaca di
+    # cakupan operasional (Joule) maupun simulasi (dashboard).
+    from app.seed.kpi_harian import lengkapi_hari_ini_dan_besok
+
+    info_kpi_harian = await lengkapi_hari_ini_dan_besok(db, sesi=None)
     await db.commit()
     kasus_dibangun = len(DEMO_CASES) + sum(
         1 for info in info_komoditas if not info.get("skipped")

@@ -382,3 +382,47 @@ describe("Pemilih keputusan — yang lewat tenggat disembunyikan", () => {
     expect(html).toContain('value="d1"');
   });
 });
+
+// Keluhan owner 30 Okt 2026: "kartu keputusan blok Bukti tidak ada panel
+// Penerimaan barang, tidak ada tombol Tandai diterima". Sebabnya bukan data:
+// sepanjang Tahap 8 kartu penerimaan hanya dipasang di `DecisionDetail`, berkas
+// yang sudah tidak dirender di halaman mana pun. Tes ini mengunci janji yang
+// sebenarnya: blok Bukti halaman keputusan WAJIB memuat kartunya.
+describe("Blok Bukti — penerimaan barang", () => {
+  const SUMMARY_GATE = {
+    ...SUMMARY,
+    status: "executed",
+    can_receive: true,
+    receipt_gate: {
+      location_id: "loc-jkt",
+      location_name: "Jakarta",
+      batches: [
+        {
+          batch_id: "b1111111-2222-3333-4444-555555555555",
+          status: "usable",
+          can_receive: true,
+          can_quarantine: false,
+          receive_reasons: [],
+          quarantine_reasons: [],
+          next_step: null,
+        },
+      ],
+      can_receive: true,
+      can_quarantine: false,
+      receive_reasons: [],
+      quarantine_reasons: [],
+      next_step: null,
+    },
+  };
+
+  it("menampilkan kartu Penerimaan barang di halaman keputusan", () => {
+    const html = render({ summary: SUMMARY_GATE });
+    expect(html).toContain("Penerimaan barang");
+    expect(html).toContain("b1111111");
+  });
+
+  it("tanpa `receipt_gate` server: kartu tidak dikarang", () => {
+    const html = render({ summary: { ...SUMMARY } });
+    expect(html).not.toContain("Penerimaan barang");
+  });
+});

@@ -36,12 +36,15 @@ describe("trustTrail — blok ledger", () => {
       locations: [],
     });
     expect(ledger.id).toBe("ledger");
-    expect(ledger.label).toBe("Blok ledger");
+    expect(ledger.label).toBe("Rantai bukti");
     expect(ledger.value).toBe("978");
     expect(ledger.unit).toBe("blok");
     expect(ledger.tone).toBe("ok");
     expect(ledger.state).toBe("utuh");
-    expect(ledger.foot).toContain("checkpoint cocok");
+    expect(ledger.foot).toContain("Salinan di luar sistem cocok.");
+    // Kalimat penjelas tidak lagi dirangkai dengan " · " (dibaca sebagai
+    // potongan istilah, bukan kalimat).
+    expect(ledger.foot).not.toContain(" · ");
   });
 
   it("rantai putus: nada peringatan dan blok patahnya disebut", () => {
@@ -84,7 +87,7 @@ describe("trustTrail — blok ledger", () => {
       decisions: [],
       locations: [],
     });
-    expect(ledger.foot).toContain("2 blok yatim");
+    expect(ledger.foot).toContain("2 dari 900 blok tidak tertaut ke keputusan mana pun.");
     expect(ledger.tone).toBe("warn");
   });
 });
@@ -107,9 +110,9 @@ describe("trustTrail — batch lolos", () => {
     expect(batch.value).toBe("1");
     expect(batch.unit).toBe("/5");
     expect(batch.tone).toBe("warn");
-    expect(batch.foot).toContain("1 gagal");
+    expect(batch.foot).toContain("1 gagal uji");
     expect(batch.foot).toContain("1 ditahan");
-    expect(batch.foot).toContain("1 belum diuji");
+    expect(batch.foot).toContain("1 perlu diuji ulang");
     // Status yang tidak masuk kategori mana pun tetap disebut, bukan hilang:
     // 1 lolos + 1 ditahan + 1 gagal + 1 belum diuji + 1 tanpa status = /5.
     expect(batch.foot).toContain("1 tanpa status");
@@ -129,7 +132,7 @@ describe("trustTrail — batch lolos", () => {
     expect(batch.unit).toBe("/2");
     expect(batch.tone).toBe("ok");
     expect(batch.state).toBe("bersih");
-    expect(batch.foot).toBe("semua batch lolos uji");
+    expect(batch.foot).toBe("Semua 2 batch lolos uji dan boleh dipakai.");
   });
 
   it("belum ada batch terbaca: '—' dan alasan", () => {
@@ -142,7 +145,7 @@ describe("trustTrail — batch lolos", () => {
     expect(batch.value).toBe("—");
     expect(batch.unit).toBeNull();
     expect(batch.state).toBe("menunggu");
-    expect(batch.foot).toBe("belum ada batch terbaca");
+    expect(batch.foot).toBe("Belum ada batch yang terbaca.");
   });
 });
 
@@ -166,7 +169,7 @@ describe("trustTrail — keputusan tereksekusi", () => {
     expect(exec.tone).toBe("ok");
     // Hanya status yang benar-benar menunggu tindakan yang dihitung; yang
     // ditolak bukan pekerjaan yang bisa diselesaikan.
-    expect(exec.foot).toBe("2 menunggu tindakan · 1 ditolak");
+    expect(exec.foot).toBe("2 sudah dieksekusi. 2 menunggu tindakan dan 1 ditolak.");
   });
 
   it("belum pernah ada eksekusi: 0 yang terukur, bukan '—'", () => {
@@ -179,7 +182,7 @@ describe("trustTrail — keputusan tereksekusi", () => {
     expect(exec.value).toBe("0");
     expect(exec.unit).toBe("/1");
     expect(exec.state).toBe("belum ada");
-    expect(exec.foot).toBe("1 menunggu tindakan");
+    expect(exec.foot).toBe("1 menunggu tindakan.");
   });
 
   it("daftar keputusan belum termuat: '—'", () => {
@@ -207,11 +210,21 @@ describe("trustTrail — node tanpa angka terlapor", () => {
         node({ demand_state: "sebagian" }),
       ],
     })[3];
-    expect(nodes.label).toBe("Node tanpa angka");
+    expect(nodes.label).toBe("Lokasi tanpa angka");
     expect(nodes.value).toBe("2");
     expect(nodes.unit).toBe("/4");
     expect(nodes.tone).toBe("warn");
-    expect(nodes.foot).toBe("2 node tanpa catatan");
+    expect(nodes.foot).toBe("2 dari 4 lokasi belum melaporkan angka pasokan atau kebutuhan.");
+  });
+
+  it("satu lokasi yang melapor ditulis tanpa kata \"semua\" yang janggal", () => {
+    const [, , , nodes] = trustTrail({
+      ledger: null,
+      batches: [],
+      decisions: [],
+      locations: [node({ supply_state: "terukur", demand_state: "terukur" })],
+    } as never);
+    expect(nodes.foot).toBe("Lokasi ini melaporkan angka pasokan dan kebutuhan.");
   });
 
   it("semua node melapor: 0 yang terukur, nada aman", () => {
@@ -225,7 +238,7 @@ describe("trustTrail — node tanpa angka terlapor", () => {
     expect(nodes.unit).toBe("/2");
     expect(nodes.tone).toBe("ok");
     expect(nodes.state).toBe("lengkap");
-    expect(nodes.foot).toBe("semua node melaporkan angka");
+    expect(nodes.foot).toBe("Semua 2 lokasi melaporkan angka pasokan dan kebutuhan.");
   });
 
   it("tidak ada node pada komoditas ini: '—'", () => {
@@ -236,7 +249,7 @@ describe("trustTrail — node tanpa angka terlapor", () => {
       locations: [],
     })[3];
     expect(nodes.value).toBe("—");
-    expect(nodes.foot).toBe("belum ada node pada komoditas ini");
+    expect(nodes.foot).toBe("Belum ada lokasi pada komoditas ini.");
   });
 });
 

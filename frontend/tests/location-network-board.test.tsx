@@ -132,6 +132,24 @@ describe("LocationNetworkBoard — halaman gabungan", () => {
     expect(html.indexOf("Cianjur")).toBeLessThan(html.indexOf("Medan"));
   });
 
+  it("kepala tabel Lokasi memuat legenda tanda selisih dan arti kolom Rekomendasi", () => {
+    // 30 Okt 2026: "− kurang · + lebih · = seimbang" tidak pernah dijelaskan di
+    // layar, padahal selisihnya ditulis dengan tanda. Legenda ini satu-satunya
+    // tempat artinya dibaca; angkanya tidak diulang di sini. Klausa Rekomendasi
+    // hanya muncul saat kolomnya ada (fixture dasar tidak memuat keputusan).
+    const tanpaRekomendasi = renderBoard();
+    expect(tanpaRekomendasi).toContain("− kurang");
+    expect(tanpaRekomendasi).toContain("+ lebih");
+    expect(tanpaRekomendasi).toContain("= seimbang");
+    expect(tanpaRekomendasi).not.toContain("Rekomendasi = usulan terbuka");
+
+    const denganRekomendasi = renderBoard({
+      decisions: [{ status: "pending_approval", target_location_name: "Jakarta" }] as never,
+    });
+    expect(denganRekomendasi).toContain(">Rekomendasi<");
+    expect(denganRekomendasi).toContain("Rekomendasi = usulan terbuka");
+  });
+
   it("baris terpilih terbuka (aria-expanded) dan rinciannya ada di halaman yang sama", () => {
     const html = renderBoard();
     // L3: pola disclosure — `aria-expanded`, bukan `aria-pressed`.

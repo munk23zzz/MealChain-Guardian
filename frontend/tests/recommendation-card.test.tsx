@@ -5,7 +5,7 @@
 import { describe, expect, it } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 
-import RecommendationCard, { CARD_HINT } from "../components/RecommendationCard";
+import RecommendationCard, { CARD_HINT, caseLabelOf } from "../components/RecommendationCard";
 
 const BASE = {
   decision_id: "d1",
@@ -101,6 +101,25 @@ describe("RecommendationCard — narasi", () => {
     expect(html).not.toContain("Rencana kirim");
     expect(html).not.toContain("rec-case");
     expect(html).not.toContain("Kasus:");
+  });
+
+  it("label kasus komoditas memakai nama Indonesia, bukan slug", () => {
+    // Sebelum 30 Okt 2026 lima kasus komoditas jatuh ke fallback slug sehingga
+    // kepala halaman mencetak "Kasus: wortel coldchain hold" (huruf kecil,
+    // tanda hubung ikut tercetak). Dua kunci telur/ayam baru ada hari itu.
+    const harapan: Record<string, string> = {
+      "wortel-coldchain-sah": "Kasus: Wortel Rantai Dingin (Bukti Lengkap)",
+      "wortel-coldchain-hold": "Kasus: Wortel Rantai Dingin (Bukti Kurang)",
+      "beras-ambient": "Kasus: Beras Suhu Ruang",
+      "telur-rantai-dingin-sah": "Kasus: Telur Rantai Dingin (Bukti Lengkap)",
+      "ayam-rantai-dingin-hold": "Kasus: Ayam Rantai Dingin (Bukti Kurang)",
+    };
+    for (const [key, label] of Object.entries(harapan)) {
+      expect(caseLabelOf({ demo_case: key })).toBe(label);
+    }
+    // Kunci asing tetap jujur: slug dibaca apa adanya, bukan dikarang.
+    expect(caseLabelOf({ demo_case: "kasus-baru" })).toBe("Kasus: kasus baru");
+    expect(caseLabelOf({})).toBeNull();
   });
 
   it("valid tanpa sisa waktu: TIDAK mencetak '0 dtk' yang dikarang", () => {

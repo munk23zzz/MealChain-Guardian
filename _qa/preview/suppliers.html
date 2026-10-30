@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="id"><head><meta charset="utf-8">
+<title>Pratinjau Pemasok — 360 / 760 / 1440 px</title>
+<style>
+  body { margin: 0; padding: 16px; background: #eef1f6; font: 14px/1.5 ui-sans-serif, system-ui, sans-serif; }
+  h1 { font-size: 16px; margin: 0 0 4px; }
+  p { margin: 0 0 16px; color: #475569; }
+  .deret { display: flex; gap: 16px; align-items: flex-start; overflow-x: auto; }
+  .bingkai { margin: 0; background: #fff; border: 1px solid #cbd5e1; border-radius: 10px; overflow: hidden; }
+  figcaption { padding: 6px 10px; font-size: 12px; font-weight: 600; background: #f1f5f9; border-bottom: 1px solid #cbd5e1; }
+  iframe { display: block; border: 0; }
+</style>
+</head><body>
+<h1>Halaman Pemasok — pratinjau statis</h1>
+<p>Data contoh berbentuk respons API demo. Isi tiap bingkai sama; hanya lebar berbeda, jadi perbedaan yang terlihat adalah akibat breakpoint.</p>
+<div class="deret">
+
+  <figure class="bingkai">
+    <figcaption>Ponsel · 360 px</figcaption>
+    <iframe src="suppliers-isi.html" width="360" height="2400" title="Ponsel"></iframe>
+  </figure>
+  <figure class="bingkai">
+    <figcaption>Tablet · 760 px</figcaption>
+    <iframe src="suppliers-isi.html" width="760" height="2400" title="Tablet"></iframe>
+  </figure>
+  <figure class="bingkai">
+    <figcaption>Desktop · 1440 px</figcaption>
+    <iframe src="suppliers-isi.html" width="1440" height="2400" title="Desktop"></iframe>
+  </figure>
+</div>
+</body></html>

@@ -336,6 +336,82 @@ _COMMODITY: tuple[ScenarioCaseSpec, ...] = (
             "log suhu ruang dicatat, bukan dinilai excursion (policy simulated_policy)"
         ),
     ),
+    # 30 Okt 2026 — dua kasus untuk komoditas yang sebelumnya TIDAK punya kasus
+    # (telur, ayam). Akibatnya panel demo hanya bisa memuat kasus beras/wortel;
+    # memilih komoditas lain berakhir `409 tidak ada kandidat` dan fitur tampak
+    # rusak padahal datanya ada. Keduanya rantai dingin 0-8 °C (profil
+    # `commodity_policy`), jadi wajib >= 2 sampel suhu sah.
+    ScenarioCaseSpec(
+        key="telur-rantai-dingin-sah",
+        kind=KIND_COMMODITY,
+        commodity="telur",
+        target_location="Jakarta",
+        source_candidates=("Bogor", "Cianjur", "Bandung"),
+        quantity_kg=480.0,
+        intended_outcome="usable",
+        decision_type="supplier_procurement",
+        decision_status="pending_approval",
+        decision_offset_min=-48,
+        # Tenggat 7 jam setelah jangkar; kirim -420 menit + tempuh Bogor->Jakarta
+        # masih jauh di depan tenggat (diperiksa `pemeriksaan_konsistensi`).
+        demand_needed_by_offset_min=7 * 60,
+        demand_recorded_offset_min=-25,
+        price_per_kg=27500.0,
+        price_offset_min=-105,
+        batches=(
+            BatchSpec(
+                label="telur-sah",
+                quantity_kg=480.0,
+                harvest_offset_min=-600,
+                dispatched_offset_min=-420,
+                temperature_offsets_min=(-360, -300, -240),
+                temperatures_c=(3.2, 3.8, 4.4),
+                certificate="hygiene",
+                safety_status=BATCH_PASS,
+            ),
+        ),
+        policy_note=(
+            "rantai dingin 0-8 °C, 3 sampel dalam 6 jam terakhir, "
+            "masa layak 28 hari (policy simulated_policy)"
+        ),
+    ),
+    ScenarioCaseSpec(
+        key="ayam-rantai-dingin-hold",
+        kind=KIND_COMMODITY,
+        commodity="ayam",
+        target_location="Jakarta",
+        source_candidates=("Bandung", "Bogor", "Cianjur"),
+        quantity_kg=220.0,
+        intended_outcome="on_hold",
+        decision_type="supplier_procurement",
+        decision_status="pending_approval",
+        decision_offset_min=-42,
+        demand_needed_by_offset_min=5 * 60,
+        # Beda menit dari kasus ayam lain: kunci unik `demand_records` adalah
+        # (lokasi, komoditas, recorded_at).
+        demand_recorded_offset_min=-27,
+        price_per_kg=38000.0,
+        price_offset_min=-95,
+        batches=(
+            BatchSpec(
+                label="ayam-bukti-kurang",
+                quantity_kg=220.0,
+                harvest_offset_min=-420,
+                dispatched_offset_min=-300,
+                # Satu sampel sah + dua entri rusak: profil menuntut >= 2 sampel,
+                # jadi bukti tidak cukup untuk `pass` — inilah `on_hold`.
+                temperature_offsets_min=(-90,),
+                temperatures_c=(3.5,),
+                malformed_samples=2,
+                certificate="hygiene",
+                safety_status=BATCH_ON_HOLD,
+            ),
+        ),
+        policy_note=(
+            "bukti suhu tidak cukup (1 sampel sah < minimum 2 + 2 entri rusak) "
+            "-> needs_verification, bukan error"
+        ),
+    ),
 )
 
 SCENARIO_CASES: tuple[ScenarioCaseSpec, ...] = _SCRIPTED + _COMMODITY

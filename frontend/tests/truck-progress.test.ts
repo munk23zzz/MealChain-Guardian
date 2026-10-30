@@ -11,7 +11,7 @@
  */
 import { describe, expect, it } from "vitest";
 
-import { fraksiBerjalan } from "../lib/truck-progress";
+import { DURASI_ANIMASI_MS, fraksiAnimasi, fraksiBerjalan } from "../lib/truck-progress";
 import type { RouteJourney } from "../lib/supplier-routes";
 
 function journey(over: Partial<RouteJourney> = {}): RouteJourney {
@@ -88,5 +88,57 @@ describe("fraksiBerjalan", () => {
       9
     );
     expect(fraksiBerjalan(null, null, T0)).toBe(0);
+  });
+});
+
+/**
+ * Animasi perjalanan di peta (permintaan 30 Okt 2026): ikon mobil harus
+ * MENUNTASKAN jalurnya di bawah satu menit waktu nyata, sementara waktu tempuh
+ * dan ETA yang tertulis tetap angka asli. Yang diuji: laju animasi, monotonitas,
+ * dan batas 1 — bukan angka estimasi.
+ */
+describe("fraksiAnimasi", () => {
+  it("tepat di jangkar memakai progress server apa adanya", () => {
+    expect(fraksiAnimasi(journey({ progress: 0.25 }), { progress: 0.25, at: T0 }, T0)).toBeCloseTo(0.25, 9);
+  });
+
+  it("tuntas (fraksi 1) paling lambat DURASI_ANIMASI_MS", () => {
+    expect(DURASI_ANIMASI_MS).toBeLessThan(60_000);
+    expect(fraksiAnimasi(journey(), { progress: 0.1, at: T0 }, T0 + DURASI_ANIMASI_MS)).toBe(1);
+    expect(fraksiAnimasi(journey(), { progress: 0, at: T0 }, T0 + DURASI_ANIMASI_MS)).toBe(1);
+  });
+
+  it("di tengah durasi animasi sudah setengah jalan menuju ujung", () => {
+    expect(
+      fraksiAnimasi(journey({ progress: 0.2 }), { progress: 0.2, at: T0 }, T0 + DURASI_ANIMASI_MS / 2)
+    ).toBeCloseTo(0.2 + 0.5 * 0.8, 9);
+  });
+
+  it("angka server yang menyusul tidak memundurkan ikon", () => {
+    // Server baru melaporkan 0,4 padahal animasi sudah maju; posisi tetap maju.
+    const sudah = fraksiAnimasi(journey({ progress: 0.2 }), { progress: 0.2, at: T0 }, T0 + 10_000);
+    const sesudah = fraksiAnimasi(
+      journey({ progress: 0.4 }),
+      { progress: 0.2, at: T0 },
+      T0 + 10_000
+    );
+    expect(sesudah).toBeCloseTo(0.4, 9);
+    // dan pada waktu berikutnya tetap tidak mundur
+    expect(
+      fraksiAnimasi(journey({ progress: 0.4 }), { progress: 0.2, at: T0 }, T0 + 20_000)
+    ).toBeGreaterThan(sesudah);
+    expect(sudah).toBeLessThan(sesudah);
+  });
+
+  it("tidak pernah melewati 1 dan tahan jam mundur", () => {
+    expect(fraksiAnimasi(journey(), { progress: 0.9, at: T0 }, T0 + 10 * DURASI_ANIMASI_MS)).toBe(1);
+    expect(fraksiAnimasi(journey({ progress: 0.5 }), { progress: 0.5, at: T0 }, T0 - 5_000)).toBeCloseTo(0.5, 9);
+  });
+
+  it("jangkar/durasi tidak masuk akal jatuh ke angka server", () => {
+    expect(fraksiAnimasi(journey({ progress: 0.3 }), null, T0 + 60_000)).toBeCloseTo(0.3, 9);
+    expect(
+      fraksiAnimasi(journey({ progress: 0.3 }), { progress: 0.3, at: T0 }, T0 + 1_000, 0)
+    ).toBeCloseTo(0.3, 9);
   });
 });

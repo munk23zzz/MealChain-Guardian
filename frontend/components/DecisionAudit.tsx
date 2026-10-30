@@ -15,13 +15,49 @@
 import { formatDateTime } from "../lib/datetime";
 import type { AuditEvent } from "../lib/evidence";
 
-const TONE_MARK: Record<string, string> = {
-  ok: "✓",
-  danger: "✕",
-  warn: "!",
-  plain: "•",
-  muted: "•",
-};
+/** Penanda nada digambar SVG, bukan glyph.
+ *
+ *  Sebelumnya ✓ ✕ ! • dicetak sebagai teks di dalam bulatan 22 px. Glyph
+ *  tidak punya metrik yang sama: ✓ dan ✕ lebih lebar, ! dan • lebih sempit,
+ *  dan baseline-nya berbeda — hasilnya penanda terlihat "keluar jalur" dari
+ *  satu baris ke baris lain (keluhan pemilik 30 Okt 2026). SVG 12×12 dengan
+ *  stroke bulat selalu duduk di tengah bulatan dan sejajar satu sama lain.
+ */
+function MarkTone({ tone }: { tone: string }) {
+  const isi =
+    tone === "ok" ? (
+      <path
+        d="M2.6 6.4l2.4 2.4 4.6-5"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    ) : tone === "danger" ? (
+      <path
+        d="M3.1 3.1l5.8 5.8M8.9 3.1l-5.8 5.8"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+      />
+    ) : tone === "warn" ? (
+      <>
+        <path d="M6 2.8v4" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+        <circle cx="6" cy="9.2" r="1" fill="currentColor" />
+      </>
+    ) : (
+      <circle cx="6" cy="6" r="2" fill="currentColor" />
+    );
+  return (
+    <span className="audit-mark" aria-hidden="true">
+      <svg width="12" height="12" viewBox="0 0 12 12" focusable="false">
+        {isi}
+      </svg>
+    </span>
+  );
+}
 
 export default function DecisionAudit({ events }: { events: AuditEvent[] }) {
   if (!events || events.length === 0) {
@@ -31,9 +67,7 @@ export default function DecisionAudit({ events }: { events: AuditEvent[] }) {
     <ol className="audit-list" aria-label="Jejak keputusan">
       {events.map((event) => (
         <li className={`audit-item audit-${event.tone}`} key={event.id}>
-          <span className="audit-mark" aria-hidden="true">
-            {TONE_MARK[event.tone] ?? "•"}
-          </span>
+          <MarkTone tone={event.tone} />
           <div className="audit-body">
             <p className="audit-head">
               <strong className="audit-title">{event.title}</strong>

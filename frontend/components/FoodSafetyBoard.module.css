@@ -296,12 +296,21 @@
 /* Baris atas butir antrean: keterangan batch di kiri, nilai rupiah di kanan
    (tahap 5, 29 Okt 2026). Angka uang rata kanan supaya bisa dibandingkan
    menurun; di layar sempit keduanya menumpuk lagi. */
+/* Dua kolom: keterangan batch di kiri, nilai rupiah di kanan, keduanya mulai
+   dari baris yang sama. Sebelumnya flex-wrap membuat nilai turun ke kanan
+   sementara tombol tetap di kiri, sehingga butir terlihat menggantung dengan
+   rongga kosong di tengah (keluhan pemilik 30 Okt 2026). */
 .approvalTop {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 4px 16px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 2px 16px;
+}
+
+@media (max-width: 640px) {
+  .approvalTop {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 
 .approvalFacts {
@@ -311,33 +320,41 @@
   min-width: 0;
 }
 
+/* Garis kiri bernada peringatan: butir di daftar ini adalah pekerjaan yang
+   MENAHAN stok, jadi ia harus terbaca sebagai antrean, bukan kartu biasa. */
 .approvalItem {
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  padding: 10px 12px;
+  gap: 8px;
+  padding: 12px 14px;
   border: 1px solid var(--line);
+  border-left: 3px solid var(--warn-border, #d9a441);
   border-radius: var(--radius-control);
   background: var(--surface);
 }
 
+/* Badge "menunggu" menempel pada judul batch, bukan dilempar ke ujung kolom:
+   dengan `space-between` ia berhenti tepat di samping label nilai rupiah dan
+   terbaca seolah milik angka itu. */
 .approvalHead {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  justify-content: space-between;
-  gap: 6px 12px;
+  gap: 6px 8px;
 }
 
 /* Nilai penerimaan pada baris antrean (Dok 05 §8.2–§8.3).
    Satu baris: label kecil + angka + asal harga. Angka memakai huruf data dan
    angka bertabular supaya nominal antar-baris bisa dibandingkan tegak lurus;
    asal harga turun ke ukuran meta karena ia penjelas, bukan angka utama. */
+/* Label, angka, dan asal harga ditumpuk rata kanan: satu kolom uang yang lurus
+   dari butir ke butir, bukan tiga potongan yang membungkus ke kiri. */
 .approvalValue {
   display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 2px 10px;
+  flex-direction: column;
+  align-items: flex-end;
+  text-align: right;
+  gap: 2px;
   margin: 0;
 }
 

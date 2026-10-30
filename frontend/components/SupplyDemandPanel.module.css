@@ -251,3 +251,21 @@
   color: var(--warn-ink, #8a5a00);
   font-size: var(--fs-1);
 }
+
+/* Kolom angka rata kanan dan sejajar dengan judulnya. Sebelumnya `Jumlah`
+   rata kiri sementara `Masa layak` rata kanan di tabel yang sama, sehingga
+   angka tidak membentuk kolom yang bisa dipindai. */
+.table th.num,
+.table td.num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Tabel `width: 100%` membagi sisa lebar ke semua kolom, sehingga kolom angka
+   yang rata kanan menyisakan rongga besar di kiri angkanya (terukur: rongga
+   ±60% lebar tabel pada baris batch). Biarkan kolom identitas batch menyerap
+   sisa lebar; tiga kolom lain menempel ke kanan. */
+.table th:first-child,
+.table td:first-child {
+  width: 60%;
+}

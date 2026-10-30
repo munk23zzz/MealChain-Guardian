@@ -1,0 +1,1802 @@
+[
+  {
+    "peran": "bgn_monitor",
+    "method": "GET",
+    "path": "/health",
+    "status": 200,
+    "ringkas": "status=healthy",
+    "endpoint": "health",
+    "catatan": ""
+  },
+  {
+    "peran": "bgn_monitor",
+    "method": "GET",
+    "path": "/auth/me",
+    "status": 200,
+    "ringkas": "role=bgn_monitor",
+    "endpoint": "auth.me",
+    "catatan": ""
+  },
+  {
+    "peran": "bgn_monitor",
+    "method": "GET",
+    "path": "/auth/demo-login",
+    "status": 200,
+    "ringkas": "enabled=True",
+    "endpoint": "auth.demo-login",
+    "catatan": ""
+  },
+  {
+    "peran": "bgn_monitor",
+    "method": "GET",
+    "path": "/auth/demo-accounts",
+    "status": 200,
+    "ringkas": "accounts[7]",
+    "endpoint": "auth.demo-accounts",
+    "catatan": ""
+  },
+  {
+    "peran": "bgn_monitor",
+    "method": "GET",
+    "path": "/batches?limit=5",
+    "status": 200,
+    "ringkas": "total=118",
+    "endpoint": "batches.list",
+    "catatan": ""
+  },
+  {
+    "peran": "bgn_monitor",
+    "method": "GET",
+    "path": "/supplier-routes?limit=5",
+    "status": 200,
+    "ringkas": "routes[5]",
+    "endpoint": "supplier-routes",
+    "catatan": ""
+  },
+  {
+    "peran": "bgn_monitor",
+    "method": "GET",
+    "path": "/supplier-routes?limit=5&commodity=beras",
+    "status": 200,
+    "ringkas": "routes[5]",
+    "endpoint": "supplier-routes.filter",
+    "catatan": ""
+  },
+  {
+    "peran": "bgn_monitor",
+    "method": "GET",
+    "path": "/receipts/menunggu",
+    "status": 200,
+    "ringkas": "total=1",
+    "endpoint": "receipts.menunggu",
+    "catatan": ""
+  },
+  {
+    "peran": "bgn_monitor",
+    "method": "GET",
+    "path": "/balance/map?commodity=telur",
+    "status": 200,
+    "ringkas": "locations[10]",
+    "endpoint": "balance.map",
+    "catatan": ""
+  },
+  {
+    "peran": "bgn_monitor",
+    "method": "GET",
+    "path": "/surplus/allocations?commodity=beras",
+    "status": 200,
+    "ringkas": "pairs[3]",
+    "endpoint": "surplus.allocations",
+    "catatan": ""
+  },
+  {
+    "peran": "bgn_monitor",
+    "method": "GET",
+    "path": "/suppliers?limit=5",
+    "status": 200,
+    "ringkas": "total=60",
+    "endpoint": "suppliers.list",
+    "catatan": ""
+  },
+  {
+    "peran": "bgn_monitor",
+    "method": "GET",
+    "path": "/suppliers?limit=5&commodity=beras&location=Jakarta",
+    "status": 200,
+    "ringkas": "total=2",
+    "endpoint": "suppliers.filter",
+    "catatan": ""
+  },
+  {
+    "peran": "bgn_monitor",
+    "method": "GET",
+    "path": "/supplier-exclusions",
+    "status": 200,
+    "ringkas": "items[2]",
+    "endpoint": "supplier-exclusions",
+    "catatan": ""
+  },
+  {
+    "peran": "bgn_monitor",
+    "method": "GET",
+    "path": "/decisions?limit=5",
+    "status": 200,
+    "ringkas": "total=39",
+    "endpoint": "decisions.list",
+    "catatan": ""
+  },
+  {
+    "peran": "bgn_monitor",
+    "method": "GET",
+    "path": "/decisions?limit=5&window=30d",
+    "status": 200,
+    "ringkas": "total=39",
+    "endpoint": "decisions.window",
+    "catatan": ""
+  },
+  {
+    "peran": "bgn_monitor",
+    "method": "GET",
+    "path": "/kpi?periode=7d",
+    "status": 200,
+    "ringkas": "metrics[7]",
+    "endpoint": "kpi.periode",
+    "catatan": ""
+  },
+  {
+    "peran": "bgn_monitor",
+    "method": "GET",
+    "path": "/kpi?periode=today",
+    "status": 200,
+    "ringkas": "metrics[7]",
+    "endpoint": "kpi.today",
+    "catatan": ""
+  },
+  {
+    "peran": "bgn_monitor",
+    "method": "GET",
+    "path": "/kpi?periode=7d&location_id=0d54faa0-89a5-5861-bbb8-95ec97ca2381",
+    "status": 200,
+    "ringkas": "metrics[7]",
+    "endpoint": "kpi.location",
+    "catatan": ""
+  },
+  {
+    "peran": "bgn_monitor",
+    "method": "GET",
+    "path": "/procurement/summary?periode=7d",
+    "status": 200,
+    "ringkas": "purchase_orders{7}",
+    "endpoint": "procurement.summary",
+    "catatan": ""
+  },
+  {
+    "peran": "bgn_monitor",
+    "method": "GET",
+    "path": "/waste/summary?days=30",
+    "status": 200,
+    "ringkas": "recorded{3}",
+    "endpoint": "waste.summary",
+    "catatan": ""
+  },
+  {
+    "peran": "bgn_monitor",
+    "method": "GET",
+    "path": "/agenda?start=2026-10-26&end=2026-10-28",
+    "status": 200,
+    "ringkas": "days[3]",
+    "endpoint": "agenda",
+    "catatan": ""
+  },
+  {
+    "peran": "bgn_monitor",
+    "method": "GET",
+    "path": "/ledger/verify",
+    "status": 200,
+    "ringkas": "blocks=978",
+    "endpoint": "ledger.verify",
+    "catatan": ""
+  },
+  {
+    "peran": "bgn_monitor",
+    "method": "GET",
+    "path": "/sap/purchase-orders?limit=5",
+    "status": 200,
+    "ringkas": "items[5]",
+    "endpoint": "sap.po",
+    "catatan": ""
+  },
+  {
+    "peran": "bgn_monitor",
+    "method": "GET",
+    "path": "/sap/purchase-orders/summary",
+    "status": 200,
+    "ringkas": "by_status{3}",
+    "endpoint": "sap.po-summary",
+    "catatan": ""
+  },
+  {
+    "peran": "bgn_monitor",
+    "method": "GET",
+    "path": "/demo/session",
+    "status": 200,
+    "ringkas": "active=False",
+    "endpoint": "demo.session",
+    "catatan": ""
+  },
+  {
+    "peran": "bgn_monitor",
+    "method": "GET",
+    "path": "/demo/data-status",
+    "status": 403,
+    "ringkas": "role tidak diizinkan",
+    "endpoint": "demo.data-status",
+    "catatan": "role tidak diizinkan"
+  },
+  {
+    "peran": "bgn_monitor",
+    "method": "GET",
+    "path": "/demo/preview",
+    "status": 403,
+    "ringkas": "role tidak diizinkan",
+    "endpoint": "demo.preview",
+    "catatan": "role tidak diizinkan"
+  },
+  {
+    "peran": "bgn_monitor",
+    "method": "GET",
+    "path": "/demo/agent/commodities",
+    "status": 403,
+    "ringkas": "role tidak diizinkan",
+    "endpoint": "demo.agent.commodities",
+    "catatan": "role tidak diizinkan"
+  },
+  {
+    "peran": "bgn_monitor",
+    "method": "GET",
+    "path": "/demo/agent/last-run",
+    "status": 403,
+    "ringkas": "role tidak diizinkan",
+    "endpoint": "demo.agent.last-run",
+    "catatan": "role tidak diizinkan"
+  },
+  {
+    "peran": "bgn_monitor",
+    "method": "GET",
+    "path": "/admin/users",
+    "status": 200,
+    "ringkas": "users[17]",
+    "endpoint": "admin.users",
+    "catatan": ""
+  },
+  {
+    "peran": "bgn_monitor",
+    "method": "GET",
+    "path": "/admin/locations",
+    "status": 200,
+    "ringkas": "locations[10]",
+    "endpoint": "admin.locations",
+    "catatan": ""
+  },
+  {
+    "peran": "bgn_monitor",
+    "method": "GET",
+    "path": "/integrations/status",
+    "status": 200,
+    "ringkas": "components[7]",
+    "endpoint": "integrations.status",
+    "catatan": ""
+  },
+  {
+    "peran": "bgn_monitor",
+    "method": "GET",
+    "path": "/balance/Jakarta/beras",
+    "status": 200,
+    "ringkas": "commodity=beras",
+    "endpoint": "balance.detail",
+    "catatan": ""
+  },
+  {
+    "peran": "bgn_monitor",
+    "method": "GET",
+    "path": "/supply/Jakarta/beras",
+    "status": 200,
+    "ringkas": "quantity_kg=911.29",
+    "endpoint": "supply",
+    "catatan": ""
+  },
+  {
+    "peran": "bgn_monitor",
+    "method": "GET",
+    "path": "/demand/Jakarta/beras",
+    "status": 200,
+    "ringkas": "quantity_kg=3010.29",
+    "endpoint": "demand",
+    "catatan": ""
+  },
+  {
+    "peran": "bgn_monitor",
+    "method": "GET",
+    "path": "/demand/forecast/Jakarta/beras?horizon_days=7",
+    "status": 200,
+    "ringkas": "forecast_qty_kg=21190.253",
+    "endpoint": "demand.forecast",
+    "catatan": ""
+  },
+  {
+    "peran": "bgn_monitor",
+    "method": "GET",
+    "path": "/price/Jakarta/beras",
+    "status": 200,
+    "ringkas": "price_per_kg=13657.02",
+    "endpoint": "price.reference",
+    "catatan": ""
+  },
+  {
+    "peran": "bgn_monitor",
+    "method": "GET",
+    "path": "/price/quotes/Jakarta/beras",
+    "status": 200,
+    "ringkas": "quotes[20]",
+    "endpoint": "price.quotes",
+    "catatan": ""
+  },
+  {
+    "peran": "bgn_monitor",
+    "method": "GET",
+    "path": "/batches/050ec2d7-e4d6-574e-b7a4-52e32511c4e8",
+    "status": 200,
+    "ringkas": "batch{10}",
+    "endpoint": "batches.detail",
+    "catatan": ""
+  },
+  {
+    "peran": "bgn_monitor",
+    "method": "GET",
+    "path": "/receipts?batch_id=050ec2d7-e4d6-574e-b7a4-52e32511c4e8&limit=5",
+    "status": 200,
+    "ringkas": "items[0]",
+    "endpoint": "receipts.by-batch",
+    "catatan": ""
+  },
+  {
+    "peran": "bgn_monitor",
+    "method": "GET",
+    "path": "/decisions/253a438f-113b-476e-959e-7c9c206f8b60",
+    "status": 200,
+    "ringkas": "decision_id=253a438f-113b-476e-959e-7c9c206f8b60",
+    "endpoint": "decisions.detail",
+    "catatan": ""
+  },
+  {
+    "peran": "bgn_monitor",
+    "method": "GET",
+    "path": "/decisions/253a438f-113b-476e-959e-7c9c206f8b60/chain",
+    "status": 200,
+    "ringkas": "chain[1]",
+    "endpoint": "decisions.chain",
+    "catatan": ""
+  },
+  {
+    "peran": "bgn_monitor",
+    "method": "GET",
+    "path": "/decisions/253a438f-113b-476e-959e-7c9c206f8b60/traces",
+    "status": 200,
+    "ringkas": "steps[16]",
+    "endpoint": "decisions.traces",
+    "catatan": ""
+  },
+  {
+    "peran": "bgn_monitor",
+    "method": "GET",
+    "path": "/decisions/253a438f-113b-476e-959e-7c9c206f8b60/approval-summary",
+    "status": 200,
+    "ringkas": "approvals[0]",
+    "endpoint": "decisions.approval-summary",
+    "catatan": ""
+  },
+  {
+    "peran": "bgn_monitor",
+    "method": "GET",
+    "path": "/decisions/253a438f-113b-476e-959e-7c9c206f8b60/packet",
+    "status": 200,
+    "ringkas": "decision_type=supplier_procurement",
+    "endpoint": "decisions.packet",
+    "catatan": ""
+  },
+  {
+    "peran": "bgn_monitor",
+    "method": "GET",
+    "path": "/decisions/253a438f-113b-476e-959e-7c9c206f8b60/audit-facts",
+    "status": 200,
+    "ringkas": "ledger{3}",
+    "endpoint": "decisions.audit-facts",
+    "catatan": ""
+  },
+  {
+    "peran": "bgn_monitor",
+    "method": "GET",
+    "path": "/decisions/253a438f-113b-476e-959e-7c9c206f8b60/dossier",
+    "status": 200,
+    "ringkas": "verify=True",
+    "endpoint": "decisions.dossier",
+    "catatan": ""
+  },
+  {
+    "peran": "bgn_monitor",
+    "method": "GET",
+    "path": "/decisions/253a438f-113b-476e-959e-7c9c206f8b60/compliance",
+    "status": 200,
+    "ringkas": "verify=True",
+    "endpoint": "decisions.compliance",
+    "catatan": ""
+  },
+  {
+    "peran": "bgn_monitor",
+    "method": "GET",
+    "path": "/supplier-exclusions/context/253a438f-113b-476e-959e-7c9c206f8b60",
+    "status": 200,
+    "ringkas": "suppliers[1]",
+    "endpoint": "supplier-exclusions.context",
+    "catatan": ""
+  },
+  {
+    "peran": "bgn_monitor",
+    "method": "GET",
+    "path": "/sap/purchase-orders/MC-661695B2C685/pdf",
+    "status": 200,
+    "ringkas": "_bytes=5537",
+    "endpoint": "sap.po-pdf",
+    "catatan": ""
+  },
+  {
+    "peran": "sppg_head",
+    "method": "GET",
+    "path": "/health",
+    "status": 200,
+    "ringkas": "status=healthy",
+    "endpoint": "health",
+    "catatan": ""
+  },
+  {
+    "peran": "sppg_head",
+    "method": "GET",
+    "path": "/auth/me",
+    "status": 200,
+    "ringkas": "role=sppg_head",
+    "endpoint": "auth.me",
+    "catatan": ""
+  },
+  {
+    "peran": "sppg_head",
+    "method": "GET",
+    "path": "/auth/demo-login",
+    "status": 200,
+    "ringkas": "enabled=True",
+    "endpoint": "auth.demo-login",
+    "catatan": ""
+  },
+  {
+    "peran": "sppg_head",
+    "method": "GET",
+    "path": "/auth/demo-accounts",
+    "status": 403,
+    "ringkas": "role tidak diizinkan",
+    "endpoint": "auth.demo-accounts",
+    "catatan": "role tidak diizinkan"
+  },
+  {
+    "peran": "sppg_head",
+    "method": "GET",
+    "path": "/batches?limit=5",
+    "status": 200,
+    "ringkas": "total=118",
+    "endpoint": "batches.list",
+    "catatan": ""
+  },
+  {
+    "peran": "sppg_head",
+    "method": "GET",
+    "path": "/supplier-routes?limit=5",
+    "status": 200,
+    "ringkas": "routes[5]",
+    "endpoint": "supplier-routes",
+    "catatan": ""
+  },
+  {
+    "peran": "sppg_head",
+    "method": "GET",
+    "path": "/supplier-routes?limit=5&commodity=beras",
+    "status": 200,
+    "ringkas": "routes[4]",
+    "endpoint": "supplier-routes.filter",
+    "catatan": ""
+  },
+  {
+    "peran": "sppg_head",
+    "method": "GET",
+    "path": "/receipts/menunggu",
+    "status": 200,
+    "ringkas": "total=1",
+    "endpoint": "receipts.menunggu",
+    "catatan": ""
+  },
+  {
+    "peran": "sppg_head",
+    "method": "GET",
+    "path": "/balance/map?commodity=telur",
+    "status": 200,
+    "ringkas": "locations[1]",
+    "endpoint": "balance.map",
+    "catatan": ""
+  },
+  {
+    "peran": "sppg_head",
+    "method": "GET",
+    "path": "/surplus/allocations?commodity=beras",
+    "status": 200,
+    "ringkas": "pairs[3]",
+    "endpoint": "surplus.allocations",
+    "catatan": ""
+  },
+  {
+    "peran": "sppg_head",
+    "method": "GET",
+    "path": "/suppliers?limit=5",
+    "status": 200,
+    "ringkas": "total=60",
+    "endpoint": "suppliers.list",
+    "catatan": ""
+  },
+  {
+    "peran": "sppg_head",
+    "method": "GET",
+    "path": "/suppliers?limit=5&commodity=beras&location=Jakarta",
+    "status": 200,
+    "ringkas": "total=2",
+    "endpoint": "suppliers.filter",
+    "catatan": ""
+  },
+  {
+    "peran": "sppg_head",
+    "method": "GET",
+    "path": "/supplier-exclusions",
+    "status": 200,
+    "ringkas": "items[2]",
+    "endpoint": "supplier-exclusions",
+    "catatan": ""
+  },
+  {
+    "peran": "sppg_head",
+    "method": "GET",
+    "path": "/decisions?limit=5",
+    "status": 200,
+    "ringkas": "total=20",
+    "endpoint": "decisions.list",
+    "catatan": ""
+  },
+  {
+    "peran": "sppg_head",
+    "method": "GET",
+    "path": "/decisions?limit=5&window=30d",
+    "status": 200,
+    "ringkas": "total=20",
+    "endpoint": "decisions.window",
+    "catatan": ""
+  },
+  {
+    "peran": "sppg_head",
+    "method": "GET",
+    "path": "/kpi?periode=7d",
+    "status": 200,
+    "ringkas": "metrics[7]",
+    "endpoint": "kpi.periode",
+    "catatan": ""
+  },
+  {
+    "peran": "sppg_head",
+    "method": "GET",
+    "path": "/kpi?periode=today",
+    "status": 200,
+    "ringkas": "metrics[7]",
+    "endpoint": "kpi.today",
+    "catatan": ""
+  },
+  {
+    "peran": "sppg_head",
+    "method": "GET",
+    "path": "/kpi?periode=7d&location_id=275d1be7-5bb8-5a37-8004-a2d40a51eb7e",
+    "status": 200,
+    "ringkas": "metrics[7]",
+    "endpoint": "kpi.location",
+    "catatan": ""
+  },
+  {
+    "peran": "sppg_head",
+    "method": "GET",
+    "path": "/procurement/summary?periode=7d",
+    "status": 200,
+    "ringkas": "purchase_orders{7}",
+    "endpoint": "procurement.summary",
+    "catatan": ""
+  },
+  {
+    "peran": "sppg_head",
+    "method": "GET",
+    "path": "/waste/summary?days=30",
+    "status": 200,
+    "ringkas": "recorded{3}",
+    "endpoint": "waste.summary",
+    "catatan": ""
+  },
+  {
+    "peran": "sppg_head",
+    "method": "GET",
+    "path": "/agenda?start=2026-10-26&end=2026-10-28",
+    "status": 200,
+    "ringkas": "days[3]",
+    "endpoint": "agenda",
+    "catatan": ""
+  },
+  {
+    "peran": "sppg_head",
+    "method": "GET",
+    "path": "/ledger/verify",
+    "status": 200,
+    "ringkas": "blocks=978",
+    "endpoint": "ledger.verify",
+    "catatan": ""
+  },
+  {
+    "peran": "sppg_head",
+    "method": "GET",
+    "path": "/sap/purchase-orders?limit=5",
+    "status": 200,
+    "ringkas": "items[2]",
+    "endpoint": "sap.po",
+    "catatan": ""
+  },
+  {
+    "peran": "sppg_head",
+    "method": "GET",
+    "path": "/sap/purchase-orders/summary",
+    "status": 200,
+    "ringkas": "by_status{3}",
+    "endpoint": "sap.po-summary",
+    "catatan": ""
+  },
+  {
+    "peran": "sppg_head",
+    "method": "GET",
+    "path": "/demo/session",
+    "status": 200,
+    "ringkas": "active=False",
+    "endpoint": "demo.session",
+    "catatan": ""
+  },
+  {
+    "peran": "sppg_head",
+    "method": "GET",
+    "path": "/demo/data-status",
+    "status": 200,
+    "ringkas": "tables{4}",
+    "endpoint": "demo.data-status",
+    "catatan": ""
+  },
+  {
+    "peran": "sppg_head",
+    "method": "GET",
+    "path": "/demo/preview",
+    "status": 200,
+    "ringkas": "counts{6}",
+    "endpoint": "demo.preview",
+    "catatan": ""
+  },
+  {
+    "peran": "sppg_head",
+    "method": "GET",
+    "path": "/demo/agent/commodities",
+    "status": 200,
+    "ringkas": "commodities[4]",
+    "endpoint": "demo.agent.commodities",
+    "catatan": ""
+  },
+  {
+    "peran": "sppg_head",
+    "method": "GET",
+    "path": "/demo/agent/last-run",
+    "status": 200,
+    "ringkas": "found=True",
+    "endpoint": "demo.agent.last-run",
+    "catatan": ""
+  },
+  {
+    "peran": "sppg_head",
+    "method": "GET",
+    "path": "/admin/users",
+    "status": 403,
+    "ringkas": "role tidak diizinkan",
+    "endpoint": "admin.users",
+    "catatan": "role tidak diizinkan"
+  },
+  {
+    "peran": "sppg_head",
+    "method": "GET",
+    "path": "/admin/locations",
+    "status": 403,
+    "ringkas": "role tidak diizinkan",
+    "endpoint": "admin.locations",
+    "catatan": "role tidak diizinkan"
+  },
+  {
+    "peran": "sppg_head",
+    "method": "GET",
+    "path": "/integrations/status",
+    "status": 200,
+    "ringkas": "components[7]",
+    "endpoint": "integrations.status",
+    "catatan": ""
+  },
+  {
+    "peran": "sppg_head",
+    "method": "GET",
+    "path": "/balance/Jakarta/beras",
+    "status": 200,
+    "ringkas": "commodity=beras",
+    "endpoint": "balance.detail",
+    "catatan": ""
+  },
+  {
+    "peran": "sppg_head",
+    "method": "GET",
+    "path": "/supply/Jakarta/beras",
+    "status": 200,
+    "ringkas": "quantity_kg=911.29",
+    "endpoint": "supply",
+    "catatan": ""
+  },
+  {
+    "peran": "sppg_head",
+    "method": "GET",
+    "path": "/demand/Jakarta/beras",
+    "status": 200,
+    "ringkas": "quantity_kg=3010.29",
+    "endpoint": "demand",
+    "catatan": ""
+  },
+  {
+    "peran": "sppg_head",
+    "method": "GET",
+    "path": "/demand/forecast/Jakarta/beras?horizon_days=7",
+    "status": 200,
+    "ringkas": "forecast_qty_kg=21190.253",
+    "endpoint": "demand.forecast",
+    "catatan": ""
+  },
+  {
+    "peran": "sppg_head",
+    "method": "GET",
+    "path": "/price/Jakarta/beras",
+    "status": 200,
+    "ringkas": "price_per_kg=13657.02",
+    "endpoint": "price.reference",
+    "catatan": ""
+  },
+  {
+    "peran": "sppg_head",
+    "method": "GET",
+    "path": "/price/quotes/Jakarta/beras",
+    "status": 200,
+    "ringkas": "quotes[20]",
+    "endpoint": "price.quotes",
+    "catatan": ""
+  },
+  {
+    "peran": "sppg_head",
+    "method": "GET",
+    "path": "/batches/050ec2d7-e4d6-574e-b7a4-52e32511c4e8",
+    "status": 200,
+    "ringkas": "batch{10}",
+    "endpoint": "batches.detail",
+    "catatan": ""
+  },
+  {
+    "peran": "sppg_head",
+    "method": "GET",
+    "path": "/receipts?batch_id=050ec2d7-e4d6-574e-b7a4-52e32511c4e8&limit=5",
+    "status": 200,
+    "ringkas": "items[0]",
+    "endpoint": "receipts.by-batch",
+    "catatan": ""
+  },
+  {
+    "peran": "sppg_head",
+    "method": "GET",
+    "path": "/decisions/253a438f-113b-476e-959e-7c9c206f8b60",
+    "status": 200,
+    "ringkas": "decision_id=253a438f-113b-476e-959e-7c9c206f8b60",
+    "endpoint": "decisions.detail",
+    "catatan": ""
+  },
+  {
+    "peran": "sppg_head",
+    "method": "GET",
+    "path": "/decisions/253a438f-113b-476e-959e-7c9c206f8b60/chain",
+    "status": 200,
+    "ringkas": "chain[1]",
+    "endpoint": "decisions.chain",
+    "catatan": ""
+  },
+  {
+    "peran": "sppg_head",
+    "method": "GET",
+    "path": "/decisions/253a438f-113b-476e-959e-7c9c206f8b60/traces",
+    "status": 200,
+    "ringkas": "steps[16]",
+    "endpoint": "decisions.traces",
+    "catatan": ""
+  },
+  {
+    "peran": "sppg_head",
+    "method": "GET",
+    "path": "/decisions/253a438f-113b-476e-959e-7c9c206f8b60/approval-summary",
+    "status": 200,
+    "ringkas": "approvals[0]",
+    "endpoint": "decisions.approval-summary",
+    "catatan": ""
+  },
+  {
+    "peran": "sppg_head",
+    "method": "GET",
+    "path": "/decisions/253a438f-113b-476e-959e-7c9c206f8b60/packet",
+    "status": 200,
+    "ringkas": "decision_type=supplier_procurement",
+    "endpoint": "decisions.packet",
+    "catatan": ""
+  },
+  {
+    "peran": "sppg_head",
+    "method": "GET",
+    "path": "/decisions/253a438f-113b-476e-959e-7c9c206f8b60/audit-facts",
+    "status": 200,
+    "ringkas": "ledger{3}",
+    "endpoint": "decisions.audit-facts",
+    "catatan": ""
+  },
+  {
+    "peran": "sppg_head",
+    "method": "GET",
+    "path": "/decisions/253a438f-113b-476e-959e-7c9c206f8b60/dossier",
+    "status": 200,
+    "ringkas": "verify=True",
+    "endpoint": "decisions.dossier",
+    "catatan": ""
+  },
+  {
+    "peran": "sppg_head",
+    "method": "GET",
+    "path": "/decisions/253a438f-113b-476e-959e-7c9c206f8b60/compliance",
+    "status": 200,
+    "ringkas": "verify=True",
+    "endpoint": "decisions.compliance",
+    "catatan": ""
+  },
+  {
+    "peran": "sppg_head",
+    "method": "GET",
+    "path": "/supplier-exclusions/context/253a438f-113b-476e-959e-7c9c206f8b60",
+    "status": 200,
+    "ringkas": "suppliers[1]",
+    "endpoint": "supplier-exclusions.context",
+    "catatan": ""
+  },
+  {
+    "peran": "sppg_head",
+    "method": "GET",
+    "path": "/sap/purchase-orders/MC-661695B2C685/pdf",
+    "status": 200,
+    "ringkas": "_bytes=5537",
+    "endpoint": "sap.po-pdf",
+    "catatan": ""
+  },
+  {
+    "peran": "sppg_nutritionist",
+    "method": "GET",
+    "path": "/health",
+    "status": 200,
+    "ringkas": "status=healthy",
+    "endpoint": "health",
+    "catatan": ""
+  },
+  {
+    "peran": "sppg_nutritionist",
+    "method": "GET",
+    "path": "/auth/me",
+    "status": 200,
+    "ringkas": "role=sppg_nutritionist",
+    "endpoint": "auth.me",
+    "catatan": ""
+  },
+  {
+    "peran": "sppg_nutritionist",
+    "method": "GET",
+    "path": "/auth/demo-login",
+    "status": 200,
+    "ringkas": "enabled=True",
+    "endpoint": "auth.demo-login",
+    "catatan": ""
+  },
+  {
+    "peran": "sppg_nutritionist",
+    "method": "GET",
+    "path": "/auth/demo-accounts",
+    "status": 403,
+    "ringkas": "role tidak diizinkan",
+    "endpoint": "auth.demo-accounts",
+    "catatan": "role tidak diizinkan"
+  },
+  {
+    "peran": "sppg_nutritionist",
+    "method": "GET",
+    "path": "/batches?limit=5",
+    "status": 200,
+    "ringkas": "total=118",
+    "endpoint": "batches.list",
+    "catatan": ""
+  },
+  {
+    "peran": "sppg_nutritionist",
+    "method": "GET",
+    "path": "/supplier-routes?limit=5",
+    "status": 200,
+    "ringkas": "routes[5]",
+    "endpoint": "supplier-routes",
+    "catatan": ""
+  },
+  {
+    "peran": "sppg_nutritionist",
+    "method": "GET",
+    "path": "/supplier-routes?limit=5&commodity=beras",
+    "status": 200,
+    "ringkas": "routes[4]",
+    "endpoint": "supplier-routes.filter",
+    "catatan": ""
+  },
+  {
+    "peran": "sppg_nutritionist",
+    "method": "GET",
+    "path": "/receipts/menunggu",
+    "status": 200,
+    "ringkas": "total=1",
+    "endpoint": "receipts.menunggu",
+    "catatan": ""
+  },
+  {
+    "peran": "sppg_nutritionist",
+    "method": "GET",
+    "path": "/balance/map?commodity=telur",
+    "status": 200,
+    "ringkas": "locations[1]",
+    "endpoint": "balance.map",
+    "catatan": ""
+  },
+  {
+    "peran": "sppg_nutritionist",
+    "method": "GET",
+    "path": "/surplus/allocations?commodity=beras",
+    "status": 200,
+    "ringkas": "pairs[3]",
+    "endpoint": "surplus.allocations",
+    "catatan": ""
+  },
+  {
+    "peran": "sppg_nutritionist",
+    "method": "GET",
+    "path": "/suppliers?limit=5",
+    "status": 200,
+    "ringkas": "total=60",
+    "endpoint": "suppliers.list",
+    "catatan": ""
+  },
+  {
+    "peran": "sppg_nutritionist",
+    "method": "GET",
+    "path": "/suppliers?limit=5&commodity=beras&location=Jakarta",
+    "status": 200,
+    "ringkas": "total=2",
+    "endpoint": "suppliers.filter",
+    "catatan": ""
+  },
+  {
+    "peran": "sppg_nutritionist",
+    "method": "GET",
+    "path": "/supplier-exclusions",
+    "status": 200,
+    "ringkas": "items[2]",
+    "endpoint": "supplier-exclusions",
+    "catatan": ""
+  },
+  {
+    "peran": "sppg_nutritionist",
+    "method": "GET",
+    "path": "/decisions?limit=5",
+    "status": 200,
+    "ringkas": "total=20",
+    "endpoint": "decisions.list",
+    "catatan": ""
+  },
+  {
+    "peran": "sppg_nutritionist",
+    "method": "GET",
+    "path": "/decisions?limit=5&window=30d",
+    "status": 200,
+    "ringkas": "total=20",
+    "endpoint": "decisions.window",
+    "catatan": ""
+  },
+  {
+    "peran": "sppg_nutritionist",
+    "method": "GET",
+    "path": "/kpi?periode=7d",
+    "status": 200,
+    "ringkas": "metrics[7]",
+    "endpoint": "kpi.periode",
+    "catatan": ""
+  },
+  {
+    "peran": "sppg_nutritionist",
+    "method": "GET",
+    "path": "/kpi?periode=today",
+    "status": 200,
+    "ringkas": "metrics[7]",
+    "endpoint": "kpi.today",
+    "catatan": ""
+  },
+  {
+    "peran": "sppg_nutritionist",
+    "method": "GET",
+    "path": "/kpi?periode=7d&location_id=275d1be7-5bb8-5a37-8004-a2d40a51eb7e",
+    "status": 200,
+    "ringkas": "metrics[7]",
+    "endpoint": "kpi.location",
+    "catatan": ""
+  },
+  {
+    "peran": "sppg_nutritionist",
+    "method": "GET",
+    "path": "/procurement/summary?periode=7d",
+    "status": 200,
+    "ringkas": "purchase_orders{7}",
+    "endpoint": "procurement.summary",
+    "catatan": ""
+  },
+  {
+    "peran": "sppg_nutritionist",
+    "method": "GET",
+    "path": "/waste/summary?days=30",
+    "status": 200,
+    "ringkas": "recorded{3}",
+    "endpoint": "waste.summary",
+    "catatan": ""
+  },
+  {
+    "peran": "sppg_nutritionist",
+    "method": "GET",
+    "path": "/agenda?start=2026-10-26&end=2026-10-28",
+    "status": 200,
+    "ringkas": "days[3]",
+    "endpoint": "agenda",
+    "catatan": ""
+  },
+  {
+    "peran": "sppg_nutritionist",
+    "method": "GET",
+    "path": "/ledger/verify",
+    "status": 200,
+    "ringkas": "blocks=978",
+    "endpoint": "ledger.verify",
+    "catatan": ""
+  },
+  {
+    "peran": "sppg_nutritionist",
+    "method": "GET",
+    "path": "/sap/purchase-orders?limit=5",
+    "status": 200,
+    "ringkas": "items[2]",
+    "endpoint": "sap.po",
+    "catatan": ""
+  },
+  {
+    "peran": "sppg_nutritionist",
+    "method": "GET",
+    "path": "/sap/purchase-orders/summary",
+    "status": 200,
+    "ringkas": "by_status{3}",
+    "endpoint": "sap.po-summary",
+    "catatan": ""
+  },
+  {
+    "peran": "sppg_nutritionist",
+    "method": "GET",
+    "path": "/demo/session",
+    "status": 200,
+    "ringkas": "active=False",
+    "endpoint": "demo.session",
+    "catatan": ""
+  },
+  {
+    "peran": "sppg_nutritionist",
+    "method": "GET",
+    "path": "/demo/data-status",
+    "status": 200,
+    "ringkas": "tables{4}",
+    "endpoint": "demo.data-status",
+    "catatan": ""
+  },
+  {
+    "peran": "sppg_nutritionist",
+    "method": "GET",
+    "path": "/demo/preview",
+    "status": 200,
+    "ringkas": "counts{6}",
+    "endpoint": "demo.preview",
+    "catatan": ""
+  },
+  {
+    "peran": "sppg_nutritionist",
+    "method": "GET",
+    "path": "/demo/agent/commodities",
+    "status": 200,
+    "ringkas": "commodities[4]",
+    "endpoint": "demo.agent.commodities",
+    "catatan": ""
+  },
+  {
+    "peran": "sppg_nutritionist",
+    "method": "GET",
+    "path": "/demo/agent/last-run",
+    "status": 200,
+    "ringkas": "found=True",
+    "endpoint": "demo.agent.last-run",
+    "catatan": ""
+  },
+  {
+    "peran": "sppg_nutritionist",
+    "method": "GET",
+    "path": "/admin/users",
+    "status": 403,
+    "ringkas": "role tidak diizinkan",
+    "endpoint": "admin.users",
+    "catatan": "role tidak diizinkan"
+  },
+  {
+    "peran": "sppg_nutritionist",
+    "method": "GET",
+    "path": "/admin/locations",
+    "status": 403,
+    "ringkas": "role tidak diizinkan",
+    "endpoint": "admin.locations",
+    "catatan": "role tidak diizinkan"
+  },
+  {
+    "peran": "sppg_nutritionist",
+    "method": "GET",
+    "path": "/integrations/status",
+    "status": 200,
+    "ringkas": "components[7]",
+    "endpoint": "integrations.status",
+    "catatan": ""
+  },
+  {
+    "peran": "sppg_nutritionist",
+    "method": "GET",
+    "path": "/balance/Jakarta/beras",
+    "status": 200,
+    "ringkas": "commodity=beras",
+    "endpoint": "balance.detail",
+    "catatan": ""
+  },
+  {
+    "peran": "sppg_nutritionist",
+    "method": "GET",
+    "path": "/supply/Jakarta/beras",
+    "status": 200,
+    "ringkas": "quantity_kg=911.29",
+    "endpoint": "supply",
+    "catatan": ""
+  },
+  {
+    "peran": "sppg_nutritionist",
+    "method": "GET",
+    "path": "/demand/Jakarta/beras",
+    "status": 200,
+    "ringkas": "quantity_kg=3010.29",
+    "endpoint": "demand",
+    "catatan": ""
+  },
+  {
+    "peran": "sppg_nutritionist",
+    "method": "GET",
+    "path": "/demand/forecast/Jakarta/beras?horizon_days=7",
+    "status": 200,
+    "ringkas": "forecast_qty_kg=21190.253",
+    "endpoint": "demand.forecast",
+    "catatan": ""
+  },
+  {
+    "peran": "sppg_nutritionist",
+    "method": "GET",
+    "path": "/price/Jakarta/beras",
+    "status": 200,
+    "ringkas": "price_per_kg=13657.02",
+    "endpoint": "price.reference",
+    "catatan": ""
+  },
+  {
+    "peran": "sppg_nutritionist",
+    "method": "GET",
+    "path": "/price/quotes/Jakarta/beras",
+    "status": 200,
+    "ringkas": "quotes[20]",
+    "endpoint": "price.quotes",
+    "catatan": ""
+  },
+  {
+    "peran": "sppg_nutritionist",
+    "method": "GET",
+    "path": "/batches/050ec2d7-e4d6-574e-b7a4-52e32511c4e8",
+    "status": 200,
+    "ringkas": "batch{10}",
+    "endpoint": "batches.detail",
+    "catatan": ""
+  },
+  {
+    "peran": "sppg_nutritionist",
+    "method": "GET",
+    "path": "/receipts?batch_id=050ec2d7-e4d6-574e-b7a4-52e32511c4e8&limit=5",
+    "status": 200,
+    "ringkas": "items[0]",
+    "endpoint": "receipts.by-batch",
+    "catatan": ""
+  },
+  {
+    "peran": "sppg_nutritionist",
+    "method": "GET",
+    "path": "/decisions/253a438f-113b-476e-959e-7c9c206f8b60",
+    "status": 200,
+    "ringkas": "decision_id=253a438f-113b-476e-959e-7c9c206f8b60",
+    "endpoint": "decisions.detail",
+    "catatan": ""
+  },
+  {
+    "peran": "sppg_nutritionist",
+    "method": "GET",
+    "path": "/decisions/253a438f-113b-476e-959e-7c9c206f8b60/chain",
+    "status": 200,
+    "ringkas": "chain[1]",
+    "endpoint": "decisions.chain",
+    "catatan": ""
+  },
+  {
+    "peran": "sppg_nutritionist",
+    "method": "GET",
+    "path": "/decisions/253a438f-113b-476e-959e-7c9c206f8b60/traces",
+    "status": 200,
+    "ringkas": "steps[16]",
+    "endpoint": "decisions.traces",
+    "catatan": ""
+  },
+  {
+    "peran": "sppg_nutritionist",
+    "method": "GET",
+    "path": "/decisions/253a438f-113b-476e-959e-7c9c206f8b60/approval-summary",
+    "status": 200,
+    "ringkas": "approvals[0]",
+    "endpoint": "decisions.approval-summary",
+    "catatan": ""
+  },
+  {
+    "peran": "sppg_nutritionist",
+    "method": "GET",
+    "path": "/decisions/253a438f-113b-476e-959e-7c9c206f8b60/packet",
+    "status": 200,
+    "ringkas": "decision_type=supplier_procurement",
+    "endpoint": "decisions.packet",
+    "catatan": ""
+  },
+  {
+    "peran": "sppg_nutritionist",
+    "method": "GET",
+    "path": "/decisions/253a438f-113b-476e-959e-7c9c206f8b60/audit-facts",
+    "status": 200,
+    "ringkas": "ledger{3}",
+    "endpoint": "decisions.audit-facts",
+    "catatan": ""
+  },
+  {
+    "peran": "sppg_nutritionist",
+    "method": "GET",
+    "path": "/decisions/253a438f-113b-476e-959e-7c9c206f8b60/dossier",
+    "status": 200,
+    "ringkas": "verify=True",
+    "endpoint": "decisions.dossier",
+    "catatan": ""
+  },
+  {
+    "peran": "sppg_nutritionist",
+    "method": "GET",
+    "path": "/decisions/253a438f-113b-476e-959e-7c9c206f8b60/compliance",
+    "status": 200,
+    "ringkas": "verify=True",
+    "endpoint": "decisions.compliance",
+    "catatan": ""
+  },
+  {
+    "peran": "sppg_nutritionist",
+    "method": "GET",
+    "path": "/supplier-exclusions/context/253a438f-113b-476e-959e-7c9c206f8b60",
+    "status": 200,
+    "ringkas": "suppliers[1]",
+    "endpoint": "supplier-exclusions.context",
+    "catatan": ""
+  },
+  {
+    "peran": "sppg_nutritionist",
+    "method": "GET",
+    "path": "/sap/purchase-orders/MC-661695B2C685/pdf",
+    "status": 200,
+    "ringkas": "_bytes=5537",
+    "endpoint": "sap.po-pdf",
+    "catatan": ""
+  },
+  {
+    "peran": "sppg_head_bandung",
+    "method": "GET",
+    "path": "/health",
+    "status": 200,
+    "ringkas": "status=healthy",
+    "endpoint": "health",
+    "catatan": ""
+  },
+  {
+    "peran": "sppg_head_bandung",
+    "method": "GET",
+    "path": "/auth/me",
+    "status": 200,
+    "ringkas": "role=sppg_head",
+    "endpoint": "auth.me",
+    "catatan": ""
+  },
+  {
+    "peran": "sppg_head_bandung",
+    "method": "GET",
+    "path": "/auth/demo-login",
+    "status": 200,
+    "ringkas": "enabled=True",
+    "endpoint": "auth.demo-login",
+    "catatan": ""
+  },
+  {
+    "peran": "sppg_head_bandung",
+    "method": "GET",
+    "path": "/auth/demo-accounts",
+    "status": 403,
+    "ringkas": "role tidak diizinkan",
+    "endpoint": "auth.demo-accounts",
+    "catatan": "role tidak diizinkan"
+  },
+  {
+    "peran": "sppg_head_bandung",
+    "method": "GET",
+    "path": "/batches?limit=5",
+    "status": 200,
+    "ringkas": "total=118",
+    "endpoint": "batches.list",
+    "catatan": ""
+  },
+  {
+    "peran": "sppg_head_bandung",
+    "method": "GET",
+    "path": "/supplier-routes?limit=5",
+    "status": 200,
+    "ringkas": "routes[5]",
+    "endpoint": "supplier-routes",
+    "catatan": ""
+  },
+  {
+    "peran": "sppg_head_bandung",
+    "method": "GET",
+    "path": "/supplier-routes?limit=5&commodity=beras",
+    "status": 200,
+    "ringkas": "routes[3]",
+    "endpoint": "supplier-routes.filter",
+    "catatan": ""
+  },
+  {
+    "peran": "sppg_head_bandung",
+    "method": "GET",
+    "path": "/receipts/menunggu",
+    "status": 200,
+    "ringkas": "total=0",
+    "endpoint": "receipts.menunggu",
+    "catatan": ""
+  },
+  {
+    "peran": "sppg_head_bandung",
+    "method": "GET",
+    "path": "/balance/map?commodity=telur",
+    "status": 200,
+    "ringkas": "locations[1]",
+    "endpoint": "balance.map",
+    "catatan": ""
+  },
+  {
+    "peran": "sppg_head_bandung",
+    "method": "GET",
+    "path": "/surplus/allocations?commodity=beras",
+    "status": 200,
+    "ringkas": "pairs[3]",
+    "endpoint": "surplus.allocations",
+    "catatan": ""
+  },
+  {
+    "peran": "sppg_head_bandung",
+    "method": "GET",
+    "path": "/suppliers?limit=5",
+    "status": 200,
+    "ringkas": "total=60",
+    "endpoint": "suppliers.list",
+    "catatan": ""
+  },
+  {
+    "peran": "sppg_head_bandung",
+    "method": "GET",
+    "path": "/suppliers?limit=5&commodity=beras&location=Jakarta",
+    "status": 200,
+    "ringkas": "total=2",
+    "endpoint": "suppliers.filter",
+    "catatan": ""
+  },
+  {
+    "peran": "sppg_head_bandung",
+    "method": "GET",
+    "path": "/supplier-exclusions",
+    "status": 200,
+    "ringkas": "items[0]",
+    "endpoint": "supplier-exclusions",
+    "catatan": ""
+  },
+  {
+    "peran": "sppg_head_bandung",
+    "method": "GET",
+    "path": "/decisions?limit=5",
+    "status": 200,
+    "ringkas": "total=11",
+    "endpoint": "decisions.list",
+    "catatan": ""
+  },
+  {
+    "peran": "sppg_head_bandung",
+    "method": "GET",
+    "path": "/decisions?limit=5&window=30d",
+    "status": 200,
+    "ringkas": "total=11",
+    "endpoint": "decisions.window",
+    "catatan": ""
+  },
+  {
+    "peran": "sppg_head_bandung",
+    "method": "GET",
+    "path": "/kpi?periode=7d",
+    "status": 200,
+    "ringkas": "metrics[7]",
+    "endpoint": "kpi.periode",
+    "catatan": ""
+  },
+  {
+    "peran": "sppg_head_bandung",
+    "method": "GET",
+    "path": "/kpi?periode=today",
+    "status": 200,
+    "ringkas": "metrics[7]",
+    "endpoint": "kpi.today",
+    "catatan": ""
+  },
+  {
+    "peran": "sppg_head_bandung",
+    "method": "GET",
+    "path": "/kpi?periode=7d&location_id=0d54faa0-89a5-5861-bbb8-95ec97ca2381",
+    "status": 200,
+    "ringkas": "metrics[7]",
+    "endpoint": "kpi.location",
+    "catatan": ""
+  },
+  {
+    "peran": "sppg_head_bandung",
+    "method": "GET",
+    "path": "/procurement/summary?periode=7d",
+    "status": 200,
+    "ringkas": "purchase_orders{7}",
+    "endpoint": "procurement.summary",
+    "catatan": ""
+  },
+  {
+    "peran": "sppg_head_bandung",
+    "method": "GET",
+    "path": "/waste/summary?days=30",
+    "status": 200,
+    "ringkas": "recorded{3}",
+    "endpoint": "waste.summary",
+    "catatan": ""
+  },
+  {
+    "peran": "sppg_head_bandung",
+    "method": "GET",
+    "path": "/agenda?start=2026-10-26&end=2026-10-28",
+    "status": 200,
+    "ringkas": "days[3]",
+    "endpoint": "agenda",
+    "catatan": ""
+  },
+  {
+    "peran": "sppg_head_bandung",
+    "method": "GET",
+    "path": "/ledger/verify",
+    "status": 200,
+    "ringkas": "blocks=978",
+    "endpoint": "ledger.verify",
+    "catatan": ""
+  },
+  {
+    "peran": "sppg_head_bandung",
+    "method": "GET",
+    "path": "/sap/purchase-orders?limit=5",
+    "status": 200,
+    "ringkas": "items[1]",
+    "endpoint": "sap.po",
+    "catatan": ""
+  },
+  {
+    "peran": "sppg_head_bandung",
+    "method": "GET",
+    "path": "/sap/purchase-orders/summary",
+    "status": 200,
+    "ringkas": "by_status{3}",
+    "endpoint": "sap.po-summary",
+    "catatan": ""
+  },
+  {
+    "peran": "sppg_head_bandung",
+    "method": "GET",
+    "path": "/demo/session",
+    "status": 200,
+    "ringkas": "active=False",
+    "endpoint": "demo.session",
+    "catatan": ""
+  },
+  {
+    "peran": "sppg_head_bandung",
+    "method": "GET",
+    "path": "/demo/data-status",
+    "status": 200,
+    "ringkas": "tables{4}",
+    "endpoint": "demo.data-status",
+    "catatan": ""
+  },
+  {
+    "peran": "sppg_head_bandung",
+    "method": "GET",
+    "path": "/demo/preview",
+    "status": 200,
+    "ringkas": "counts{6}",
+    "endpoint": "demo.preview",
+    "catatan": ""
+  },
+  {
+    "peran": "sppg_head_bandung",
+    "method": "GET",
+    "path": "/demo/agent/commodities",
+    "status": 200,
+    "ringkas": "commodities[4]",
+    "endpoint": "demo.agent.commodities",
+    "catatan": ""
+  },
+  {
+    "peran": "sppg_head_bandung",
+    "method": "GET",
+    "path": "/demo/agent/last-run",
+    "status": 200,
+    "ringkas": "found=True",
+    "endpoint": "demo.agent.last-run",
+    "catatan": ""
+  },
+  {
+    "peran": "sppg_head_bandung",
+    "method": "GET",
+    "path": "/admin/users",
+    "status": 403,
+    "ringkas": "role tidak diizinkan",
+    "endpoint": "admin.users",
+    "catatan": "role tidak diizinkan"
+  },
+  {
+    "peran": "sppg_head_bandung",
+    "method": "GET",
+    "path": "/admin/locations",
+    "status": 403,
+    "ringkas": "role tidak diizinkan",
+    "endpoint": "admin.locations",
+    "catatan": "role tidak diizinkan"
+  },
+  {
+    "peran": "sppg_head_bandung",
+    "method": "GET",
+    "path": "/integrations/status",
+    "status": 200,
+    "ringkas": "components[7]",
+    "endpoint": "integrations.status",
+    "catatan": ""
+  },
+  {
+    "peran": "sppg_head_bandung",
+    "method": "GET",
+    "path": "/balance/Bandung/beras",
+    "status": 200,
+    "ringkas": "commodity=beras",
+    "endpoint": "balance.detail",
+    "catatan": ""
+  },
+  {
+    "peran": "sppg_head_bandung",
+    "method": "GET",
+    "path": "/supply/Bandung/beras",
+    "status": 200,
+    "ringkas": "quantity_kg=1142.55",
+    "endpoint": "supply",
+    "catatan": ""
+  },
+  {
+    "peran": "sppg_head_bandung",
+    "method": "GET",
+    "path": "/demand/Bandung/beras",
+    "status": 200,
+    "ringkas": "quantity_kg=957.74",
+    "endpoint": "demand",
+    "catatan": ""
+  },
+  {
+    "peran": "sppg_head_bandung",
+    "method": "GET",
+    "path": "/demand/forecast/Bandung/beras?horizon_days=7",
+    "status": 200,
+    "ringkas": "forecast_qty_kg=6783.965999999999",
+    "endpoint": "demand.forecast",
+    "catatan": ""
+  },
+  {
+    "peran": "sppg_head_bandung",
+    "method": "GET",
+    "path": "/price/Bandung/beras",
+    "status": 200,
+    "ringkas": "price_per_kg=12627.49",
+    "endpoint": "price.reference",
+    "catatan": ""
+  },
+  {
+    "peran": "sppg_head_bandung",
+    "method": "GET",
+    "path": "/price/quotes/Bandung/beras",
+    "status": 200,
+    "ringkas": "quotes[12]",
+    "endpoint": "price.quotes",
+    "catatan": ""
+  },
+  {
+    "peran": "sppg_head_bandung",
+    "method": "GET",
+    "path": "/batches/050ec2d7-e4d6-574e-b7a4-52e32511c4e8",
+    "status": 200,
+    "ringkas": "batch{10}",
+    "endpoint": "batches.detail",
+    "catatan": ""
+  },
+  {
+    "peran": "sppg_head_bandung",
+    "method": "GET",
+    "path": "/receipts?batch_id=050ec2d7-e4d6-574e-b7a4-52e32511c4e8&limit=5",
+    "status": 200,
+    "ringkas": "items[0]",
+    "endpoint": "receipts.by-batch",
+    "catatan": ""
+  },
+  {
+    "peran": "sppg_head_bandung",
+    "method": "GET",
+    "path": "/decisions/fea88784-dfcd-42bf-8162-47460270221d",
+    "status": 200,
+    "ringkas": "decision_id=fea88784-dfcd-42bf-8162-47460270221d",
+    "endpoint": "decisions.detail",
+    "catatan": ""
+  },
+  {
+    "peran": "sppg_head_bandung",
+    "method": "GET",
+    "path": "/decisions/fea88784-dfcd-42bf-8162-47460270221d/chain",
+    "status": 200,
+    "ringkas": "chain[3]",
+    "endpoint": "decisions.chain",
+    "catatan": ""
+  },
+  {
+    "peran": "sppg_head_bandung",
+    "method": "GET",
+    "path": "/decisions/fea88784-dfcd-42bf-8162-47460270221d/traces",
+    "status": 200,
+    "ringkas": "steps[3]",
+    "endpoint": "decisions.traces",
+    "catatan": ""
+  },
+  {
+    "peran": "sppg_head_bandung",
+    "method": "GET",
+    "path": "/decisions/fea88784-dfcd-42bf-8162-47460270221d/approval-summary",
+    "status": 200,
+    "ringkas": "approvals[1]",
+    "endpoint": "decisions.approval-summary",
+    "catatan": ""
+  },
+  {
+    "peran": "sppg_head_bandung",
+    "method": "GET",
+    "path": "/decisions/fea88784-dfcd-42bf-8162-47460270221d/packet",
+    "status": 200,
+    "ringkas": "decision_type=supplier_procurement",
+    "endpoint": "decisions.packet",
+    "catatan": ""
+  },
+  {
+    "peran": "sppg_head_bandung",
+    "method": "GET",
+    "path": "/decisions/fea88784-dfcd-42bf-8162-47460270221d/audit-facts",
+    "status": 200,
+    "ringkas": "ledger{3}",
+    "endpoint": "decisions.audit-facts",
+    "catatan": ""
+  },
+  {
+    "peran": "sppg_head_bandung",
+    "method": "GET",
+    "path": "/decisions/fea88784-dfcd-42bf-8162-47460270221d/dossier",
+    "status": 200,
+    "ringkas": "verify=True",
+    "endpoint": "decisions.dossier",
+    "catatan": ""
+  },
+  {
+    "peran": "sppg_head_bandung",
+    "method": "GET",
+    "path": "/decisions/fea88784-dfcd-42bf-8162-47460270221d/compliance",
+    "status": 200,
+    "ringkas": "verify=True",
+    "endpoint": "decisions.compliance",
+    "catatan": ""
+  },
+  {
+    "peran": "sppg_head_bandung",
+    "method": "GET",
+    "path": "/supplier-exclusions/context/fea88784-dfcd-42bf-8162-47460270221d",
+    "status": 200,
+    "ringkas": "suppliers[0]",
+    "endpoint": "supplier-exclusions.context",
+    "catatan": ""
+  },
+  {
+    "peran": "sppg_head_bandung",
+    "method": "GET",
+    "path": "/sap/purchase-orders/MC-E7150DA4CB4B/pdf",
+    "status": 200,
+    "ringkas": "_bytes=5563",
+    "endpoint": "sap.po-pdf",
+    "catatan": ""
+  }
+]

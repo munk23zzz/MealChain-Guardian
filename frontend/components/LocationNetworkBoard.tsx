@@ -38,7 +38,7 @@ import {
   rekomendasiTerbuka,
   sortBySeverity,
 } from "../lib/location-network";
-import { formatBalanceGap, tanpaCatatan, type BalanceMapLocation } from "../lib/overview-format";
+import { formatBalanceGap, formatKg, tanpaCatatan, type BalanceMapLocation } from "../lib/overview-format";
 import { planRingkas, wasteRingkas, wasteSentence } from "../lib/surplus";
 import type { SupplyDemandDetail } from "../lib/supply-demand";
 import styles from "./LocationNetworkBoard.module.css";
@@ -298,7 +298,11 @@ export default function LocationNetworkBoard({
         <article className="card jump-target" id={NETWORK_SECTION_IDS.lokasi}>
           <div className="board-card-head">
             <h2>Lokasi</h2>
-            {adaIsu ? <span className="evidence-note">bertanda = catatan belum lengkap</span> : null}
+            <span className="evidence-note" data-testid="location-network-legend">
+              − kurang · + lebih · = seimbang
+              {adaRekomendasi ? " · Rekomendasi = usulan terbuka" : ""}
+              {adaIsu ? " · bertanda = catatan belum lengkap" : null}
+            </span>
           </div>
 
           <div className="board-table-wrap network-table-wrap">
@@ -395,6 +399,19 @@ export default function LocationNetworkBoard({
                           {markSelisih(location.status)}
                         </span>
                         {formatBalanceGap(location)}
+                        {/* Dua angka asal selisih, ditulis di bawahnya: tanpa ini
+                            baris hanya menyebut HASIL, dan pembaca harus membuka
+                            rincian untuk tahu dari mana angkanya. Nol yang tidak
+                            terukur tetap "—" (tanpaCatatan). */}
+                        <span className={styles.balanceSub}>
+                          {tanpaCatatan(location.supply_state)
+                            ? "pasokan belum dicatat"
+                            : `pasokan ${formatKg(location.supply_kg)}`}
+                          {" · "}
+                          {tanpaCatatan(location.demand_state)
+                            ? "kebutuhan belum dicatat"
+                            : `kebutuhan ${formatKg(location.demand_kg)}`}
+                        </span>
                       </td>
                       {adaHampir ? (
                         <td className={styles.num} data-label={`Batch ≤${expiryDays}h`} data-kind="expiry">

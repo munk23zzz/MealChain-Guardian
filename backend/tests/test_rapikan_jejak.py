@@ -9,9 +9,35 @@ Yang dijaga:
 
 from datetime import datetime, timedelta, timezone
 
-from app.seed.rapikan_jejak import jadwal_ulang_jejak
+from app.seed.rapikan_jejak import jadwal_ulang_jejak, langkah_pelengkap
 
 LAHIR = datetime(2026, 10, 29, 2, 42, tzinfo=timezone.utc)
+
+
+def test_keputusan_tanpa_detect_dilengkapi_detect():
+    """Tanpa DETECT, Decision Time kehilangan titik kiri dan panel jejak
+    menulis \"tidak ada langkah awal\" padahal keputusannya jelas ada."""
+    assert langkah_pelengkap("pending_approval", ["DECIDE"]) == ["DETECT"]
+    assert langkah_pelengkap("rejected", []) == ["DETECT"]
+
+
+def test_keputusan_executed_wajib_punya_act():
+    """Status `executed` berarti eksekusi SUDAH terjadi — jejaknya harus
+    mencatat ACT, bukan hanya mengandalkan kolom status."""
+    assert langkah_pelengkap("executed", ["DETECT", "DECIDE"]) == ["ACT"]
+    assert langkah_pelengkap("executed", ["DECIDE"]) == ["DETECT", "ACT"]
+
+
+def test_tidak_menambah_apa_pun_bila_sudah_lengkap():
+    assert langkah_pelengkap("executed", ["DETECT", "DECIDE", "ACT"]) == []
+    assert langkah_pelengkap("pending_approval", ["DETECT", "VERIFY"]) == []
+
+
+def test_act_tidak_diminta_untuk_status_selain_executed():
+    """Keputusan yang belum dieksekusi tidak boleh diberi ACT: itu mengarang
+    eksekusi yang belum terjadi."""
+    for status in ("pending_approval", "proposed", "approved", "rejected", "verifier_flagged"):
+        assert "ACT" not in langkah_pelengkap(status, ["DETECT"])
 
 
 def test_seluruh_langkah_sebelum_keputusan_digeser_ke_sesudahnya():

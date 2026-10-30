@@ -65,6 +65,32 @@ async def purge_session(db: AsyncSession, sesi_id: uuid.UUID) -> dict[str, Any]:
     tabel. Tidak memanggil `commit`: pemanggil yang menentukan transaksi.
     """
     dihapus: dict[str, int] = {}
+    # Anak keputusan yang TIDAK punya `demo_session_id` (approvals,
+    # decision_evidence, agent_traces) tidak bisa disapu oleh
+    # `_kriteria_sesi`, sehingga DELETE decisions menabrak
+    # ForeignKeyViolationError ("still referenced from table approvals" —
+    # terukur 30 Okt 2026 saat "Muat kasus" dijalankan ulang). Hapus lebih dulu
+    # lewat subquery keputusan milik sesi ini.
+    from sqlalchemy import select as _select
+
+    from app.models import AgentTrace, Approval, Decision, DecisionEvidence
+
+    id_keputusan = _select(Decision.id).where(_kriteria_sesi(Decision, sesi_id))
+    for model_anak, kolom in (
+        (AgentTrace, AgentTrace.decision_id),
+        (Approval, Approval.decision_id),
+        (DecisionEvidence, DecisionEvidence.decision_id),
+    ):
+        hasil_anak = await db.execute(
+            delete(model_anak)
+            .where(kolom.in_(id_keputusan))
+            .execution_options(synchronize_session=False)
+        )
+        jumlah_anak = int(hasil_anak.rowcount or 0)
+        if jumlah_anak:
+            dihapus[model_anak.__tablename__] = (
+                dihapus.get(model_anak.__tablename__, 0) + jumlah_anak
+            )
     for model in sorted(sesi.model_bersesi(), key=sesi._urutan_hapus):
         hasil = await db.execute(
             delete(model)

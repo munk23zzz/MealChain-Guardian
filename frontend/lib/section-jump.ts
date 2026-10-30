@@ -125,20 +125,26 @@ export function overviewSections({ isApprover }: { isApprover: boolean }): JumpI
 export function safetySections({
   ownLocation,
   hasDecisions,
+  hasPending = false,
 }: {
   ownLocation: boolean;
   hasDecisions: boolean;
+  /** Ada catatan penerimaan yang menunggu persetujuan (aksi tulis hari ini). */
+  hasPending?: boolean;
 }): JumpItem[] {
-  const items: JumpItem[] = [
-    { id: SAFETY_SECTION_IDS.ringkasan, label: "Ringkasan" },
-    // Kartu "Batch perlu perhatian" (bukti suhu + sisa layak + kesegaran dalam
-    // satu tabel) selalu dirender, jadi jangkarnya tetap di navigasi.
-    { id: SAFETY_SECTION_IDS.bukti, label: "Perlu perhatian" },
-  ];
+  const items: JumpItem[] = [];
+  // Aksi yang menahan stok didahulukan: pertanyaan pertama pembaca adalah
+  // "ada yang harus saya putuskan sekarang?". Jatah lima tujuan tetap dipegang
+  // `slice` di bawah, jadi menambah tujuan ini tidak menambah keruwetan nav.
+  if (hasPending) items.push({ id: SAFETY_SECTION_IDS.persetujuan, label: "Menunggu keputusan" });
+  items.push({ id: SAFETY_SECTION_IDS.ringkasan, label: "Ringkasan" });
+  // Kartu "Batch perlu perhatian" (bukti suhu + sisa layak + kesegaran dalam
+  // satu tabel) selalu dirender, jadi jangkarnya tetap di navigasi.
+  items.push({ id: SAFETY_SECTION_IDS.bukti, label: "Perlu perhatian" });
   if (ownLocation) items.push({ id: SAFETY_SECTION_IDS.terima, label: "Penerimaan" });
   items.push({ id: SAFETY_SECTION_IDS.batch, label: "Status per batch" });
   if (hasDecisions) items.push({ id: SAFETY_SECTION_IDS.keputusan, label: "Keputusan" });
-  return items;
+  return items.slice(0, 5);
 }
 
 /* ── Tiga halaman yang 29 Okt 2026 baru diberi navigasi bagian ─────────────

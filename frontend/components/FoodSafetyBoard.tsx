@@ -67,6 +67,9 @@ import {
   type SafetyDecisionRow,
   type SafetyRow,
 } from "../lib/food-safety";
+// Titik warna komoditas: kelas yang sama dipakai peta & donat, jadi warna
+// "wortel" di tabel tidak lahir dari daftar kedua.
+import { komoditasToneClass } from "../lib/surplus-regions";
 import { formatKg } from "../lib/overview-format";
 import { kodeWilayah } from "../lib/wilayah";
 import type { SupplierRoute } from "../lib/supplier-routes";
@@ -1084,6 +1087,7 @@ export default function FoodSafetyBoard({
   const bagianNav = safetySections({
     ownLocation: adaPenerimaan,
     hasDecisions: Boolean(decisions),
+    hasPending: Boolean(canApprove && onApproveReceipt && antrean.length > 0),
   });
   return (
     <PageShell
@@ -1119,6 +1123,116 @@ export default function FoodSafetyBoard({
             </button>
           ) : null}
         </article>
+      ) : null}
+
+      {/* Zona pertama (30 Okt 2026): pertanyaan pembaca yang paling mendesak
+          adalah "ada yang harus saya putuskan sekarang?". Kartu ini dulu berada
+          di zona Tindakan, SESUDAH tabel "Batch perlu perhatian" — padahal stok
+          tidak bertambah sampai disetujui. Ia dipindah ke atas ringkasan, bukan
+          dihapus dari zona Tindakan, supaya urutan halaman mengikuti akibat
+          pekerjaan: putuskan dulu, baru membaca keadaan. */}
+      {canApprove && onApproveReceipt && antrean.length > 0 ? (
+      <section className={styles.zona} aria-labelledby="zona-keputusan-label">
+        <p className={styles.zonaLabel} id="zona-keputusan-label">Perlu keputusan Anda</p>
+        <article className="card jump-target" id="safety-persetujuan">
+          <div className="board-card-head">
+            <h2>Menunggu keputusan Anda</h2>
+            <span className="board-badge board-badge-warn">{antrean.length} catatan</span>
+          </div>
+          {/* Kalimat sebab-akibat: pembaca harus tahu bahwa stok BELUM bertambah
+              dan tombol di bawah inilah yang menambahkannya. */}
+          <p className="evidence-note">
+            Barangnya sudah tiba dan sudah diperiksa. Stok bertambah setelah Anda setujui;
+            menolak berarti barang tidak masuk dapur.
+          </p>
+          {/* Hanya batch `usable` yang sampai ke daftar ini (server, 29 Okt
+              2026): barang yang buktinya belum lengkap atau sudah lewat masa
+              layak tidak ditawarkan untuk disetujui. */}
+          {aksi?.where === "terima" ? (
+            <p className={aksi.nada === "danger" ? "board-alert" : "evidence-note"} aria-live="polite">
+              {aksi.teks}
+            </p>
+          ) : null}
+          <ul className={styles.approvalList}>
+            {antrean.map((row) => (
+              <li key={row.id} className={styles.approvalItem}>
+                {/* Tahap 5 (29 Okt 2026): fakta batch dan nilainya duduk sebaris —
+                    kiri keterangan, kanan angka rupiah — supaya satu butir antrean
+                    cukup 3 baris (judul · meta · aksi), bukan 5 bertumpuk. */}
+                <div className={styles.approvalTop}>
+                  <div className={styles.approvalFacts}>
+                    <div className={styles.approvalHead}>
+                      <span className={styles.batchTitle}>
+                        {row.commodity} · {formatKg(row.quantity_kg)} · {kodeWilayah(row.location)}
+                      </span>
+                      <span className="board-badge board-badge-warn">menunggu</span>
+                    </div>
+                    <span className={styles.batchMeta}>
+                      {row.checked_count} titik · dicatat {row.recorded_by_name ?? "—"} ·{" "}
+                      {waktuCatat(row.recorded_at)}
+                    </span>
+                  </div>
+                  <NilaiAntrean row={row} />
+                </div>
+                <div className="safety-row-actions">
+                  <button
+                    type="button"
+                    className="button"
+                    disabled={sibuk !== null}
+                    onClick={() => void setujuiTerima(row.id)}
+                  >
+                    {sibuk === "setujui" ? "Menyetujui…" : "Setujui & masukkan stok"}
+                  </button>
+                  <button
+                    type="button"
+                    className="button button-secondary"
+                    disabled={sibuk !== null}
+                    onClick={() => {
+                      setTolakId(row.id);
+                      setAlasanTolak("");
+                    }}
+                  >
+                    Tolak
+                  </button>
+                </div>
+                {tolakId === row.id ? (
+                  <div className="safety-other">
+                    <label htmlFor={`alasan-antrean-${row.id}`}>Alasan penolakan (wajib)</label>
+                    <textarea
+                      id={`alasan-antrean-${row.id}`}
+                      value={alasanTolak}
+                      maxLength={500}
+                      rows={2}
+                      placeholder="Contoh: kemasan penyok dan suhu 12 °C — minta ganti barang."
+                      onChange={(event) => setAlasanTolak(event.target.value)}
+                    />
+                    <div className="safety-row-actions">
+                      <button
+                        type="button"
+                        className="button button-primary"
+                        disabled={sibuk !== null}
+                        onClick={() => void tolakTerima(row.id)}
+                      >
+                        {sibuk === "tolak" ? "Mengirim…" : "Kirim penolakan"}
+                      </button>
+                      <button
+                        type="button"
+                        className="button button-secondary"
+                        onClick={() => {
+                          setTolakId(null);
+                          setAlasanTolak("");
+                        }}
+                      >
+                        Batal
+                      </button>
+                    </div>
+                  </div>
+                ) : null}
+              </li>
+            ))}
+          </ul>
+        </article>
+      </section>
       ) : null}
 
       {/* Tiga zona (redesign 29 Okt 2026). Halaman ini menjawab satu pertanyaan
@@ -1513,100 +1627,6 @@ export default function FoodSafetyBoard({
             />
           </Popup>
 
-      {canApprove && onApproveReceipt && antrean.length > 0 ? (
-        <article className="card jump-target" id="safety-persetujuan">
-          <div className="board-card-head">
-            <h2>Menunggu persetujuan</h2>
-            <span className="board-badge board-badge-warn">{antrean.length} catatan</span>
-          </div>
-          {/* Hanya batch `usable` yang sampai ke daftar ini (server, 29 Okt
-              2026): barang yang buktinya belum lengkap atau sudah lewat masa
-              layak tidak ditawarkan untuk disetujui. */}
-          {aksi?.where === "terima" ? (
-            <p className={aksi.nada === "danger" ? "board-alert" : "evidence-note"} aria-live="polite">
-              {aksi.teks}
-            </p>
-          ) : null}
-          <ul className={styles.approvalList}>
-            {antrean.map((row) => (
-              <li key={row.id} className={styles.approvalItem}>
-                {/* Tahap 5 (29 Okt 2026): fakta batch dan nilainya duduk sebaris —
-                    kiri keterangan, kanan angka rupiah — supaya satu butir antrean
-                    cukup 3 baris (judul · meta · aksi), bukan 5 bertumpuk. */}
-                <div className={styles.approvalTop}>
-                  <div className={styles.approvalFacts}>
-                    <div className={styles.approvalHead}>
-                      <span className={styles.batchTitle}>
-                        {row.commodity} · {formatKg(row.quantity_kg)} · {kodeWilayah(row.location)}
-                      </span>
-                      <span className="board-badge board-badge-warn">menunggu</span>
-                    </div>
-                    <span className={styles.batchMeta}>
-                      {row.checked_count} titik · dicatat {row.recorded_by_name ?? "—"} ·{" "}
-                      {waktuCatat(row.recorded_at)}
-                    </span>
-                  </div>
-                  <NilaiAntrean row={row} />
-                </div>
-                <div className="safety-row-actions">
-                  <button
-                    type="button"
-                    className="button"
-                    disabled={sibuk !== null}
-                    onClick={() => void setujuiTerima(row.id)}
-                  >
-                    {sibuk === "setujui" ? "Menyetujui…" : "Setujui & masukkan stok"}
-                  </button>
-                  <button
-                    type="button"
-                    className="button button-secondary"
-                    disabled={sibuk !== null}
-                    onClick={() => {
-                      setTolakId(row.id);
-                      setAlasanTolak("");
-                    }}
-                  >
-                    Tolak
-                  </button>
-                </div>
-                {tolakId === row.id ? (
-                  <div className="safety-other">
-                    <label htmlFor={`alasan-antrean-${row.id}`}>Alasan penolakan (wajib)</label>
-                    <textarea
-                      id={`alasan-antrean-${row.id}`}
-                      value={alasanTolak}
-                      maxLength={500}
-                      rows={2}
-                      placeholder="Contoh: kemasan penyok dan suhu 12 °C — minta ganti barang."
-                      onChange={(event) => setAlasanTolak(event.target.value)}
-                    />
-                    <div className="safety-row-actions">
-                      <button
-                        type="button"
-                        className="button button-primary"
-                        disabled={sibuk !== null}
-                        onClick={() => void tolakTerima(row.id)}
-                      >
-                        {sibuk === "tolak" ? "Mengirim…" : "Kirim penolakan"}
-                      </button>
-                      <button
-                        type="button"
-                        className="button button-secondary"
-                        onClick={() => {
-                          setTolakId(null);
-                          setAlasanTolak("");
-                        }}
-                      >
-                        Batal
-                      </button>
-                    </div>
-                  </div>
-                ) : null}
-              </li>
-            ))}
-          </ul>
-        </article>
-      ) : null}
 
       </section>
 
@@ -1739,33 +1759,47 @@ export default function FoodSafetyBoard({
                   {halamanData.items.map((row: SafetyRow) => {
                     const state = expiryState(row.hoursLeft);
                     return (
-                      <tr key={row.id ?? `${row.location}-${row.commodity}`}>
+                      <tr key={row.id ?? `${row.location}-${row.commodity}`} data-tone={row.tone}>
                         <td data-label={ownLocation && !jaringan ? "Asal" : "Lokasi"}>
-                          {ownLocation && !jaringan ? asal(row) : kodeWilayah(row.location)}
+                          <span className="safety-loc">
+                            {ownLocation && !jaringan ? asal(row) : kodeWilayah(row.location)}
+                          </span>
                         </td>
                         <td data-label="Komoditas">
-                          {/* Butir 1: komoditas yang punya keputusan keamanan
-                              menjadi tautan ke gerbang di bawah. Komoditas tanpa
-                              keputusan tetap teks biasa — tidak ada tautan yang
-                              menjanjikan tujuan kosong. */}
-                          {komoditasBerKeputusan.some(
-                            (nama) => nama.toLowerCase() === row.commodity.trim().toLowerCase()
-                          ) ? (
-                            <button
-                              type="button"
-                              className="board-link"
-                              aria-label={`Lihat keputusan keamanan ${row.commodity}`}
-                              title={`Saring keputusan keamanan ke komoditas ${row.commodity}`}
-                              onClick={() => saringKeputusanKomoditas(row.commodity)}
-                            >
-                              {row.commodity}
-                            </button>
-                          ) : (
-                            row.commodity
-                          )}
+                          {/* Titik warna = identitas komoditas yang sama dengan
+                              peta dan donat (30 Okt 2026). Nama komoditas tetap
+                              teks supaya tidak bergantung pada warna. */}
+                          <span className={`safety-komod ${komoditasToneClass(row.commodity)}`}>
+                            <span className="safety-komod-dot" aria-hidden="true" />
+                            {/* Butir 1: komoditas yang punya keputusan keamanan
+                                menjadi tautan ke gerbang di bawah. Komoditas tanpa
+                                keputusan tetap teks biasa — tidak ada tautan yang
+                                menjanjikan tujuan kosong. */}
+                            {komoditasBerKeputusan.some(
+                              (nama) => nama.toLowerCase() === row.commodity.trim().toLowerCase()
+                            ) ? (
+                              <button
+                                type="button"
+                                className="board-link"
+                                aria-label={`Lihat keputusan keamanan ${row.commodity}`}
+                                title={`Saring keputusan keamanan ke komoditas ${row.commodity}`}
+                                onClick={() => saringKeputusanKomoditas(row.commodity)}
+                              >
+                                {row.commodity}
+                              </button>
+                            ) : (
+                              row.commodity
+                            )}
+                          </span>
                         </td>
                         <td className="num" data-label="Jumlah">
-                          {row.kg === null ? "—" : formatKg(row.kg)}
+                          {row.kg === null ? (
+                            "—"
+                          ) : (
+                            <>
+                              <span className="safety-num">{formatKg(row.kg)}</span>
+                            </>
+                          )}
                         </td>
                         <td data-label="Status keamanan">
                           {(() => {
@@ -1806,10 +1840,16 @@ export default function FoodSafetyBoard({
                             }
                             const langkah = rowNextSteps(row.safetyStatus, row.quarantine);
                             if (!langkah.safety && !langkah.karantina) return null;
+                            // Kalimat ini dipotong satu baris dengan elipsis di
+                            // kolom (lihat globals.css `.safety-row-next`), jadi
+                            // teks penuhnya dibawa `title` agar tetap terbaca.
+                            const kalimat = [
+                              langkah.safety ? `Langkah: ${langkah.safety}.` : null,
+                              langkah.karantina ? `Karantina: ${langkah.karantina}.` : null,
+                            ].filter(Boolean).join(" ");
                             return (
-                              <span className="cell-meta safety-row-next">
-                                {langkah.safety ? <>Langkah: {langkah.safety}.</> : null}
-                                {langkah.karantina ? <> Karantina: {langkah.karantina}.</> : null}
+                              <span className="cell-meta safety-row-next" title={kalimat}>
+                                {kalimat}
                               </span>
                             );
                           })()}
@@ -1817,12 +1857,18 @@ export default function FoodSafetyBoard({
                         <td className="num" data-label="Kesegaran">{row.freshness}</td>
                         <td data-label="Layak sampai">{row.usableUntil}</td>
                         <td data-label="Sisa masa">
-                          {state.key === "expired" || state.key === "urgent" || state.key === "watch" ? (
-                            <>
-                              <span className={`safety-state safety-state-${state.key}`}>{state.label}</span>{" "}
-                            </>
-                          ) : null}
-                          {state.detail}
+                          {/* Dua baris tetap: lencana keadaan di atas, kalimat
+                              sisa masa redup di bawahnya. Dulu keduanya satu
+                              baris sehingga lencana "Kedaluwarsa" yang lebar
+                              memaksa kalimatnya pecah tak beraturan. */}
+                          <span className="safety-sisa">
+                            {state.key === "expired" || state.key === "urgent" || state.key === "watch" ? (
+                              <span className={`safety-state safety-state-${state.key}`}>
+                                {state.label}
+                              </span>
+                            ) : null}
+                            <span className="safety-sisa-teks">{state.detail}</span>
+                          </span>
                         </td>
                         {canMutate && (onRecheck || onTriggerDisruption || onKarantina) ? (
                           <td data-label="Tindakan">
@@ -1837,14 +1883,19 @@ export default function FoodSafetyBoard({
                                   {sibuk === row.id ? "Menguji…" : "Uji ulang"}
                                 </button>
                               ) : null}
+                              {/* Label tombol sengaja pendek ("Ajukan", bukan
+                                  "Ajukan keputusan") supaya dua tombol muat satu
+                                  baris di kolom Tindakan; makna penuhnya tetap
+                                  tersedia lewat aria-label. */}
                               {row.id && onTriggerDisruption && canPropose && row.tone === "danger" ? (
                                 <button
                                   type="button"
                                   className="button button-secondary"
                                   disabled={sibuk === `putus-${row.id}`}
                                   onClick={() => void ajukanKeputusan(String(row.id))}
+                                  aria-label={`Ajukan keputusan penanganan untuk batch ${row.id}`}
                                 >
-                                  {sibuk === `putus-${row.id}` ? "Mengajukan…" : "Ajukan keputusan"}
+                                  {sibuk === `putus-${row.id}` ? "Mengajukan…" : "Ajukan"}
                                 </button>
                               ) : null}
                               {row.id && onKarantina ? (

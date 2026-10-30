@@ -1431,6 +1431,178 @@ def food_loss_report(summary: Mapping[str, Any] | None, *, note: str | None = No
     )
 
 
+# --- surplus wilayah & rencana alih ------------------------------------------------------
+
+#: Alasan backend menahan alokasi surplus, diterjemahkan ke kalimat pengguna.
+#: Token mentah tidak boleh muncul di chat (lihat tes daftar-terlarang).
+ALLOC_REASON_LABEL: dict[str, str] = {
+    "alokasi_di_bawah_ambang": "pasangannya masih di bawah ambang surplus",
+    "tidak_ada_surplus": "tidak ada SPPG dengan surplus",
+    "tidak_ada_kekurangan": "tidak ada SPPG yang kekurangan",
+    "tidak_ada_pasangan": "tidak ada pasangan surplus–kekurangan yang cocok",
+    "data_belum_terukur": "datanya belum terukur",
+}
+
+
+def surplus_region_report(
+    regions: Mapping[str, Any] | None,
+    allocations: Sequence[Mapping[str, Any]] | None = None,
+    *,
+    note: str | None = None,
+    dilewati: int = 0,
+    limit: int = 12,
+) -> str:
+    """Surplus per wilayah + rencana alih antar SPPG.
+
+    Seluruh angka datang dari `/surplus/regions` dan `/surplus/allocations`; perender hanya
+    memformat dan mengurutkan. Dua hal yang sengaja ditampilkan walau tidak enak dibaca:
+
+    * `available: false` + `reason` — tanpa ini, jawaban berbunyi "tidak ada alokasi"
+      padahal surplusnya ada dan hanya tertahan ambang;
+    * jumlah komoditas yang tidak diperiksa (`dilewati`) — cap kerja yang disembunyikan
+      adalah klaim palsu yang sama seperti angka fiktif.
+    """
+    data = regions or {}
+    daftar_wilayah = list(data.get("regions") or ())
+    if not data or not daftar_wilayah:
+        return (
+            "Belum ada ringkasan surplus antar wilayah yang dikirim MealChain Guardian "
+            "saat ini.\n\n" + _footnote([note])
+        )
+
+    totals = data.get("totals") or {}
+    ringkas = [
+        ("Wilayah dengan surplus", f"{_text(totals.get('regions'))} dari {_text(data.get('locations_total'))} SPPG terdaftar · cakupan akun Anda"),
+        ("Surplus layak dialihkan", kg(totals.get("layak_kg")) + f" dari {kg(totals.get('surplus_kg'))} tercatat"),
+        ("Lokasi sumber surplus", _text(totals.get("source_locations"))),
+        ("Ambang surplus per lokasi", kg(data.get("min_surplus_kg"))),
+        ("Dihitung pada", wib(data.get("as_of"))),
+    ]
+    tak_terukur = totals.get("surplus_unmeasured_locations") or 0
+    if tak_terukur:
+        ringkas.append(
+            (
+                "Belum terukur",
+                f"{_text(tak_terukur)} SPPG belum punya catatan surplus — tidak dihitung nol",
+            )
+        )
+    isi = "\n".join(f"- **{judul}:** {nilai}" for judul, nilai in ringkas)
+
+    urut_wilayah = sorted(
+        daftar_wilayah, key=lambda r: _angka(r.get("surplus_kg")), reverse=True
+    )
+    tabel_wilayah = _table(
+        ["Wilayah", "Surplus", "Layak dialihkan", "SPPG sumber", "Komoditas terbesar"],
+        [
+            [
+                _text(r.get("region")),
+                kg(r.get("surplus_kg")),
+                kg(r.get("layak_kg")),
+                _text(r.get("locations")),
+                _komoditas_teratas(r.get("by_commodity")),
+            ]
+            for r in urut_wilayah
+        ],
+    )
+
+    sumber: list[list[str]] = []
+    for r in urut_wilayah:
+        for s in r.get("sources") or ():
+            sumber.append(
+                [_text(r.get("region")), _text(s.get("location")), kg(s.get("surplus_kg"))]
+            )
+    bagian = f"Surplus pangan antar wilayah (MealChain Guardian)\n\n{isi}\n\nSurplus per wilayah:\n\n{tabel_wilayah}"
+    if sumber:
+        tampil, catatan_sumber = _cap(sumber, limit)
+        bagian += "\n\nSPPG sumber surplus:\n\n" + _table(
+            ["Wilayah", "SPPG", "Surplus"], tampil
+        )
+        if catatan_sumber:
+            bagian += f"\n\n{catatan_sumber}"
+
+    bagian_alih = _alokasi_bagian(list(allocations or ()), limit=limit)
+    if bagian_alih:
+        bagian += "\n\n" + bagian_alih
+
+    catatan = [
+        note,
+        (
+            f"Rencana alih diperiksa untuk {len(allocations or ())} dari "
+            f"{len(allocations or ()) + dilewati} komoditas; {dilewati} komoditas lain "
+            "belum diperiksa — sebut nama komoditas untuk mempersempit."
+            if dilewati
+            else None
+        ),
+        "Angka surplus dan rencana alih dihitung sistem MealChain Guardian; Joule hanya menyajikan.",
+        "Surplus yang belum dialihkan bukan berarti tidak ada — bisa berarti pasangannya "
+        "masih di bawah ambang, dan itu disebut di atas.",
+    ]
+    return bagian + "\n\n" + _footnote(catatan)
+
+
+def _angka(value: Any) -> float:
+    """Nilai untuk pengurutan; bukan untuk ditampilkan (tidak ada aritmetika di laporan)."""
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return float("-inf")
+
+
+def _komoditas_teratas(by_commodity: Any) -> str:
+    """Komoditas penyumbang surplus terbesar satu wilayah, apa adanya dari backend."""
+    daftar = [row for row in (by_commodity or ()) if isinstance(row, Mapping)]
+    if not daftar:
+        return MISSING
+    teratas = max(daftar, key=lambda r: _angka(r.get("surplus_kg")))
+    return f"{_text(teratas.get('commodity'))} ({kg(teratas.get('surplus_kg'))})"
+
+
+def _alokasi_bagian(allocations: Sequence[Mapping[str, Any]], *, limit: int = 12) -> str:
+    """Satu blok per komoditas: pasangan alih bila ada, alasan penahan bila tidak."""
+    blok: list[str] = []
+    for row in allocations:
+        komoditas = _text(row.get("commodity"))
+        totals = row.get("totals") or {}
+        pairs = [p for p in (row.get("pairs") or ()) if isinstance(p, Mapping)]
+        if pairs:
+            tampil, catatan = _cap(pairs, limit)
+            kepala = (
+                f"**{komoditas.title()}** — {kg(totals.get('allocatable_kg'))} bisa dialihkan "
+                f"(surplus {kg(totals.get('surplus_kg'))}, kekurangan {kg(totals.get('shortage_kg'))})."
+            )
+            tabel = _table(
+                ["Dari", "Ke", "Jumlah", "Jarak jalan"],
+                [
+                    [
+                        _text(p.get("from_location")),
+                        _text(p.get("to_location")),
+                        kg(p.get("quantity_kg")),
+                        f"{num(p.get('distance_km'))} km"
+                        if p.get("distance_km") is not None
+                        else MISSING,
+                    ]
+                    for p in tampil
+                ],
+            )
+            blok.append(f"{kepala}\n\n{tabel}" + (f"\n\n{catatan}" if catatan else ""))
+            continue
+        alasan = ALLOC_REASON_LABEL.get(str(row.get("reason") or "").strip().lower())
+        if not alasan:
+            alasan = "belum ada pasangan yang layak dialihkan saat ini"
+        rincian = ""
+        dibawah = totals.get("surplus_below_min_kg")
+        if dibawah:
+            rincian = f" ({kg(dibawah)} di antaranya masih di bawah ambang)"
+        blok.append(
+            f"**{komoditas.title()}** — {alasan}: surplus {kg(totals.get('surplus_kg'))}, "
+            f"kekurangan {kg(totals.get('shortage_kg'))}{rincian}. Belum ada pasangan yang "
+            "layak dialihkan."
+        )
+    if not blok:
+        return ""
+    return "Rencana alih surplus antar SPPG:\n\n" + "\n\n".join(blok)
+
+
 # --- risiko pemasok & rute kiriman -------------------------------------------------------
 
 

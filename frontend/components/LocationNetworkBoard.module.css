@@ -55,6 +55,16 @@
   white-space: nowrap;
 }
 
+/* Global `.location-table th` menang atas `.num` (kelas+elemen mengalahkan
+   kelas tunggal), sehingga judul kolom angka tertinggal ke kiri sementara
+   angkanya rata kanan — terukur: `text-align` th = left, sel = right, jadi
+   angka tidak sejajar dengan judulnya. Bungkus nama global dengan `:global()`
+   karena di CSS module `.location-table` ikut di-hash dan tidak akan cocok. */
+:global(.location-table) th.num,
+:global(.location-table) td.num {
+  text-align: right;
+}
+
 .num[data-status="shortage"] {
   color: var(--danger);
 }
@@ -77,4 +87,18 @@
 
 .openRow td {
   background: var(--surface-muted, #f4f6f9);
+}
+
+/* Angka asal selisih (pasokan · kebutuhan) di bawah hasilnya. Tanpa baris ini
+   sel tabel hanya menyebut HASIL, dan pembaca harus membuka rincian untuk tahu
+   angkanya datang dari mana. Diletakkan di dalam sel yang sama supaya tidak
+   menambah kolom (dan tidak menggandakan angka di dua tempat). */
+.balanceSub {
+  display: block;
+  margin-top: 2px;
+  font-size: var(--fs-1);
+  font-weight: 400;
+  color: var(--ink-subtle);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
 }

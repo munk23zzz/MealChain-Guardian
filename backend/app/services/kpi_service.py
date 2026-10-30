@@ -224,7 +224,18 @@ def _scope(alias: str, include_demo: bool) -> str:
             f" AND ({alias}.demo_session_id = :demo_session_id "
             f"OR {alias}.demo_session_id = '{CETAKAN_ID}'::uuid) "
         )
-    return f" AND {alias}.demo_session_id IS NULL "
+    # 30 Okt 2026 — cakupan OPERASIONAL ikut membaca baris CETAKAN. Dataset
+    # cetakan adalah template demo yang disiapkan untuk aplikasi ini, bukan milik
+    # sesi operator mana pun; sebelum aturan ini, menstempel rencana menu/kiriman
+    # dengan sesi cetakan (supaya terlihat di mode simulasi) justru membuat KPI
+    # operasional — yang dipakai Joule secara bawaan — kehilangan data yang sama.
+    # Yang tetap TIDAK terbaca: sesi operator lain.
+    from app.services.demo_session import CETAKAN_ID
+
+    return (
+        f" AND ({alias}.demo_session_id IS NULL "
+        f"OR {alias}.demo_session_id = '{CETAKAN_ID}'::uuid) "
+    )
 
 
 async def _rows(db: AsyncSession, stmt: str, params: dict | None = None):

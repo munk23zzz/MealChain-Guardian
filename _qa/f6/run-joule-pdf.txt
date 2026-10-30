@@ -1,0 +1,14 @@
+== siapkan klon mealchain_f6 dari mealchain
+== migrate ke head
+ALEMBIC_EXIT=0
+INFO  [alembic.runtime.migration] Context impl PostgresqlImpl.
+INFO  [alembic.runtime.migration] Will assume transactional DDL.
+klon mealchain_f6: 133 batch, alembic 045_analyze_step
+== pytest
+PYTEST_EXIT=0
+  /usr/local/lib/python3.12/site-packages/starlette/testclient.py:40: DeprecationWarning: The anyio.abc.BlockingPortal alias is deprecated, use anyio.from_thread.BlockingPortal instead.
+    _PortalFactoryType = typing.Callable[[], typing.ContextManager[anyio.abc.BlockingPortal]]
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+15 passed, 1 warning in 9.14s
+log: _qa/f6/pytest-gate.txt

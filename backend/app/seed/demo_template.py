@@ -2996,6 +2996,15 @@ async def build_into(db: AsyncSession, *, purge: bool = True, freeze: bool = Tru
     laporan["penerimaan"] = await _semai_penerimaan(db, now)
     laporan["eksklusi"] = await _semai_eksklusi(db, now)
     laporan["status_tambahan"] = await _semai_status_tambahan(db, now)
+    # 30 Okt 2026 — fakta KPI untuk HARI INI & BESOK. Tanpa langkah ini dataset
+    # hanya terisi pada hari build: besoknya Meal Continuity, Food Loss, dan
+    # Regional Imbalance kosong karena tidak ada kiriman/limbah/DETECT baru,
+    # padahal demo berjalan di hari berikutnya. Semua baris dicap sesi cetakan
+    # (terbaca di cakupan operasional maupun simulasi) dan waktunya dini hari WIB
+    # supaya sudah "terjadi" saat demo dibuka 06:00.
+    from app.seed.kpi_harian import lengkapi_hari_ini_dan_besok
+
+    laporan["kpi_harian"] = await lengkapi_hari_ini_dan_besok(db, sesi=None)
     # NUM-01/D-05: isi tautan keputusan→PO yang pemicunya terbukti ada. Baris
     # impor SAP yang tidak punya pemicu dibiarkan NULL dan dilaporkan.
     laporan["po_tautan"] = await _tautkan_po_ke_keputusan(db)

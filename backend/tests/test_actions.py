@@ -155,6 +155,17 @@ def _cleanup(decision_id: str | None, emails: list[str]) -> None:
     engine = _db()
     try:
         with engine.begin() as conn:
+            # Penerimaan yang lahir dari eksekusi (`actions._antre_penerimaan`)
+            # menunjuk user penguji sebagai `recorded_by`. Baris itu harus
+            # hilang sebelum user-nya, kalau tidak FK menolak DELETE user dan
+            # seluruh tes gagal di pembersihan — bukan di perilakunya.
+            conn.execute(
+                text(
+                    "DELETE FROM batch_receipts WHERE recorded_by IN "
+                    "(SELECT id FROM users WHERE email = ANY(:e))"
+                ),
+                {"e": list(emails)},
+            )
             conn.execute(
                 text("DELETE FROM sap_mock_purchase_orders WHERE decision_id = :d"),
                 {"d": decision_id},

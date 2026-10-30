@@ -35,6 +35,13 @@ import DecisionIdentityBatch from "./DecisionIdentityBatch";
 import DecisionTraceIntegrity from "./DecisionTraceIntegrity";
 import EvidenceEmptyState from "./EvidenceEmptyState";
 import DecisionSafetySupplier from "./DecisionSafetySupplier";
+// Penerimaan barang: kartu "Penerimaan barang" + tombol "Tandai diterima".
+// Komponennya SELALU ada di repo, tetapi sejak Tahap 8 (29 Okt 2026) isi
+// halaman pindah ke berkas ini sementara kartunya hanya dipasang di
+// `DecisionDetail` — berkas yang tidak lagi dirender di mana pun. Akibatnya
+// tombol penerimaan hilang dari layar keputusan; yang tersisa cuma antrean di
+// tab Keamanan Pangan. Dipasang kembali di sini (30 Okt 2026).
+import GoodsReceiptDrawer from "./GoodsReceiptDrawer";
 import DecisionSummary from "./DecisionSummary";
 import SectionJump from "./SectionJump";
 
@@ -165,40 +172,6 @@ export default function DecisionEvidence({
             ) : null}
           </>
         }
-        filters={
-          <div className="evidence-controls">
-            <div className="evidence-picker">
-              <DecisionPicker
-                id="pilih-keputusan"
-                label="Keputusan yang diperiksa"
-                groups={groups}
-                value={selectedId}
-                onChange={onSelect}
-                hint={
-                  <>
-                    {countActionable(decisions, now, role)} menunggu tindakan
-                    {expiredCount > 0
-                      ? showExpired
-                        ? ` · ${expiredCount} lewat tenggat ditampilkan`
-                        : ` · ${expiredCount} lewat tenggat disembunyikan`
-                      : ""}{" "}
-                    · {decisions.length} keputusan tersedia
-                  </>
-                }
-              />
-              {expiredCount > 0 && (
-                <label className="evidence-picker-toggle">
-                  <input
-                    type="checkbox"
-                    checked={showExpired}
-                    onChange={(event) => setShowExpired(event.target.checked)}
-                  />
-                  Tampilkan yang lewat tenggat ({expiredCount})
-                </label>
-              )}
-            </div>
-          </div>
-        }
       />
 
       {/* Nav bagian: lima tujuan, label sama dengan judul bagian yang tercetak.
@@ -212,6 +185,47 @@ export default function DecisionEvidence({
           ariaLabel="Bagian halaman Decision & Evidence"
         />
       ) : null}
+
+      {/* BILAH KENDALI — pemilih "Keputusan yang diperiksa" (permintaan pemilik,
+          30 Okt 2026): DIPISAH dari kartu kepala dan diletakkan di BAWAH nav
+          bagian, jadi urutan baca halaman: kepala → bagian halaman → pilih
+          keputusan → isi. Dulu pemilih menempel di dalam kepala sebagai baris
+          bergaris, sehingga nav bagian (yang menempel saat menggulir) menutupi
+          baris pemilih dan judul halaman + pemilih terbaca sebagai satu hal.
+          Pemilih tetap dirender walau belum ada keputusan terpilih — tanpa itu
+          tidak ada jalan memilih keputusan pertama. */}
+      <div className="evidence-controls">
+        <div className="evidence-picker">
+          <DecisionPicker
+            id="pilih-keputusan"
+            label="Keputusan yang diperiksa"
+            groups={groups}
+            value={selectedId}
+            onChange={onSelect}
+            hint={
+              <>
+                {countActionable(decisions, now, role)} menunggu tindakan
+                {expiredCount > 0
+                  ? showExpired
+                    ? ` · ${expiredCount} lewat tenggat ditampilkan`
+                    : ` · ${expiredCount} lewat tenggat disembunyikan`
+                  : ""}{" "}
+                · {decisions.length} keputusan tersedia
+              </>
+            }
+          />
+          {expiredCount > 0 && (
+            <label className="evidence-picker-toggle">
+              <input
+                type="checkbox"
+                checked={showExpired}
+                onChange={(event) => setShowExpired(event.target.checked)}
+              />
+              Tampilkan yang lewat tenggat ({expiredCount})
+            </label>
+          )}
+        </div>
+      </div>
 
       {/* TAHAP 8 (29 Okt 2026) — isi halaman jadi SATU jalur.
           Gerbang `ISI_DIBANGUN_ULANG` dicabut: dulu ia memilih antara isi baru
@@ -261,6 +275,14 @@ export default function DecisionEvidence({
             summary={summary}
             token={token ? String(token) : null}
             now={now}
+          />
+          {/* TAHAP 5b: penerimaan barang — BUKTI pelaksanaan, bukan angka baru.
+              Status dan tombolnya dari `receipt_gate` server (can_receive),
+              hanya untuk peran yang memang boleh memutuskan. */}
+          <GoodsReceiptDrawer
+            summary={summary}
+            token={token ? String(token) : null}
+            role={role}
           />
           {/* TAHAP 6: jejak, PO milik keputusan ini, dan integritas bukti. */}
           <DecisionTraceIntegrity

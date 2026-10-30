@@ -12,6 +12,7 @@
 // menyimpulkan hal berbeda dari data yang sama.
 
 import { humanizeBlocker, safetyLabel } from "../lib/bahasa";
+import { formatDate } from "../lib/datetime";
 
 export type BatchEvaluationView = {
   batch_id: string;
@@ -23,17 +24,19 @@ export type BatchEvaluationView = {
   usable_until?: string | null;
 };
 
-const GATE_WORDS: Record<string, string> = {
-  usable: "layak",
-  on_hold: "ditahan — butuh bukti",
-  rejected: "ditolak gerbang",
-  quarantined: "dikarantina",
+/* Kata gerbang + nada lencananya (polish 30 Okt 2026).
+   Dulu nilainya string huruf kecil ("layak") sehingga kolom ini terbaca
+   sebagai kode, bukan label; dan tanggalnya "23/11/2026" sementara halaman
+   ini menulis "29 Okt 2026". Sekarang kata dan warna satu sumber. */
+const GATE_WORDS: Record<string, { label: string; tone: string }> = {
+  usable: { label: "Layak", tone: "ok" },
+  on_hold: { label: "Ditahan — butuh bukti", tone: "warn" },
+  rejected: { label: "Ditolak gerbang", tone: "danger" },
+  quarantined: { label: "Dikarantina", tone: "danger" },
 };
 
-function tanggal(iso?: string | null): string {
-  if (!iso) return "-";
-  const d = new Date(iso);
-  return Number.isNaN(d.getTime()) ? iso : d.toLocaleDateString("id-ID");
+function gateUntuk(status: string): { label: string; tone: string } {
+  return GATE_WORDS[status] ?? { label: status || "—", tone: "muted" };
 }
 
 export default function BatchEvaluationTable({
@@ -70,19 +73,28 @@ export default function BatchEvaluationTable({
         </thead>
         <tbody>
           {daftar.map((b) => {
+            const gate = gateUntuk(b.status);
             const alasan = (b.blocking_reasons ?? [])
               .map((k) => humanizeBlocker(k) ?? k)
               .join("; ");
             return (
               <tr key={b.batch_id} className={`batch-eval-${b.status}`}>
                 <td>
-                  <code>{String(b.batch_id).slice(0, 8)}</code>
+                  <code className="batch-eval-id" title={b.batch_id}>
+                    {String(b.batch_id).slice(0, 8)}
+                  </code>
                 </td>
-                <td>{GATE_WORDS[b.status] ?? b.status}</td>
-                <td>{safetyLabel(b.safety_status) ?? b.safety_status ?? "-"}</td>
-                <td>{tanggal(b.usable_until)}</td>
                 <td>
-                  {alasan || "—"}
+                  <span className={`board-badge board-badge-${gate.tone}`}>{gate.label}</span>
+                </td>
+                <td>{safetyLabel(b.safety_status) ?? b.safety_status ?? "—"}</td>
+                <td className="batch-eval-date">{formatDate(b.usable_until)}</td>
+                <td>
+                  {alasan ? (
+                    <span className="batch-eval-reason">{alasan}</span>
+                  ) : (
+                    <span className="batch-eval-none">—</span>
+                  )}
                   {b.next_step && (
                     <div className="batch-eval-next">Langkah: {b.next_step}</div>
                   )}

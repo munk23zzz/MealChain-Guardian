@@ -16,7 +16,7 @@ import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "rea
 import maplibregl from "maplibre-gl";
 import { kodeWilayah } from "../lib/wilayah";
 import { posisiDanArah, siapkanJalur, wakeLine } from "../lib/route-flow";
-import { fraksiBerjalan, type JangkarTruk } from "../lib/truck-progress";
+import { fraksiAnimasi, type JangkarTruk } from "../lib/truck-progress";
 import "maplibre-gl/dist/maplibre-gl.css";
 import {
   dataSourceNote,
@@ -938,9 +938,6 @@ export default function SupplyMap({
   const trukMarkersRef = useRef<Map<string, maplibregl.Marker>>(new Map());
   /** Bingkai animasi geser per kiriman (dibatalkan saat posisi baru datang). */
   const trukFrameRef = useRef<Map<string, number>>(new Map());
-  // Jangkar posisi mobil: `progress` server + kapan angka itu diterima. Dipakai
-  // untuk memajukan mobil di antara dua polling (audit 24 Okt 2026).
-  const trukJangkarRef = useRef<Map<string, JangkarTruk>>(new Map());
   const supplierRowsRef = useRef<readonly SupplierPinRow[]>(supplierMapRows);
   const supplierReachRef = useRef<number | null>(reachKm ?? null);
   // Selalu hidup — ref ikut nilai tetapnya, bukan keadaan yang bisa berubah.
@@ -1226,18 +1223,25 @@ export default function SupplyMap({
   );
 
   /**
-   * Jangkar posisi mobil untuk satu kiriman.
+   * Jangkar ANIMASI posisi mobil (30 Okt 2026).
    *
-   * Server hanya mengirim `progress` tiap polling; di antaranya mobil harus
-   * tetap maju. Jangkar diganti HANYA saat angka server berubah, supaya gerak
-   * lokal tidak "mundur" hanya karena satu kiriman belum berubah angkanya.
+   * Dipasang SEKALI saat sebuah kiriman pertama terlihat `di_jalan`, lalu
+   * sengaja TIDAK diperbarui oleh polling. Kalau ditambatkan ulang tiap 5 detik
+   * (seperti versi laju-nyata), ikon akan ditarik mundur ke angka server dan
+   * perjalanannya tidak pernah tuntas — persis yang membuat peta terasa diam.
+   *
+   * Yang dipentaskan adalah POSISI ikon saja: waktu tempuh, ETA, dan sisa menit
+   * di panel kiriman tetap angka asli dari server.
    */
-  const jangkarTruk = useCallback((row: SupplierRoute): JangkarTruk => {
-    const peta = trukJangkarRef.current;
-    const angka = Math.min(1, Math.max(0, row.journey?.progress ?? 0));
+  const trukAwalRef = useRef<Map<string, JangkarTruk>>(new Map());
+  const awalAnimasi = useCallback((row: SupplierRoute): JangkarTruk => {
+    const peta = trukAwalRef.current;
     const lama = peta.get(row.id);
-    if (lama && Math.abs(lama.progress - angka) < 1e-9) return lama;
-    const baru: JangkarTruk = { progress: angka, at: Date.now() };
+    if (lama) return lama;
+    const baru: JangkarTruk = {
+      progress: Math.min(1, Math.max(0, row.journey?.progress ?? 0)),
+      at: Date.now(),
+    };
     peta.set(row.id, baru);
     return baru;
   }, []);
@@ -1264,7 +1268,7 @@ export default function SupplyMap({
       // Posisi dihitung dari waktu, bukan dari angka beku: `progress` server
       // menjadi jangkar, lalu fraksi dimajukan per detik sehingga mobil benar-
       // benar berjalan (audit 24 Okt 2026).
-      const frac = fraksiBerjalan(row.journey, jangkarTruk(row), Date.now());
+      const frac = fraksiAnimasi(row.journey, awalAnimasi(row), Date.now());
       const { posisi, arah } = posisiDanArah(jalur, frac);
       hidup.add(row.id);
       // Ekor: jejak beberapa kilometer terakhir. Ini yang membuat kendaraan
@@ -1296,7 +1300,7 @@ export default function SupplyMap({
       marker.remove();
       trukMarkersRef.current.delete(id);
       // Jangkar ikut dibuang: kiriman yang tiba tidak boleh menyisakan entri.
-      trukJangkarRef.current.delete(id);
+      trukAwalRef.current.delete(id);
     }
     // Ekor digambar sebagai SATU layer (bukan satu per kiriman): menggambar 1–3
     // garis lewat satu source jauh lebih murah daripada menambah layer dinamis.
@@ -1333,7 +1337,7 @@ export default function SupplyMap({
         "line-opacity": 0.55,
       },
     });
-  }, [geserTruk, jangkarTruk]);
+  }, [geserTruk, awalAnimasi]);
 
   const syncRouteLayer = useCallback(() => {
     const map = mapRef.current;

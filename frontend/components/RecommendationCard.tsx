@@ -57,6 +57,15 @@ const CASE_LABELS: Record<string, string> = {
   // Demo 2026-10-23: kasus sengaja tinggal di jendela 24 jam supaya operator
   // punya satu keputusan berbukti lengkap untuk disetujui saat demo.
   "bukti-hari-ini": "Kasus: Alokasi Bandung–Jakarta",
+  // 30 Okt 2026 — kasus komoditas dulu JATUH ke fallback slug, sehingga
+  // tampil sebagai "Kasus: wortel coldchain hold" (huruf kecil, tanda hubung
+  // ikut tercetak). Sekalian ditambah dua kasus baru (telur, ayam) yang
+  // sebelumnya tidak ada, jadi memilih komoditas itu tidak memuat apa pun.
+  "wortel-coldchain-sah": "Kasus: Wortel Rantai Dingin (Bukti Lengkap)",
+  "wortel-coldchain-hold": "Kasus: Wortel Rantai Dingin (Bukti Kurang)",
+  "beras-ambient": "Kasus: Beras Suhu Ruang",
+  "telur-rantai-dingin-sah": "Kasus: Telur Rantai Dingin (Bukti Lengkap)",
+  "ayam-rantai-dingin-hold": "Kasus: Ayam Rantai Dingin (Bukti Kurang)",
 };
 
 // Judul dari decision_type — kosakatanya mengikuti schema backend. Diekspor

@@ -26,7 +26,7 @@ export default function AgentSwarmPanel({
     return (
       <p className="empty-state">
         {decisionId
-          ? "Belum ada review sembilan agen untuk keputusan ini."
+          ? "Belum ada review sembilan agen untuk keputusan ini. Review hanya lahir dari putaran agent (Demo Control → Jalankan agent); keputusan yang disiapkan template demo tidak melewati putaran itu."
           : "Pilih keputusan dulu untuk melihat review sembilan agen."}
       </p>
     );

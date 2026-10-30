@@ -289,7 +289,15 @@ def test_provenance_menyatakan_simulasi_tanpa_klaim_produksi():
 
 def test_kasus_komoditas_lengkap_dan_unik():
     kunci = [spec.key for spec in kasus_komoditas()]
-    assert kunci == ["wortel-coldchain-sah", "wortel-coldchain-hold", "beras-ambient"]
+    # 30 Okt 2026: telur + ayam ikut, karena tanpa keduanya panel demo tidak
+    # punya kasus untuk dua dari empat komoditas yang bisa dipilih.
+    assert kunci == [
+        "wortel-coldchain-sah",
+        "wortel-coldchain-hold",
+        "beras-ambient",
+        "telur-rantai-dingin-sah",
+        "ayam-rantai-dingin-hold",
+    ]
     assert len(set(kunci)) == len(kunci)
     for spec in kasus_komoditas():
         assert spec.batches, f"{spec.key} tanpa batch"

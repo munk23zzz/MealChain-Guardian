@@ -51,6 +51,7 @@ from sqlalchemy import delete, func, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from app.db import create_engine, create_session_maker
+from app.services.demo_session import CETAKAN_ID
 from app.models import (
     Batch,
     Decision,
@@ -406,6 +407,12 @@ def kiriman_sudah_terjadi(plan_date: date, now: datetime) -> bool:
     hari_ini = now.astimezone(_WIB).date()
     if plan_date > hari_ini:
         return False
+    # 30 Okt 2026 — HARI INI dihitung sudah tercatat. Dataset demo ini disiapkan
+    # SEBELUM jam kiriman (21:00 WIB); tanpa aturan ini kartu Meal Continuity
+    # "Hari ini" selalu `no_data` pada demo pagi/siang walau rencana menunya ada
+    # (terukur: 30 Okt rencana 1.212 porsi, kiriman 0 jam 08:40 WIB).
+    if plan_date == hari_ini:
+        return True
     return _at(plan_date, 14) <= now
 
 
@@ -736,7 +743,7 @@ async def _upsert_supply(session, rows: list[dict], now: datetime) -> None:
         return
     for bagian in _potong(rows):
         stmt = pg_insert(SupplyRecord).values(
-            [{**row, "generated_at": now} for row in bagian]
+            [{**row, "generated_at": now, "demo_session_id": CETAKAN_ID} for row in bagian]
         )
         stmt = stmt.on_conflict_do_update(
             constraint="uq_supply_records_loc_com_time_source",
@@ -759,7 +766,7 @@ async def _upsert_demand(session, rows: list[dict], now: datetime) -> None:
         return
     for bagian in _potong(rows):
         stmt = pg_insert(DemandRecord).values(
-            [{**row, "generated_at": now} for row in bagian]
+            [{**row, "generated_at": now, "demo_session_id": CETAKAN_ID} for row in bagian]
         )
         stmt = stmt.on_conflict_do_update(
             constraint="uq_demand_records_loc_com_time",
@@ -784,7 +791,7 @@ async def _upsert_prices(session, rows: list[dict], now: datetime) -> None:
             continue
         for bagian in _potong(subset):
             stmt = pg_insert(PriceSignal).values(
-                [{**row, "generated_at": now} for row in bagian]
+                [{**row, "generated_at": now, "demo_session_id": CETAKAN_ID} for row in bagian]
             )
             stmt = stmt.on_conflict_do_update(
                 index_elements=(
@@ -811,8 +818,16 @@ async def _insert_menu_plans(session, rows: list[dict], now: datetime) -> None:
     """
     if not rows:
         return
+    # 30 Okt 2026 — cap sesi CETAKAN. KPI mode simulasi menyaring
+    # `demo_session_id = <sesi operator> OR cetakan`; tanpa cap ini rencana menu
+    # hasil generator tidak terlihat sama sekali, sehingga Meal Continuity
+    # menjawab `no_data` walau rencananya ada (terukur: 590 rencana 1 Sep–5 Nov
+    # tapi 0 berstempel). Cetakan dipilih supaya "Akhiri sesi" tidak
+    # menghapusnya — sama seperti fakta template lain.
     for bagian in _potong(rows):
-        stmt = pg_insert(MenuPlan).values([{**row, "generated_at": now} for row in bagian])
+        stmt = pg_insert(MenuPlan).values(
+            [{**row, "generated_at": now, "demo_session_id": CETAKAN_ID} for row in bagian]
+        )
         stmt = stmt.on_conflict_do_nothing(constraint="uq_menu_plans_loc_date")
         await session.execute(stmt)
 
@@ -964,6 +979,11 @@ async def generate_timeseries(
     melewati penjaga `before_flush`, sehingga tanpa parameter ini kiriman lahir
     tanpa pemilik dan tidak ikut terhapus saat sesi direset.
     """
+    # 30 Okt 2026 — cap default CETAKAN. KPI mode simulasi menyaring
+    # `demo_session_id = <sesi operator> OR cetakan`; sebelum ini generator
+    # dipanggil tanpa pemilik sehingga rencana menu & kiriman lahir NULL dan
+    # hilang dari KPI (Meal Continuity `no_data` padahal 590 rencana ada).
+    demo_session_id = demo_session_id or CETAKAN_ID
     plan = None
     engine = create_engine(database_url or _database_url())
     maker = create_session_maker(engine)

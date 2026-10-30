@@ -94,6 +94,9 @@ PAIR_LIMIT = 8
 #: Berapa keputusan terakhir yang bukti/jejaknya dibuka saat pengguna tidak menyebut satu id.
 EVIDENCE_LIMIT = 3
 
+#: Batas pasangan alih surplus per komoditas (plafon dikirim ke backend sebagai `limit`).
+SURPLUS_PAIR_LIMIT = 20
+
 
 class MealchainUnavailable(RuntimeError):
     """Backend tidak bisa dihubungi, kredensial baca belum diisi, atau token tidak bisa dibuat."""
@@ -547,6 +550,94 @@ class MealchainClient:
         jendela = max(1, min(int(days), 365))
         payload = self._get("/waste/summary", params={"days": jendela})
         return payload if isinstance(payload, dict) else {}
+
+    # --- surplus wilayah & rencana alih ---------------------------------------------------
+
+    def surplus_regions(self) -> dict[str, Any]:
+        """Surplus per wilayah (`GET /surplus/regions`) — angka wilayah milik backend.
+
+        Jembatan tidak menjumlah ulang `by_commodity` atau `sources`: yang dikirim backend
+        dipakai apa adanya. `totals.surplus_unmeasured_locations` diteruskan supaya laporan
+        bisa menyebut lokasi yang belum terukur, bukan diam-diam menghitungnya nol.
+        """
+        payload = self._get("/surplus/regions")
+        if not isinstance(payload, dict):
+            return {}
+        hasil: list[dict[str, Any]] = []
+        for row in self._rows(payload, "regions"):
+            by_commodity = [
+                {
+                    "commodity": item.get("commodity"),
+                    "surplus_kg": item.get("surplus_kg"),
+                }
+                for item in (row.get("by_commodity") or ())
+                if isinstance(item, dict)
+            ]
+            sources = [
+                {
+                    "location": item.get("location"),
+                    "surplus_kg": item.get("surplus_kg"),
+                }
+                for item in (row.get("sources") or ())
+                if isinstance(item, dict)
+            ]
+            hasil.append(
+                {
+                    "region": row.get("region"),
+                    "surplus_kg": row.get("surplus_kg"),
+                    "layak_kg": row.get("layak_kg"),
+                    "locations": row.get("locations"),
+                    "by_commodity": by_commodity,
+                    "sources": sources,
+                }
+            )
+        return {
+            "as_of": payload.get("as_of"),
+            "commodities": [str(c) for c in (payload.get("commodities") or ())],
+            "excluded_location": payload.get("excluded_location"),
+            "min_surplus_kg": payload.get("min_surplus_kg"),
+            "locations_total": payload.get("locations_total"),
+            "available": payload.get("available"),
+            "reason": payload.get("reason"),
+            "totals": payload.get("totals") if isinstance(payload.get("totals"), dict) else {},
+            "regions": hasil,
+        }
+
+    def surplus_allocations(self, commodity: str, limit: int = SURPLUS_PAIR_LIMIT) -> dict[str, Any]:
+        """Rencana alih surplus satu komoditas (`GET /surplus/allocations`).
+
+        `available`/`reason` WAJIB diteruskan: hari ini backend mengirim `available: false`
+        dengan `pairs: []` sementara surplusnya ada 232 kg, karena tiap pasangan masih di
+        bawah ambang. Menampilkan `pairs` saja akan terbaca "tidak ada surplus".
+        """
+        batas = max(1, min(int(limit), SURPLUS_PAIR_LIMIT))
+        payload = self._get(
+            "/surplus/allocations", params={"commodity": commodity, "limit": batas}
+        )
+        if not isinstance(payload, dict):
+            return {"commodity": commodity, "pairs": []}
+        pairs = [
+            {
+                "from_location": row.get("from_location"),
+                "to_location": row.get("to_location"),
+                "quantity_kg": row.get("quantity_kg"),
+                "distance_km": row.get("distance_km"),
+                "priority": row.get("priority"),
+            }
+            for row in (payload.get("pairs") or ())
+            if isinstance(row, dict)
+        ]
+        return {
+            "commodity": payload.get("commodity") or commodity,
+            "min_surplus_kg": payload.get("min_surplus_kg"),
+            "locations_total": payload.get("locations_total"),
+            "surplus_locations": payload.get("surplus_locations"),
+            "shortage_locations": payload.get("shortage_locations"),
+            "totals": payload.get("totals") if isinstance(payload.get("totals"), dict) else {},
+            "available": payload.get("available"),
+            "reason": payload.get("reason"),
+            "pairs": pairs,
+        }
 
     # --- risiko pemasok & rute ------------------------------------------------------------
 

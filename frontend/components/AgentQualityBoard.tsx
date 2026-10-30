@@ -55,11 +55,13 @@ const VERDICT_TONE: Record<QualityVerdict, "ok" | "danger" | "muted"> = {
   unavailable: "muted",
 };
 
-/** Peran agen: worker (tujuh analitik), supervisor, verifier (audit). */
+/** Peran agen: worker (tujuh analitik), supervisor, verifier (audit).
+ *  Label ditulis Indonesia — kolom ini terlihat oleh operator, bukan nama
+ *  internal. */
 const ROLE_LABEL: Record<AgentQualityRow["role"], string> = {
-  worker: "Worker",
-  supervisor: "Supervisor",
-  verifier: "Verifier",
+  worker: "Agen analitik",
+  supervisor: "Pengawas",
+  verifier: "Verifikator",
 };
 
 const ROLE_TONE: Record<AgentQualityRow["role"], "muted" | "ok"> = {

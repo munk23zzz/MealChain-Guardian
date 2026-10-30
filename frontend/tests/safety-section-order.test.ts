@@ -53,17 +53,32 @@ describe("urutan bagian Keamanan Pangan", () => {
 
   it("nav tidak melebihi lima tujuan", () => {
     expect(safetySections({ ownLocation: true, hasDecisions: true }).length).toBeLessThanOrEqual(5);
+    expect(
+      safetySections({ ownLocation: true, hasDecisions: true, hasPending: true }).length
+    ).toBeLessThanOrEqual(5);
+  });
+
+  it("nav menaruh 'Menunggu keputusan' paling depan saat ada antrean", () => {
+    const nav = safetySections({ ownLocation: true, hasDecisions: true, hasPending: true });
+    expect(nav[0].id).toBe(SAFETY_SECTION_IDS.persetujuan);
+    expect(nav[0].label).toBe("Menunggu keputusan");
+    // Tanpa antrean, tujuan itu tidak ditawarkan (tautannya akan mati).
+    const tanpa = safetySections({ ownLocation: true, hasDecisions: true });
+    expect(tanpa.some((item) => item.id === SAFETY_SECTION_IDS.persetujuan)).toBe(false);
   });
 
   it("tindakan lebih dulu, konteks kiriman sesudah rujukan", () => {
     const diHalaman = urutanDiHalaman();
     const posisi = (id: string) => diHalaman.indexOf(id);
-    // Keadaan dan bukti di atas.
-    expect(posisi(SAFETY_SECTION_IDS.ringkasan)).toBe(0);
-    expect(posisi(SAFETY_SECTION_IDS.bukti)).toBe(1);
-    // Tindakan tulis: penerimaan lalu persetujuan, berdampingan.
-    expect(posisi(SAFETY_SECTION_IDS.terima)).toBeLessThan(posisi(SAFETY_SECTION_IDS.persetujuan));
-    expect(posisi(SAFETY_SECTION_IDS.persetujuan)).toBeLessThan(posisi(SAFETY_SECTION_IDS.batch));
+    // 30 Okt 2026 — aksi yang menahan stok dipindah ke PALING ATAS. Urutan lama
+    // (ringkasan dulu) menaruh "Menunggu persetujuan" di dalam zona Tindakan,
+    // sesudah tabel "Batch perlu perhatian"; stok tidak bertambah sampai
+    // disetujui, jadi keputusan itu yang harus terbaca lebih dulu.
+    expect(posisi(SAFETY_SECTION_IDS.persetujuan)).toBe(0);
+    expect(posisi(SAFETY_SECTION_IDS.ringkasan)).toBe(1);
+    expect(posisi(SAFETY_SECTION_IDS.bukti)).toBe(2);
+    // Tindakan tulis lain (ceklis penerimaan) tetap sebelum tabel rujukan.
+    expect(posisi(SAFETY_SECTION_IDS.terima)).toBeLessThan(posisi(SAFETY_SECTION_IDS.batch));
     // Rujukan (tabel) sebelum konteks (kiriman) sebelum jejak audit.
     expect(posisi(SAFETY_SECTION_IDS.batch)).toBeLessThan(posisi(SAFETY_SECTION_IDS.kiriman));
     expect(posisi(SAFETY_SECTION_IDS.kiriman)).toBeLessThan(posisi(SAFETY_SECTION_IDS.keputusan));

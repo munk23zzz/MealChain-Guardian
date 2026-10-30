@@ -30,14 +30,14 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import Popup from "./Popup";
 
-import { approveReceipt, fetchReceipts, rejectReceipt } from "../lib/api";
+import { approveReceipt, fetchReceiptChecklist, fetchReceipts, recordReceipt, rejectReceipt } from "../lib/api";
+import type { ReceiptChecklist } from "../lib/api";
 import { formatRupiah } from "../lib/decision-economics";
 import {
   QUARANTINE_HOLD_LABEL,
   RECEIPT_APPROVE_LABEL,
   RECEIPT_REJECT_LABEL,
   canDecideReceipt,
-  checkpointState,
   pendingReceipt,
   receiptFigures,
   receiptGateView,
@@ -143,6 +143,17 @@ export function GoodsReceiptSheet({
   baris,
   catatan,
   bolehPutuskan,
+  bolehIsi,
+  checklist,
+  checklistGalat,
+  jawaban,
+  onJawab,
+  berat,
+  onBerat,
+  catatanIsi,
+  onCatatanIsi,
+  menyimpan,
+  onSimpan,
   busy,
   galat,
   pesan,
@@ -157,6 +168,19 @@ export function GoodsReceiptSheet({
   baris: BarisGate;
   catatan: BarisCatatan | null;
   bolehPutuskan: boolean;
+  /** Peran yang boleh MENGISI ceklis (kepala SPPG / ahli gizi). */
+  bolehIsi?: boolean;
+  /** Daftar butir dari `GET /receipts/checklist`; `null` = belum termuat. */
+  checklist?: ReceiptChecklist | null;
+  checklistGalat?: string | null;
+  jawaban?: Record<string, string>;
+  onJawab?: (kunci: string, opsi: string) => void;
+  berat?: string;
+  onBerat?: (nilai: string) => void;
+  catatanIsi?: string;
+  onCatatanIsi?: (nilai: string) => void;
+  menyimpan?: boolean;
+  onSimpan?: () => void;
   busy: boolean;
   galat: string | null;
   pesan: string | null;
@@ -168,9 +192,29 @@ export function GoodsReceiptSheet({
   onBukaTolak?: () => void;
   onBatalTolak?: () => void;
 }) {
-  const titik = checkpointState(catatan);
+  const skorTeks = catatan?.score != null ? String(catatan.score) : "—";
+  const putusan =
+    (catatan?.verdict_label as string) ?? (catatan?.verdict as string) ?? "belum dinilai";
+  const maxSkor = checklist?.total_bobot ?? 100;
   const menunggu = String(catatan?.status ?? "") === "menunggu";
-  const bisaTerima = baris.canReceive && menunggu;
+  const isian = jawaban ?? {};
+  const butir = checklist?.butir ?? [];
+  const perluIsi = butir.filter((b) => !b.dari_timbangan);
+  const terjawab = perluIsi.filter((b) => isian[b.kunci]).length;
+  const beratTerisi = (berat ?? "").trim().length > 0;
+  const lengkap = butir.length > 0 && terjawab === perluIsi.length && beratTerisi;
+  // Penerimaan hanya bisa DITANDAI setelah ceklisnya dinilai server (verdict
+  // tersimpan). Tanpa syarat ini tombol "Tandai diterima" mendahului
+  // pemeriksaan, dan "human approval" berubah jadi klik kosong.
+  const ceklisDinilai = Boolean(String(catatan?.verdict ?? ""));
+  // Hanya penilaian SERVER yang membuka tombol. Isian yang lengkap di layar
+  // tapi belum disimpan tidak cukup: keputusan pemilik 30 Okt 2026 — periksa
+  // dulu, simpan (server menilai), baru tandai diterima.
+  // Putusan `fail` TIDAK boleh menampilkan tombol: server menjawab 409
+  // ("tidak boleh diterima"), dan tombol yang selalu gagal terbaca sebagai
+  // aplikasi rusak.
+  const ceklisGagal = String(catatan?.verdict ?? "") === "fail";
+  const bisaTerima = baris.canReceive && menunggu && ceklisDinilai && !ceklisGagal;
 
   return (
     <div className={own.sheet}>
@@ -190,44 +234,112 @@ export function GoodsReceiptSheet({
         no={1}
         title="Periksa kondisi barang"
         testId="receipt-step-checklist"
-        note="Titik periksa dicatat petugas di papan Keamanan Pangan. Yang tampil di sini adalah yang benar-benar tersimpan — bukan ringkasan karangan layar."
+        note="Isi apa adanya setelah barang tiba. Butir berbobot dinilai server; butir jumlah dihitung dari timbangan."
       >
-        <p className={own.progress} data-testid="receipt-checkpoint-progress">
-          <strong>
-            {titik.done} dari {titik.total}
-          </strong>{" "}
-          titik periksa ditandai
-        </p>
-        <ul className={own.checkpoints}>
-          {titik.items.map((item) => (
-            <li
-              key={item.id}
-              className={own.checkpoint}
-              data-checked={item.checked ? "true" : "false"}
-              data-testid={`receipt-checkpoint-${item.id}`}
-            >
-              <span aria-hidden="true" className={own.checkpointMark}>
-                {item.checked ? "✓" : "•"}
+        {bolehIsi ? (
+          <div className={own.form} data-testid="receipt-check-form">
+            {checklistGalat ? (
+              <p className={own.error} role="alert" data-testid="receipt-checklist-error">
+                {checklistGalat}
+              </p>
+            ) : null}
+            {butir.length === 0 ? (
+              <p className={own.note}>Daftar butir periksa belum termuat.</p>
+            ) : (
+              <ul className={own.checkpoints}>
+                {butir.map((b) => (
+                  <li
+                    key={b.kunci}
+                    className={own.checkpoint}
+                    data-testid={`butir-${b.kunci}`}
+                  >
+                    <span className={own.checkpointLabel}>
+                      {b.label}
+                    </span>
+                    {b.petunjuk ? (
+                      <span className={own.checkpointHint}>{b.petunjuk}</span>
+                    ) : null}
+                    {b.dari_timbangan ? (
+                      <span className={own.checkpointFlag}>dihitung dari timbangan</span>
+                    ) : (
+                      <span className={own.options} role="radiogroup" aria-label={b.label}>
+                        {b.opsi.map((o) => (
+                          <label
+                            key={o.kunci}
+                            className={own.option}
+                            data-state={isian[b.kunci] === o.kunci ? "aktif" : "kosong"}
+                            data-kritis={o.kritis ? "true" : "false"}
+                          >
+                            <input
+                              type="radio"
+                              name={`butir-${b.kunci}`}
+                              value={o.kunci}
+                              checked={isian[b.kunci] === o.kunci}
+                              disabled={!menunggu && Boolean(catatan)}
+                              onChange={() => onJawab?.(b.kunci, o.kunci)}
+                              data-testid={`opsi-${b.kunci}-${o.kunci}`}
+                            />
+                            {o.label}
+                          </label>
+                        ))}
+                      </span>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            )}
+            <label className={own.field}>
+              <span className={own.fieldLabel}>Berat ditimbang (kg)</span>
+              <input
+                className={own.input}
+                inputMode="decimal"
+                value={berat ?? ""}
+                onChange={(e) => onBerat?.(e.target.value)}
+                placeholder="mis. 348,5"
+                data-testid="receipt-weight"
+              />
+            </label>
+            <label className={own.field}>
+              <span className={own.fieldLabel}>Catatan lain (opsional)</span>
+              <input
+                className={own.input}
+                type="text"
+                value={catatanIsi ?? ""}
+                onChange={(e) => onCatatanIsi?.(e.target.value)}
+                placeholder="mis. 2 dus penyok"
+                data-testid="receipt-other-input"
+              />
+            </label>
+            <div className={own.actions}>
+              <button
+                type="button"
+                className={own.primary}
+                disabled={!lengkap || Boolean(menyimpan)}
+                onClick={onSimpan}
+                data-testid="receipt-save-checklist"
+              >
+                {menyimpan ? "Menyimpan…" : "Simpan hasil periksa"}
+              </button>
+              <span className={own.note} data-testid="receipt-answer-progress">
+                {terjawab} dari {perluIsi.length} butir dijawab
+                {beratTerisi ? "" : " · berat belum diisi"}
               </span>
-              <span className={own.checkpointLabel}>{item.label}</span>
-              <span className={own.checkpointFlag}>
-                {item.checked ? "ditandai" : "tidak ditandai"}
-              </span>
-            </li>
-          ))}
-        </ul>
+            </div>
+          </div>
+        ) : null}
         {catatan === null ? (
           <p className={own.note} data-testid="receipt-no-record">
-            Belum ada catatan pemeriksaan untuk batch ini. Catatan dibuat petugas
-            penerima di papan Keamanan Pangan; setelah tersimpan, batch masuk
-            antrean keputusan di sini.
+            Belum ada catatan pemeriksaan untuk batch ini — isi butir di atas lalu
+            simpan; server yang menilai.
           </p>
-        ) : null}
-        {catatan?.other_note ? (
-          <p className={own.note} data-testid="receipt-other-note">
-            Catatan lain petugas: {String(catatan.other_note)}
+        ) : (
+          <p className={own.note} data-testid="receipt-saved-state">
+            {ceklisDinilai
+              ? `Tersimpan & dinilai server: skor ${skorTeks} dari ${maxSkor} — ${putusan}`
+              : "Isian tersimpan, tetapi belum dinilai server — simpan ulang untuk menilai."}
+            {catatan?.other_note ? ` · Catatan lain: ${String(catatan.other_note)}` : ""}
           </p>
-        ) : null}
+        )}
       </Step>
 
       {/* ---------- langkah 2: nilai dan putusan ---------- */}
@@ -235,8 +347,61 @@ export function GoodsReceiptSheet({
         no={2}
         title="Nilai dan putusan batch"
         testId="receipt-step-nilai"
-        note="Kg dari batch dan harga satuan dari PO invoice; nilai rupiahnya dihitung dari keduanya."
+        note="Skor dan putusan ceklis dihitung server (tujuh butir berbobot). Nilai rupiah memakai kg timbangan × harga satuan PO."
       >
+        {ceklisDinilai ? (
+          <div
+            className={own.scoreCard}
+            data-tone={
+              catatan?.verdict === "fail"
+                ? "danger"
+                : catatan?.verdict === "needs_verification"
+                  ? "warn"
+                  : "ok"
+            }
+            data-testid="receipt-score"
+          >
+            <div className={own.scoreHead}>
+              <span className={own.scoreValue} data-testid="receipt-score-value">
+                {skorTeks}
+                <span className={own.scoreMax}>/{maxSkor}</span>
+              </span>
+              <span className={own.scoreVerdict} data-testid="receipt-verdict">
+                {putusan}
+              </span>
+            </div>
+            {catatan?.advice ? (
+              <p className={own.scoreAdvice} data-testid="receipt-advice">
+                {String(catatan.advice)}
+              </p>
+            ) : null}
+            {Array.isArray(catatan?.points) && catatan.points.length > 0 ? (
+              <ul className={own.checkpoints} data-testid="receipt-points">
+                {catatan.points.map((p: Record<string, any>) => (
+                  <li key={String(p.kunci)} className={own.checkpoint}>
+                    <span className={own.pointMain}>
+                      <span className={own.checkpointLabel}>
+                        {String(p.label ?? p.kunci)}
+                      </span>
+                      <span className={own.checkpointHint}>
+                        {String(p.opsi_label ?? p.opsi ?? "—")}
+                        {p.kritis ? " · butir kritis" : ""}
+                      </span>
+                    </span>
+                    <span className={own.pointValue}>
+                      {String(p.poin)}/{String(p.max_points)}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+          </div>
+        ) : (
+          <p className={own.note} data-testid="receipt-score-empty">
+            Belum ada skor: ceklis belum dinilai server. Isi butir periksa dan
+            timbangan di langkah 1, lalu simpan.
+          </p>
+        )}
         <ReceiptFigures catatan={catatan} />
         <div className={own.figureRow}>
           <span className={own.figureLabel}>Status batch</span>
@@ -279,6 +444,20 @@ export function GoodsReceiptSheet({
               >
                 {RECEIPT_APPROVE_LABEL}
               </button>
+            ) : null}
+
+            {menunggu && bolehPutuskan && !ceklisDinilai ? (
+              <p className={own.note} data-testid="receipt-checks-first">
+                Simpan hasil periksa dulu — penerimaan baru bisa ditandai setelah
+                ceklisnya dinilai server.
+              </p>
+            ) : null}
+
+            {ceklisGagal && bolehPutuskan ? (
+              <p className={own.error} role="alert" data-testid="receipt-verdict-fail">
+                Putusan ceklis: tidak boleh diterima. Barang tidak masuk stok —
+                tolak penerimaan atau periksa ulang barangnya.
+              </p>
             ) : null}
 
             {menunggu && bolehPutuskan ? (
@@ -373,6 +552,16 @@ export default function GoodsReceiptDrawer({
   const [alasanTolak, setAlasanTolak] = useState("");
   const [tolakTerbuka, setTolakTerbuka] = useState(false);
   const [terbuka, setTerbuka] = useState<string | null>(null);
+  // Ceklis periksa (Dok 05 §3): diisi DI SINI, bukan hanya dibaca dari papan
+  // Keamanan Pangan. Tanpa ini "Tandai diterima" hanya bisa ditekan setelah
+  // petugas mencatat ceklis di tab lain — dan keputusan pemilik 30 Okt 2026
+  // menyatakan penerimaan harus bisa diselesaikan dari kartu keputusan.
+  const [checklist, setChecklist] = useState<ReceiptChecklist | null>(null);
+  const [checklistGalat, setChecklistGalat] = useState<string | null>(null);
+  const [jawaban, setJawaban] = useState<Record<string, string>>({});
+  const [berat, setBerat] = useState("");
+  const [catatanIsi, setCatatanIsi] = useState("");
+  const [menyimpan, setMenyimpan] = useState(false);
   // Fokus dikembalikan ke tombol pemicu oleh `Popup` lewat `returnFocusRef`;
   // komponen ini tidak lagi mengelola portal, kunci gulir, atau jebakan Tab
   // sendiri (lihat catatan di kepala berkas).
@@ -404,11 +593,29 @@ export default function GoodsReceiptDrawer({
 
 
 
+  const bolehPutuskan = canDecideReceipt(role);
+  // Mengisi ceklis bukan memutuskan: ahli gizi boleh mencatat, hanya kepala
+  // SPPG yang boleh menyetujui/menolak (dikunci `canDecideReceipt`).
+  const bolehIsi = role === "sppg_head" || role === "sppg_nutritionist";
+  const komoditas = ((summary ?? {}) as Record<string, any>).commodity ?? null;
+
+  // Hook WAJIB di atas `return null` di bawah — menaruhnya setelah gerbang
+  // membuat jumlah hook berbeda antar-render ("Rendered more hooks than during
+  // the previous render"), dan seluruh halaman keputusan jatuh ke error
+  // boundary. Terukur di browser 30 Okt 2026.
+  const muatChecklist = useCallback(async () => {
+    if (checklist || !token) return;
+    setChecklistGalat(null);
+    try {
+      setChecklist(await fetchReceiptChecklist(komoditas, token));
+    } catch (e) {
+      setChecklistGalat(serverDetail(e) || "Daftar butir periksa gagal dimuat.");
+    }
+  }, [checklist, token, komoditas]);
+
   if (!gate.present) {
     return null;
   }
-
-  const bolehPutuskan = canDecideReceipt(role);
 
   function bukaPanel(batchId: string, pemicu: HTMLElement | null) {
     pemicuRef.current = pemicu;
@@ -416,7 +623,44 @@ export default function GoodsReceiptDrawer({
     setPesan(null);
     setTolakTerbuka(false);
     setAlasanTolak("");
+    // Lanjutkan dari isian yang tersimpan, jangan mulai dari nol: baris
+    // `menunggu` bisa sudah berisi jawaban petugas sebelumnya.
+    const tercatat = pendingReceipt(muatan[batchId]) ?? muatan[batchId]?.[0] ?? null;
+    setJawaban((tercatat?.answers as Record<string, string>) ?? {});
+    setBerat(tercatat?.accepted_kg != null ? String(tercatat.accepted_kg) : "");
+    setCatatanIsi(String(tercatat?.other_note ?? ""));
+    void muatChecklist();
     setTerbuka(batchId);
+  }
+
+  async function simpanCeklis() {
+    if (!token || !barisAktif) return;
+    const kg = Number(berat.replace(",", "."));
+    if (!Number.isFinite(kg) || kg <= 0) {
+      setGalat("Berat ditimbang harus angka lebih dari 0 kg.");
+      return;
+    }
+    setMenyimpan(true);
+    setGalat(null);
+    setPesan(null);
+    try {
+      // Server yang menilai 7 butir berbobot dan menyimpan berat timbangan;
+      // layar tidak menghitung skor sendiri (Rules.md §10).
+      const baris = await recordReceipt(barisAktif.batchId, {}, catatanIsi, token, {
+        answers: jawaban,
+        acceptedKg: kg,
+      });
+      setPesan(
+        baris?.verdict_label
+          ? `Hasil periksa tersimpan — putusan server: ${baris.verdict_label}.`
+          : "Hasil periksa tersimpan; server menilai dan menyimpannya."
+      );
+      await muat();
+    } catch (e) {
+      setGalat(serverDetail(e) || "Hasil periksa gagal disimpan.");
+    } finally {
+      setMenyimpan(false);
+    }
   }
 
   function tutupPanel() {
@@ -483,7 +727,7 @@ export default function GoodsReceiptDrawer({
       <div className="card-header">
         <h2>Penerimaan barang</h2>
         <span className="evidence-note">
-          Status, angka, dan tombol mengikuti penilaian server untuk dapur penerima.
+          Status, angka, dan tombol mengikuti hasil penilaian ceklis untuk dapur penerima.
         </span>
       </div>
 
@@ -570,6 +814,19 @@ export default function GoodsReceiptDrawer({
               baris={barisAktif}
               catatan={catatanAktif}
               bolehPutuskan={bolehPutuskan}
+              bolehIsi={bolehIsi}
+              checklist={checklist}
+              checklistGalat={checklistGalat}
+              jawaban={jawaban}
+              onJawab={(kunci, opsi) =>
+                setJawaban((lama) => ({ ...lama, [kunci]: opsi }))
+              }
+              berat={berat}
+              onBerat={setBerat}
+              catatanIsi={catatanIsi}
+              onCatatanIsi={setCatatanIsi}
+              menyimpan={menyimpan}
+              onSimpan={() => void simpanCeklis()}
               busy={busy}
               galat={galat}
               pesan={pesan}

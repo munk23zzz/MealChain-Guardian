@@ -418,3 +418,84 @@ def test_barang_tidak_aman_tidak_boleh_disetujui(auth_headers):
             )
         engine.dispose()
         _bersihkan(receipt_ids, [])
+
+
+def test_ceklis_mengisi_antrean_kosong_bukan_membuat_baris_kedua(auth_headers):
+    """Antrean `menunggu` dari `actions._antre_penerimaan` diisi, bukan diduplikasi.
+
+    Kasus yang PO-nya baru dikirim sudah punya baris `menunggu` tanpa ceklis.
+    Saat petugas mencatat ceklis lewat `POST /receipts`, hasilnya harus SATU
+    baris untuk barang itu — kalau tidak, antrean menyisakan catatan hantu yang
+    tidak pernah bisa diputuskan (dan satu baris kosong selamanya).
+    """
+    batch_id, loc, com, kg = _batch()
+    dibuat: list[str] = []
+    engine = _db()
+    try:
+        with engine.begin() as conn:
+            perekam = conn.execute(
+                text("SELECT id FROM users WHERE role = 'sppg_head' LIMIT 1")
+            ).scalar_one()
+            kunci = conn.execute(
+                text(
+                    "INSERT INTO batch_receipts"
+                    " (batch_id, checked, recorded_by, status, ordered_kg)"
+                    " VALUES (:b, '{}'::jsonb, :u, 'menunggu', :kg) RETURNING id"
+                ),
+                {"b": batch_id, "u": perekam, "kg": kg},
+            ).scalar_one()
+        dibuat.append(str(kunci))
+
+        with _client() as c:
+            badan = _catat(c, auth_headers, batch_id)
+
+        assert badan["id"] == str(kunci), "ceklis harus mengisi antrean yang sama"
+        with engine.connect() as conn:
+            jumlah = conn.execute(
+                text(
+                    "SELECT count(*) FROM batch_receipts"
+                    " WHERE batch_id = :b AND status = 'menunggu'"
+                ),
+                {"b": batch_id},
+            ).scalar_one()
+        assert jumlah == 1, f"harus satu baris menunggu, dapat {jumlah}"
+    finally:
+        engine.dispose()
+        _bersihkan(dibuat, [])
+
+
+def test_ceklis_diperbarui_mengisi_baris_menunggu_yang_sama(auth_headers):
+    """Simpan kedua (melengkapi jawaban) memperbarui baris antrean, bukan menumpuk.
+
+    Kasus nyata 30 Okt 2026: petugas menyimpan 2 dari 7 butir, lalu kembali
+    melengkapi sisanya dari kartu keputusan. Bila `POST /receipts` membuat baris
+    `menunggu` kedua untuk batch yang sama, antrean menyisakan catatan lama yang
+    tidak pernah bisa diputuskan (dan keputusan bisa jatuh pada baris kosong).
+    """
+    batch_id, _loc, _com, _kg = _batch()
+    engine = _db()
+    dibuat: list[str] = []
+    try:
+        with _client() as c:
+            pertama = _catat(c, auth_headers, batch_id, catatan="cek awal")
+            dibuat.append(str(pertama["id"]))
+            kedua = _catat(c, auth_headers, batch_id, catatan="cek lanjutan")
+
+        assert kedua["id"] == pertama["id"], "harus memperbarui baris yang sama"
+        with engine.connect() as conn:
+            jumlah = conn.execute(
+                text(
+                    "SELECT count(*) FROM batch_receipts"
+                    " WHERE batch_id = :b AND status = 'menunggu'"
+                ),
+                {"b": batch_id},
+            ).scalar_one()
+            catatan = conn.execute(
+                text("SELECT other_note FROM batch_receipts WHERE id = :i"),
+                {"i": pertama["id"]},
+            ).scalar_one()
+        assert jumlah == 1, f"harus satu baris menunggu, dapat {jumlah}"
+        assert catatan == "cek lanjutan", "isian terbaru yang tersimpan"
+    finally:
+        engine.dispose()
+        _bersihkan(dibuat, [])

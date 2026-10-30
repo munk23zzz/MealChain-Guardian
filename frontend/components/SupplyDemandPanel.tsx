@@ -156,9 +156,9 @@ export default function SupplyDemandPanel({
                 <thead>
                   <tr>
                     <th scope="col">Batch</th>
-                    <th scope="col">Jumlah</th>
+                    <th scope="col" className={styles.num}>Jumlah</th>
                     <th scope="col">Keamanan</th>
-                    <th scope="col">Masa layak</th>
+                    <th scope="col" className={styles.num}>Masa layak</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -169,7 +169,7 @@ export default function SupplyDemandPanel({
                         <th scope="row">
                           {batch.id ? batch.id.slice(0, 8) : `batch ${index + 1}`}
                         </th>
-                        <td data-label="Jumlah">{formatKg(
+                        <td data-label="Jumlah" className={styles.num}>{formatKg(
                           batch.quantity_kg === null || batch.quantity_kg === undefined
                             ? null
                             : Number(batch.quantity_kg)
@@ -188,7 +188,7 @@ export default function SupplyDemandPanel({
                             </span>
                           )}
                         </td>
-                        <td data-label="Masa layak">
+                        <td data-label="Masa layak" className={styles.num}>
                           {/* Satu keterangan saja: kalau ada angka pastinya, angka
                               itu yang ditulis — bukan ember "≤ 7 hari" DAN angka. */}
                           <span className={styles.expiry} data-state={layak.key}>

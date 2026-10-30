@@ -1,0 +1,11 @@
+== [1/5] siapkan DB mealchain_gate (putuskan sesi lama, buat ulang) ==
+== [2/5] migrasi ke head ==
+INFO  [alembic.runtime.migration] Running upgrade 041_commodity_policies -> 042_ledger_append_only, Ledger append-only ditegakkan DATABASE, bukan konvensi (Fase 11 MG).
+INFO  [alembic.runtime.migration] Running upgrade 042_ledger_append_only -> 043_least_privilege_app, Least privilege untuk role aplikasi, tanpa memutus backup/restore (Fase 11 butir 3).
+== [3a/5] canonical + akun demo (tanpa deret waktu) ==
+Seed selesai (idempoten). Row baru: {'locations': 10, 'commodities': 4, 'suppliers': 60, 'sap_mock_material_stock': 40, 'sap_mock_purchase_orders': 12, 'delivery_events': 70, 'disposal_events': 20, 'supply_records': 40, 'demand_records': 280, 'price_signals': 100, 'menu_plans': 70, 'commodity_policies': 4}
+selesai (canonical saja).
+== [3/5] bangun template demo (jalur tombol 'Siapkan data demo') ==
+[parameters: (UUID('3bc81364-d1cb-58f8-813e-bc1ec4ed5970'), UUID('e538fe1f-fc0d-4490-8c55-d110a5a288c3'), UUID('0d54faa0-89a5-5861-bbb8-95ec97ca2381'), UUID('d4fc7988-e070-428c-925c-851647d6292d'), Decimal('200'), None, datetime.datetime(2026, 10, 27, 2, 33, 31, 686647, tzinfo=datetime.timezone.utc), '[{"timestamp": "2026-10-27T02:33:31.686647+00:00", "temperature_c": 4.2}, {"timestamp": "2026-10-27T03:33:31.686647+00:00", "temperature_c": 4.2}, {" ... (1673 characters truncated) ... 2}, {"timestamp": "2026-10-28T03:33:31.686647+00:00", "temperature_c": 4.2}, {"timestamp": "2026-10-28T04:33:31.686647+00:00", "temperature_c": 4.2}]', 'haccp', Decimal('0.82'), 'pass', datetime.datetime(2026, 11, 24, 2, 33, 31, 686647, tzinfo=datetime.timezone.utc), datetime.datetime(2026, 10, 28, 3, 58, 31, 686647, tzinfo=datetime.timezone.utc), 'demo', datetime.datetime(2026, 10, 28, 4, 33, 31, 686647, tzinfo=datetime.timezone.utc), None, None, None, None)]
+(Background on this error at: https://sqlalche.me/e/20/gkpj)
+SCRIPT_EXIT=1

@@ -88,6 +88,14 @@ def _hapus_sesi(sesi_id: uuid.UUID) -> None:
     _exec("DELETE FROM demo_sessions WHERE id = :s", {"s": str(sesi_id)})
 
 
+#: Versi dataset KHUSUS tes ini. ID keputusan replay diturunkan dari
+#: (mode, dataset_version, kasus, kota); memakai versi kanon di sini membuat
+#: penyemaian tes MENABRAK baris kasus demo yang sah di DB yang sama
+#: (`decisions_pkey`, terukur 30 Okt 2026). Versi unik = tidak menyentuh data
+#: demo, dan `_hapus_sesi` tetap membersihkan seluruh baris milik tes ini.
+VERSI_UJI = f"uji-{uuid.uuid4().hex[:8]}"
+
+
 async def _semai_async(sesi_id: uuid.UUID) -> dict:
     engine = create_async_engine(DSN_ASYNC)
     maker = async_sessionmaker(engine, expire_on_commit=False)
@@ -107,7 +115,7 @@ async def _semai_async(sesi_id: uuid.UUID) -> dict:
                 demo_session_id=sesi_id,
                 mode="replay",
                 anchor=JANGKAR,
-                dataset_version=VERSI,
+                dataset_version=VERSI_UJI,
             )
             await db.commit()
             return hasil
@@ -130,7 +138,7 @@ def kasus_db():
         " dataset_version) "
         "VALUES (:id, 'ended', now(), now() + interval '3 hours', now(), 'replay', "
         "        :anchor, :versi)",
-        {"id": str(sesi_id), "anchor": JANGKAR, "versi": VERSI},
+        {"id": str(sesi_id), "anchor": JANGKAR, "versi": VERSI_UJI},
     )
     try:
         hasil = asyncio.run(_semai_async(sesi_id))
@@ -145,7 +153,15 @@ def kasus_db():
 
 
 def test_setiap_kasus_komoditas_punya_rantai_data_lengkap():
-    assert KASUS == ("wortel-coldchain-sah", "wortel-coldchain-hold", "beras-ambient")
+    # 30 Okt 2026: telur dan ayam ditambah karena panel demo hanya punya kasus
+    # beras/wortel — memilih komoditas lain tidak memuat apa pun.
+    assert KASUS == (
+        "wortel-coldchain-sah",
+        "wortel-coldchain-hold",
+        "beras-ambient",
+        "telur-rantai-dingin-sah",
+        "ayam-rantai-dingin-hold",
+    )
     for spec in kasus_komoditas():
         # Profil policy wajib ada: `policy_for` melempar KeyError bila komoditas
         # belum punya profil, dan kasus tanpa profil tidak boleh didemokan.
@@ -446,13 +462,15 @@ def test_kasus_komoditas_tidak_menyentuh_sesi_lain(kasus_db):
         "SELECT count(*) AS n FROM decisions WHERE demo_session_id = :s",
         {"s": str(sesi_id)},
     )[0]["n"]
-    assert milik_saya == 10, "tujuh kasus (tiga komoditas + empat cerita) menulis 10 baris"
+    # Sembilan kasus (lima komoditas + empat cerita) menulis 12 baris keputusan:
+    # kasus cerita menghasilkan lebih dari satu baris (rejection loop, dll.).
+    assert milik_saya == 12, "sembilan kasus (lima komoditas + empat cerita) menulis 12 baris"
     assert lain >= 0  # dokumentasi: hitungan sesi lain tidak diubah tes ini
 
 
 def test_hasil_seed_menyebut_tujuh_kasus(kasus_db):
     _, hasil = kasus_db
-    assert hasil["cases_total"] == 7
+    assert hasil["cases_total"] == 9
     assert hasil["mode"] == "replay"
     assert hasil["temperature_source"] == "simulated_replay"
     assert hasil["evaluation_anchor"] == JANGKAR.isoformat()
@@ -465,3 +483,5 @@ def test_hasil_seed_menyebut_tujuh_kasus(kasus_db):
     assert status["wortel-coldchain-sah"] == "pass"
     assert status["wortel-coldchain-hold"] == "needs_verification"
     assert status["beras-ambient"] == "pass"
+    assert status["telur-rantai-dingin-sah"] == "pass"
+    assert status["ayam-rantai-dingin-hold"] == "needs_verification"

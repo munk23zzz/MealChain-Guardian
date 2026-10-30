@@ -28,6 +28,38 @@ const catatanMenunggu = {
   batch_id: "b1",
   status: "menunggu",
   checked: { kemasan: true, suhu: true, timbang: true },
+  // Skor & putusan dinilai SERVER (Dok 05 §3–§5). Sejak 30 Okt 2026 drawer
+  // menampilkan angka ini, bukan hitungan "x dari 5 titik" buatan layar.
+  score: 85,
+  verdict: "needs_verification",
+  verdict_label: "Perlu verifikasi",
+  advice: "Skor 85 dari 100 — boleh masuk hanya setelah dicek ulang ahli gizi.",
+  points: [
+    {
+      kunci: "suhu",
+      label: "Suhu wadah",
+      opsi: "sesuai",
+      opsi_label: "Sesuai",
+      bobot: 30,
+      faktor: 1,
+      poin: 30,
+      max_points: 30,
+      kritis: false,
+      perlu_cek: false,
+    },
+    {
+      kunci: "kemasan",
+      label: "Kemasan utuh",
+      opsi: "ragu",
+      opsi_label: "Ragu",
+      bobot: 20,
+      faktor: 0.6,
+      poin: 12,
+      max_points: 20,
+      kritis: false,
+      perlu_cek: true,
+    },
+  ],
   other_note: null,
   batch_quantity_kg: 130,
   stock_kg: null,
@@ -179,7 +211,10 @@ describe("Dok 05 §1–§2 — panel daftar + drawer tiga langkah", () => {
     expect(i1).toBeGreaterThan(-1);
     expect(i2).toBeGreaterThan(i1);
     expect(i3).toBeGreaterThan(i2);
-    expect(html).toContain("3 dari 5");
+    expect(html).toContain(">85<");
+    expect(html).toContain(">/100<");
+    expect(html).toContain("Perlu verifikasi");
+    expect(html).toContain("30/30");
     expect(html).toContain("Rp 3.406.000");
     expect(html).toContain("perkiraan");
     expect(html).toContain("× Rp 26.200");

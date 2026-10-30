@@ -84,15 +84,25 @@ function teks(value: unknown): string {
   return value === null || value === undefined ? "" : String(value).trim().toLowerCase();
 }
 
+/** Daftar kata gaya Indonesia: "A", "A dan B", "A, B, dan C".
+ *  Dipakai untuk kalimat penjelas — rantai " · " terbaca sebagai potongan
+ *  istilah, bukan kalimat. */
+function daftarKata(bagian: readonly string[]): string {
+  if (bagian.length === 0) return "";
+  if (bagian.length === 1) return bagian[0];
+  if (bagian.length === 2) return `${bagian[0]} dan ${bagian[1]}`;
+  return `${bagian.slice(0, -1).join(", ")}, dan ${bagian[bagian.length - 1]}`;
+}
+
 function ledgerMetric(ledger: TrustLedger): TrustMetric {
   const blok = angka(ledger?.blocks);
   if (!ledger || blok === null) {
     return {
       id: "ledger",
-      label: "Blok ledger",
+      label: "Rantai bukti",
       value: DASH,
       unit: null,
-      foot: "verifikasi rantai belum termuat",
+      foot: "Pemeriksaan rantai bukti belum selesai dimuat.",
       tone: "plain",
       state: "menunggu",
     };
@@ -107,27 +117,39 @@ function ledgerMetric(ledger: TrustLedger): TrustMetric {
   const anchorCocok = anchor?.match === true;
   const anchorBeda = anchor?.match === false;
 
-  const bagian: string[] = [];
+  // Satu kalimat per keadaan (bukan potongan " · "): pembaca harus tahu APA
+  // artinya bagi angka di halaman ini, bukan hanya istilah teknisnya.
+  const kalimat: string[] = [];
   if (!valid) {
-    bagian.push(patah !== null ? `putus di blok ${ribuan(patah)}` : "rantai tidak utuh");
+    kalimat.push(
+      patah !== null
+        ? `Rantai bukti patah di blok ${ribuan(patah)}, jadi angka di halaman ini belum bisa dipercaya.`
+        : "Rantai bukti tidak utuh, jadi angka di halaman ini belum bisa dipercaya."
+    );
   } else if (orphan > 0) {
-    bagian.push(`${ribuan(orphan)} blok yatim`);
+    kalimat.push(
+      `${ribuan(orphan)} dari ${ribuan(blok)} blok tidak tertaut ke keputusan mana pun.`
+    );
   } else if (tertaut !== null && entitas !== null) {
-    bagian.push(`${ribuan(tertaut)} tertaut ke keputusan`);
+    kalimat.push(
+      `Seluruh ${ribuan(blok)} blok tertaut, ${ribuan(tertaut)} di antaranya milik keputusan.`
+    );
   } else {
-    bagian.push("genesis sampai kepala rantai");
+    kalimat.push(`Seluruh ${ribuan(blok)} blok utuh dari blok pertama sampai terakhir.`);
   }
-  if (anchorCocok) bagian.push("checkpoint cocok");
-  else if (anchorBeda) bagian.push("checkpoint tidak cocok");
-  else if (anchor?.configured === true) bagian.push("checkpoint belum dicek");
+  if (anchorCocok) kalimat.push("Salinan di luar sistem cocok.");
+  else if (anchorBeda) kalimat.push("Salinan di luar sistem tidak cocok.");
+  else if (anchor?.configured === true) {
+    kalimat.push("Salinan di luar sistem belum diperiksa.");
+  }
 
   const bersih = valid && orphan === 0 && !anchorBeda;
   return {
     id: "ledger",
-    label: "Blok ledger",
+    label: "Rantai bukti",
     value: ribuan(blok),
     unit: "blok",
-    foot: bagian.join(" · "),
+    foot: kalimat.join(" "),
     tone: bersih ? "ok" : "warn",
     state: valid ? (bersih ? "utuh" : "sebagian") : "putus",
   };
@@ -141,7 +163,7 @@ function batchMetric(batches: readonly unknown[] | null | undefined): TrustMetri
       label: "Batch lolos uji",
       value: DASH,
       unit: null,
-      foot: "belum ada batch terbaca",
+      foot: "Belum ada batch yang terbaca.",
       tone: "plain",
       state: "menunggu",
     };
@@ -169,8 +191,8 @@ function batchMetric(batches: readonly unknown[] | null | undefined): TrustMetri
   }
 
   const bagian: string[] = [];
-  if (gagal > 0) bagian.push(`${ribuan(gagal)} gagal`);
-  if (perluRuji > 0) bagian.push(`${ribuan(perluRuji)} belum diuji`);
+  if (gagal > 0) bagian.push(`${ribuan(gagal)} gagal uji`);
+  if (perluRuji > 0) bagian.push(`${ribuan(perluRuji)} perlu diuji ulang`);
   if (ditahan > 0) bagian.push(`${ribuan(ditahan)} ditahan`);
   if (lain > 0) bagian.push(`${ribuan(lain)} tanpa status`);
 
@@ -180,7 +202,10 @@ function batchMetric(batches: readonly unknown[] | null | undefined): TrustMetri
     label: "Batch lolos uji",
     value: ribuan(lolos),
     unit: `/${ribuan(rows.length)}`,
-    foot: bermasalah ? bagian.join(" · ") : "semua batch lolos uji",
+    // Satu kalimat: berapa yang lolos, lalu apa yang menahan sisanya.
+    foot: bermasalah
+      ? `${ribuan(lolos)} dari ${ribuan(rows.length)} batch lolos uji; ${daftarKata(bagian)}.`
+      : `Semua ${ribuan(rows.length)} batch lolos uji dan boleh dipakai.`,
     tone: bermasalah ? "warn" : "ok",
     state:
       gagal > 0 ? "perlu tinjau" : ditahan > 0 ? "ada ditahan" : perluRuji > 0 ? "belum diuji" : "bersih",
@@ -197,7 +222,7 @@ function eksekusiMetric(
       label: "Keputusan tereksekusi",
       value: DASH,
       unit: null,
-      foot: "belum ada keputusan terbaca",
+      foot: "Belum ada keputusan yang terbaca.",
       tone: "plain",
       state: "menunggu",
     };
@@ -221,8 +246,17 @@ function eksekusiMetric(
   const bagian: string[] = [];
   if (menunggu > 0) bagian.push(`${ribuan(menunggu)} menunggu tindakan`);
   if (ditolak > 0) bagian.push(`${ribuan(ditolak)} ditolak`);
-  if (selesaiLain > 0) bagian.push(`${ribuan(selesaiLain)} sudah selesai`);
-  const foot = bagian.length > 0 ? bagian.join(" · ") : "tidak ada yang menunggu tindakan";
+  if (selesaiLain > 0) bagian.push(`${ribuan(selesaiLain)} selesai tanpa eksekusi`);
+  const inti = daftarKata(bagian);
+  // Angka di kiri adalah yang TEREKSEKUSI; kalimatnya harus menyebut angka yang
+  // sama, bukan hanya sisanya, supaya pembaca bisa mencocokkan 3/12.
+  const foot =
+    [
+      tereksekusi > 0 ? `${ribuan(tereksekusi)} sudah dieksekusi.` : null,
+      inti ? `${inti}.` : null,
+    ]
+      .filter(Boolean)
+      .join(" ") || "Tidak ada yang menunggu tindakan.";
 
   return {
     id: "eksekusi",
@@ -242,10 +276,10 @@ function nodeMetric(
   if (!rows || rows.length === 0) {
     return {
       id: "node",
-      label: "Node tanpa angka",
+      label: "Lokasi tanpa angka",
       value: DASH,
       unit: null,
-      foot: "belum ada node pada komoditas ini",
+      foot: "Belum ada lokasi pada komoditas ini.",
       tone: "plain",
       state: "menunggu",
     };
@@ -259,12 +293,14 @@ function nodeMetric(
 
   return {
     id: "node",
-    label: "Node tanpa angka",
+    label: "Lokasi tanpa angka",
     value: ribuan(tanpaCatatanJumlah),
     unit: `/${ribuan(rows.length)}`,
     foot: lengkap
-      ? "semua node melaporkan angka"
-      : `${ribuan(tanpaCatatanJumlah)} node tanpa catatan`,
+      ? rows.length === 1
+        ? "Lokasi ini melaporkan angka pasokan dan kebutuhan."
+        : `Semua ${ribuan(rows.length)} lokasi melaporkan angka pasokan dan kebutuhan.`
+      : `${ribuan(tanpaCatatanJumlah)} dari ${ribuan(rows.length)} lokasi belum melaporkan angka pasokan atau kebutuhan.`,
     tone: lengkap ? "ok" : "warn",
     state: lengkap ? "lengkap" : "ada celah",
   };

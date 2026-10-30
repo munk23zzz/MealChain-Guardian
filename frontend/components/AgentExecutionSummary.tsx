@@ -135,9 +135,9 @@ export default function AgentExecutionSummary({
       )}
 
       <p className="aa-exec-foot">
-        Dihitung dari daftar keputusan, bukan dari tabel eksekusi. Skema tidak menyimpan
-        status <em>berjalan</em> atau <em>gagal</em> per eksekusi; kegagalan yang tercatat
-        adalah keputusan yang ditolak verifikator.
+        Dihitung dari daftar keputusan, bukan dari catatan eksekusi. Status
+        <em> berjalan</em> atau <em>gagal</em> per eksekusi tidak dicatat;
+        kegagalan yang tercatat adalah keputusan yang ditolak verifikator.
       </p>
     </section>
   );

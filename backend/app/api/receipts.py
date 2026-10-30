@@ -342,20 +342,39 @@ async def create_receipt(
             },
         }
 
-    receipt = BatchReceipt(
-        batch_id=batch.id,
-        checked=dict(dinilai.pop("checked", payload.checked)),
-        other_note=catatan or None,
-        recorded_by=user.id,
-        status="menunggu",
+    nilai_baris = {
+        "checked": dict(dinilai.pop("checked", payload.checked)),
+        "other_note": catatan or None,
+        "recorded_by": user.id,
+        "status": "menunggu",
         # Fase 2 MG: penerimaan milik SESI BATCH-nya, bukan sesi yang kebetulan
         # aktif. Tanpa ini, penerimaan atas barang sesi pertama tercatat milik
         # sesi kedua begitu operator membuka sesi baru, dan reset sesi pertama
         # tidak lagi bisa menemukan catatannya sendiri.
-        demo_session_id=batch.demo_session_id,
+        "demo_session_id": batch.demo_session_id,
         **dinilai,
-    )
-    db.add(receipt)
+    }
+    # Antrean `menunggu` untuk batch ini MENGISI baris yang sama setiap kali
+    # petugas memperbarui ceklis — bukan menumpuk baris baru. Dulu syaratnya
+    # `answers` masih kosong, sehingga simpan kedua (melengkapi 2 dari 7 butir
+    # yang tersisa) meninggalkan baris hantu yang tak pernah bisa diputuskan.
+    receipt = (
+        await db.execute(
+            select(BatchReceipt)
+            .where(
+                BatchReceipt.batch_id == batch.id,
+                BatchReceipt.status == "menunggu",
+            )
+            .order_by(BatchReceipt.recorded_at.desc())
+            .limit(1)
+        )
+    ).scalar_one_or_none()
+    if receipt is None:
+        receipt = BatchReceipt(batch_id=batch.id, **nilai_baris)
+        db.add(receipt)
+    else:
+        for kunci, nilai in nilai_baris.items():
+            setattr(receipt, kunci, nilai)
     await db.commit()
     await db.refresh(receipt)
     # Dok 05 §8.2–§8.3: catatan yang baru dibuat langsung membawa konteks nilai
@@ -519,6 +538,10 @@ async def approve_receipt(
     )
     db.add(stok)
     receipt.status = "disetujui"
+    # Timbangan yang tidak diisi disamakan dengan berat batch (aturan yang sama
+    # dipakai perhitungan stok di atas) — simpan angkanya supaya layar tidak
+    # menampilkan "kg masuk stok" kosong padahal stok sudah bertambah.
+    receipt.accepted_kg = kg_masuk
     receipt.reviewed_by = user.id
     receipt.reviewed_at = sekarang
     receipt.review_note = None
@@ -540,13 +563,12 @@ async def approve_receipt(
             detail="batch ini sudah punya penerimaan yang disetujui",
         ) from exc
     await db.refresh(receipt)
-    kg = float(batch.quantity_kg)
-    kg_terima = float(receipt.accepted_kg) if receipt.accepted_kg is not None else kg
+    kg_terima = float(kg_masuk)
     po_number, harga = await receipt_value.po_dan_harga(db, batch.id)
     return _row(
         receipt,
         pemeriksa=user.name,
-        kg=kg,
+        kg=float(batch.quantity_kg),
         nilai=receipt_value.nilai_dari(kg_terima, harga),
         po_number=po_number,
         unit_price=float(harga) if harga is not None else None,

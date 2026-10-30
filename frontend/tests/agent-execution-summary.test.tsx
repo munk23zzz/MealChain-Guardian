@@ -84,9 +84,13 @@ describe("AgentExecutionSummary", () => {
     expect(html).not.toContain("Belum ada keputusan pada periode ini");
   });
 
-  it("menyatakan batas skema: status berjalan/gagal tidak dicatat", () => {
+  it("menyatakan batas data: status berjalan/gagal tidak dicatat", () => {
     const html = renderToStaticMarkup(<AgentExecutionSummary overview={ISI} />);
-    expect(html).toContain("tidak menyimpan");
+    // Salinan user-facing 30 Okt 2026: "tabel eksekusi"/"Skema" adalah bahasa
+    // internal; kalimatnya menyebut batas DATA, bukan skema.
+    expect(html).toContain("tidak dicatat");
+    expect(html).not.toContain("Skema");
+    expect(html).not.toContain("tabel eksekusi");
     expect(html).toContain("berjalan");
     expect(html).toContain("ditolak verifikator");
   });

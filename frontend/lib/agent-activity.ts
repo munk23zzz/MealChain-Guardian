@@ -311,7 +311,7 @@ export function traceBanner(
     state: "present",
     label: `${steps.length} langkah tercatat`,
     sentence:
-      "Trace menunjukkan APA yang dijalankan agent, bukan bahwa hasilnya benar. Penilaian benar atau salah ada di modul Safety & Evidence.",
+      "Trace menunjukkan APA yang dijalankan agent, bukan bahwa hasilnya benar. Penilaian benar atau salah ada di tab Food Safety.",
     tone: "neutral",
   };
 }

@@ -161,6 +161,34 @@ def _ledger_actions(decision_id: str) -> list[str]:
         engine.dispose()
 
 
+def _hapus_penerimaan(batch_id: str) -> None:
+    """Kosongkan riwayat penerimaan batch ini supaya "antrean lahir" terukur."""
+    engine = _db()
+    try:
+        with engine.begin() as conn:
+            conn.execute(
+                text("DELETE FROM batch_receipts WHERE batch_id = :b"), {"b": batch_id}
+            )
+    finally:
+        engine.dispose()
+
+
+def _penerimaan(batch_id: str) -> list[dict]:
+    engine = _db()
+    try:
+        with engine.begin() as conn:
+            rows = conn.execute(
+                text(
+                    "SELECT id, status, accepted_kg, answers FROM batch_receipts "
+                    "WHERE batch_id = :b ORDER BY recorded_at DESC"
+                ),
+                {"b": batch_id},
+            ).mappings()
+            return [dict(r) for r in rows]
+    finally:
+        engine.dispose()
+
+
 def _siap_disetujui(client, verdict: str = "consistent"):
     """Head + Nutritionist Jakarta untuk satu keputusan yang sudah 2 approval."""
     head = _mk_user("sppg_head", "Jakarta")
@@ -239,6 +267,7 @@ def test_review_po_mengirim_ke_sap_dan_mengeksekusi(client):
     decision_id, head, nutritionist = _siap_disetujui(client)
     batch_id = _batch_terikat(decision_id)
     _reset_batch_berangkat(batch_id)
+    _hapus_penerimaan(batch_id)
     try:
         draft = client.post(
             "/actions/execute",
@@ -248,6 +277,7 @@ def test_review_po_mengirim_ke_sap_dan_mengeksekusi(client):
         po_number = draft.json()["po_number"]
         # Gerbang 1 belum memberangkatkan barang.
         assert _batch_dispatched(batch_id) is None
+        assert _penerimaan(batch_id) == [], "antrean lahir saat barang berangkat"
 
         resp = client.post(
             f"/actions/purchase-orders/{po_number}/approve",
@@ -265,6 +295,11 @@ def test_review_po_mengirim_ke_sap_dan_mengeksekusi(client):
         assert _act_trace_count(decision_id) == 1
         assert _batch_dispatched(batch_id) is not None
         assert _ledger_actions(decision_id)[-1] == "execute"
+        # Barang yang berangkat WAJIB meninggalkan antrean penerimaan `menunggu`
+        # tanpa timbangan: stok baru bertambah setelah manusia menyetujui.
+        antrean = _penerimaan(batch_id)
+        assert [r["status"] for r in antrean] == ["menunggu"], antrean
+        assert antrean[0]["accepted_kg"] is None, antrean
     finally:
         _cleanup(decision_id, [head["email"], nutritionist["email"]])
 

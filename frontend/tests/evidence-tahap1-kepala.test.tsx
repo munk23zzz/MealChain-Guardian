@@ -85,35 +85,45 @@ describe("kepala: pola kartu bersama", () => {
   });
 });
 
-// 29 Okt 2026 — KEPUTUSAN PEMILIK MENGUBAH TAHAP 1: pemilih "Keputusan yang
-// diperiksa" DIGABUNG ke kartu kepala. Tahap 1 dulu memindahkannya keluar ke
-// bilah kartu sendiri; pemilik meminta keduanya jadi satu kartu, karena dua
-// bingkai bertumpuk membuat judul halaman dan pemilih terbaca sebagai dua hal.
-describe("pemilih keputusan digabung ke kartu kepala", () => {
-  it("pemilih berada DI DALAM kepala, bukan di kartu kedua di bawahnya", () => {
+// 30 Okt 2026 — KEPUTUSAN PEMILIK MEMBALIK TAHAP 1: pemilih "Keputusan yang
+// diperiksa" DIPISAH dari kartu kepala dan diletakkan di BAWAH navigasi bagian.
+// Urutan baca yang diminta: kepala → "Bagian: Ringkasan · Persetujuan · Bukti
+// biaya · Keamanan & pemasok · Jejak & integritas" → pemilih → isi halaman.
+describe("pemilih keputusan dipisah ke bawah nav bagian", () => {
+  it("pemilih berada DI LUAR kepala dan SESUDAH nav bagian", () => {
     const out = html();
-    const pemilih = out.indexOf('id="pilih-keputusan"');
     const kepalaTutup = out.indexOf("</header>");
-    expect(pemilih).toBeGreaterThan(-1);
+    const nav = out.indexOf('aria-label="Bagian halaman Decision &amp; Evidence"');
+    const pemilih = out.indexOf('id="pilih-keputusan"');
     expect(kepalaTutup).toBeGreaterThan(-1);
-    expect(pemilih).toBeLessThan(kepalaTutup);
+    expect(nav).toBeGreaterThan(-1);
+    expect(pemilih).toBeGreaterThan(-1);
+    expect(pemilih).toBeGreaterThan(kepalaTutup);
+    expect(pemilih).toBeGreaterThan(nav);
   });
 
-  it("CSS: kepala jadi grid dua kolom, bilah jadi baris selebar kartu", () => {
-    // Jangkar ke blok "PEMILIH DIGABUNG" — `.evidence-page .page-header`
-    // juga muncul di aturan layar sempit tahap 1, dan itu bukan aturan ini.
+  it("kepala tidak lagi membawa bilah kendali di dalamnya", () => {
+    const out = html();
+    const kepala = out.slice(0, out.indexOf("</header>"));
+    expect(kepala).not.toContain("evidence-controls");
+    expect(kepala).not.toContain("pilih-keputusan");
+  });
+
+  it("tanpa keputusan terpilih pemilih tetap ada (jalan memilih keputusan)", () => {
+    // Nav bagian tidak dirender saat belum ada keputusan, jadi pemilih tidak
+    // boleh ikut hilang — kalau hilang, tidak ada cara memilih keputusan.
+    const out = html({ selected: null, selectedId: null });
+    expect(out).not.toContain('aria-label="Bagian halaman Decision &amp; Evidence"');
+    expect(out).toContain('id="pilih-keputusan"');
+  });
+
+  it("CSS: bilah kembali berbentuk kartu, aturan penempelan ke kepala dicabut", () => {
+    // Selektor lama `.evidence-page .page-header .evidence-controls` sudah
+    // tidak punya sasaran; kalau tertinggal, ia menipu pembaca berikutnya.
+    expect(css).not.toContain(".evidence-page .page-header .evidence-controls");
     expect(css).toMatch(
-      /\.evidence-page \.page-header \{[^}]*grid-template-columns: minmax\(0, 1fr\) auto/
+      /\.evidence-page \.evidence-controls \.dpick \{\s*max-width: none/
     );
-    const bilah = css.slice(
-      css.indexOf(".evidence-page .page-header .evidence-controls {")
-    );
-    const isi = bilah.slice(0, bilah.indexOf("}"));
-    expect(isi).toContain("grid-column: 1 / -1");
-    // Bukan kartu kedua: tanpa bingkai penuh, tanpa bayangan, hanya garis rambut.
-    expect(isi).toContain("border-top: 1px solid var(--line)");
-    expect(isi).toContain("box-shadow: none");
-    expect(isi).toContain("background: transparent");
   });
 
   it("di layar sempit kepala kembali satu kolom", () => {

@@ -32,6 +32,7 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from app.api.demo import DEMO_CASES, _seed_demo_cases
 from app.models import Location
+from app.services.scenario_specs import kasus_komoditas
 from tests.dsn import DSN_ASYNC, DSN_SYNC
 
 JANGKAR_REPLAY = datetime(2026, 10, 8, 12, 0, tzinfo=timezone.utc)
@@ -39,6 +40,11 @@ JANGKAR_REALTIME_A = datetime(2026, 10, 27, 3, 0, tzinfo=timezone.utc)
 JANGKAR_REALTIME_B = datetime(2026, 10, 27, 4, 30, tzinfo=timezone.utc)
 KASUS_KOMODITAS = ("wortel-coldchain-sah", "wortel-coldchain-hold", "beras-ambient")
 SEMUA_KASUS = DEMO_CASES + KASUS_KOMODITAS
+#: Jumlah KASUS yang dibangun seeder = kasus cerita + seluruh kasus komoditas.
+#: Dihitung dari daftar kasus, bukan dipaku pada angka 7: 30 Okt 2026 dua kasus
+#: komoditas baru (telur, ayam) masuk, dan tes ini bukan tempat mencatat isi
+#: dataset — yang dijaga adalah "replay dua kali menghasilkan jumlah yang sama".
+JUMLAH_KASUS = len(DEMO_CASES) + len(kasus_komoditas())
 
 
 # --------------------------------------------------------------------------- #
@@ -202,7 +208,7 @@ def test_replay_dua_kali_menghasilkan_baris_sama_tanpa_duplikasi(sesi_ids):
 
     assert pertama["mode"] == kedua["mode"] == "replay"
     assert pertama["evaluation_anchor"] == JANGKAR_REPLAY.isoformat()
-    assert pertama["cases_total"] == kedua["cases_total"] == 7
+    assert pertama["cases_total"] == kedua["cases_total"] == JUMLAH_KASUS
 
     # ID sama: baris ditimpa, bukan digandakan.
     assert [b["id"] for b in baris1] == [b["id"] for b in baris2]
@@ -215,8 +221,10 @@ def test_replay_dua_kali_menghasilkan_baris_sama_tanpa_duplikasi(sesi_ids):
     assert [b["generated_at"] for b in baris1] == [b["generated_at"] for b in baris2]
     # Jumlah jejak dan batch tidak bertambah antar-run.
     assert len(jejak1) == len(jejak2)
-    assert len(batch1) == len(batch2) == 3
-    assert len({b["id"] for b in batch1}) == 3
+    # Satu batch per kasus komoditas (jumlahnya dari daftar kasus, bukan angka
+    # yang dipaku: kasus telur & ayam ditambah 30 Okt 2026).
+    assert len(batch1) == len(batch2) == len(kasus_komoditas())
+    assert len({b["id"] for b in batch1}) == len(kasus_komoditas())
 
 
 def test_replay_tidak_menyentuh_jumlah_baris_kanonik(sesi_ids):
@@ -290,11 +298,17 @@ def test_tenggat_kebutuhan_setelah_jangkar_dan_sebelum_masa_layak(sesi_ids):
         "WHERE demo_session_id = :s",
         {"s": str(sesi)},
     )
-    assert len(baris) == 3, "tiga kasus komoditas masing-masing punya satu kebutuhan"
-    # Kedua kasus wortel harus PUNYA barisnya sendiri: kalau recorded_at-nya
-    # sama, unik (lokasi, komoditas, recorded_at) menimpa yang pertama dan
-    # kebutuhan 420 kg hilang tanpa galat apa pun.
-    assert sorted(float(d["quantity_kg"]) for d in baris) == [380.0, 420.0, 600.0]
+    assert len(baris) == len(kasus_komoditas()), (
+        "setiap kasus komoditas punya tepat satu kebutuhan"
+    )
+    # Tiap kasus wortel harus PUNYA barisnya sendiri: kalau recorded_at-nya sama,
+    # unik (lokasi, komoditas, recorded_at) menimpa yang pertama dan kebutuhan
+    # 420 kg hilang tanpa galat apa pun. Karena itu kuantitas yang dibandingkan
+    # adalah SELURUH kuantitas kasus — bukan tiga angka yang dipaku, yang akan
+    # diam-diam lolos begitu satu kasus hilang dan kasus lain bertambah.
+    assert sorted(float(d["quantity_kg"]) for d in baris) == sorted(
+        spec.quantity_kg for spec in kasus_komoditas()
+    )
     for demand in baris:
         assert demand["needed_by"] > JANGKAR_REPLAY
         assert demand["recorded_at"] <= JANGKAR_REPLAY

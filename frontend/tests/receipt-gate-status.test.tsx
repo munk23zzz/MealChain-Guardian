@@ -68,7 +68,10 @@ function render(summary: unknown, opts: Record<string, unknown> = {}) {
   const baris = tampilan.rows.find((b) => b.batchId === batchId) ?? tampilan.rows[0] ?? null;
   const receipts =
     (sisa.receipts as Record<string, any[]> | undefined) ?? {
-      b1: [{ id: "r1", status: "menunggu" }],
+      // `verdict` = ceklis sudah dinilai server. Sejak 30 Okt 2026 tombol
+      // "Tandai diterima" menunggu syarat ini; baris `menunggu` tanpa penilaian
+      // belum boleh ditandai (cek dulu, baru setujui).
+      b1: [{ id: "r1", status: "menunggu", verdict: "pass", verdict_label: "Layak diterima" }],
     };
   const catatan = receipts?.[batchId]?.[0] ?? null;
   const panel = renderToStaticMarkup(
@@ -325,7 +328,7 @@ describe("Fase 9 butir 2 — langkah berikutnya per batch", () => {
         next_step: "lepas karantina atau tolak batch",
       },
     };
-    const receipts = { "b-siap": [{ id: "r1", status: "menunggu" }] };
+    const receipts = { "b-siap": [{ id: "r1", status: "menunggu", verdict: "pass" }] };
     // Drawer batch siap-terima menampilkan tombolnya, bukan arahan agregat.
     const barisSiap = render(summary, { receipts, batchId: "b-siap" });
     expect(barisSiap).toContain('data-action="receive"');

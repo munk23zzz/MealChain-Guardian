@@ -462,6 +462,46 @@
 .evidence-page .batch-eval-table td:nth-child(4) { width: 118px; }
 .evidence-page .batch-eval-table td:nth-child(-n + 4) { white-space: nowrap; }
 
+/* Polish 30 Okt 2026: baris dulu 23 px (berdesakan) dan tanggalnya angka
+   pendek. Sekarang sel punya ruang napas, angka tidak pecah, dan kata yang
+   tidak ada isinya ("—") tampil redup supaya tidak terbaca sebagai nilai. */
+.evidence-page .batch-eval-table th,
+.evidence-page .batch-eval-table td {
+  padding: 6px 10px;
+  vertical-align: middle;
+}
+
+.evidence-page .batch-eval-table tbody td {
+  font-size: var(--fs-2);
+}
+
+.evidence-page .batch-eval-id {
+  display: inline-block;
+  padding: 1px 6px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-control);
+  background: var(--surface-sunken);
+  color: var(--ink-muted);
+  font-family: var(--font-data);
+  font-size: var(--fs-1);
+  line-height: 18px;
+}
+
+.evidence-page .batch-eval-date {
+  font-variant-numeric: tabular-nums;
+}
+
+.evidence-page .batch-eval-none {
+  color: var(--ink-subtle);
+}
+
+.evidence-page .batch-eval-next {
+  margin-top: 3px;
+  color: var(--ink-muted);
+  font-size: var(--fs-1);
+  line-height: 1.35;
+}
+
 /* Di layar sempit, lebar tetap (446 px) melebihi panel, jadi kembali ke lebar
    otomatis dan biarkan sel membungkus — lebih baik membungkus daripada
    menggeser keluar panel. */
@@ -1645,11 +1685,19 @@
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
-   PEMILIH DIGABUNG KE KARTU KEPALA (permintaan pemilik, 29 Okt 2026)
+   PEMILIH DIPISAH DARI KEPALA (permintaan pemilik, 30 Okt 2026)
 
-   Sebelum: kepala (kartu) lalu bilah kendali (kartu kedua) — dua bingkai untuk
-   satu hal. Sekarang satu kartu, dua baris: judul + penanda keadaan di atas,
-   pemilih "Keputusan yang diperiksa" selebar kartu di bawah garis rambut.
+   Sebelum: kepala (kartu) memuat judul + pemilih sebagai satu kartu dua baris
+   — pemilih duduk DI DALAM `<header>` sebagai baris bergaris.
+   Sekarang: kepala hanya menjawab "halaman apa, keadaan apa"; pemilih turun
+   sebagai kartu sendiri di BAWAH navigasi bagian. Urutan baca jadi
+   kepala → bagian halaman → pilih keputusan → isi.
+
+   Konsekuensi gaya: aturan yang dulu menempelkan bilah ke dalam kepala
+   (`grid-column: 1 / -1`, `border-top`, `background: transparent`,
+   `box-shadow: none`) DICABUT — bilah kembali memakai bentuk kartu bawaan
+   `.evidence-controls` (surface + garis + bayangan tipis), sama seperti kartu
+   lain di halaman ini.
    ═══════════════════════════════════════════════════════════════════════════ */
 .evidence-page .page-header {
   display: grid;
@@ -1658,28 +1706,11 @@
   gap: 10px 12px;
 }
 
-/* Bilah kendali di dalam kepala: bukan kartu lagi — hanya baris bergaris atas. */
-.evidence-page .page-header .evidence-controls {
-  grid-column: 1 / -1;
-  align-items: center;
-  margin: 0;
-  padding: 12px 0 0;
-  background: transparent;
-  border: 0;
-  border-top: 1px solid var(--line);
-  border-radius: 0;
-  box-shadow: none;
-}
-
-.evidence-page .page-header .evidence-controls .evidence-picker {
-  flex: 1 1 320px;
-}
-
-/* Pemilih memakai selebar barisnya. `max-width: 340px` di globals masuk akal
-   saat pemilih berada di kolom sempit, tetapi di dalam kepala selebar kartu ia
-   menyisakan ~950 px kosong dan memotong judul keputusan yang panjang. */
-.evidence-page .page-header .evidence-controls .evidence-picker,
-.evidence-page .page-header .evidence-controls .dpick {
+/* Pemilih memakai selebar kartunya. `max-width: 340px` di globals masuk akal
+   saat pemilih duduk di kolom sempit, tetapi di dalam kartu selebar halaman ia
+   menyisakan ruang kosong dan memotong judul keputusan yang panjang. */
+.evidence-page .evidence-controls .evidence-picker,
+.evidence-page .evidence-controls .dpick {
   max-width: none;
 }
 

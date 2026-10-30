@@ -113,6 +113,7 @@ SKILL_BATCH = "batch_detail"
 SKILL_GAP = "unsupported_domain"
 SKILL_EVIDENCE = "decision_evidence"
 SKILL_SYSTEM = "system_status"
+SKILL_SURPLUS = "surplus_region"
 SKILLS = (
     SKILL_SUPPLY,
     SKILL_KPI,
@@ -128,7 +129,12 @@ SKILLS = (
     SKILL_BATCH,
     SKILL_EVIDENCE,
     SKILL_SYSTEM,
+    SKILL_SURPLUS,
 )
+
+#: Berapa komoditas yang rencana alihnya diperiksa per jawaban. Satu komoditas = satu
+#: panggilan HTTP; Joule menunggu sinkron maksimal 60 detik, jadi sisanya disebut di laporan.
+SURPLUS_COMMODITY_LIMIT = 4
 
 #: Urutan di tuple ini = urutan pemeriksaan (prioritas), kecuali PO yang punya pemeriksa sendiri
 #: dan selalu diperiksa setelah KPI. Alasannya tertulis di docstring modul; ringkasnya:
@@ -222,6 +228,29 @@ _KEYWORDS: tuple[tuple[str, tuple[str, ...]], ...] = (
     ),
     # Harga sebelum direktori: "harga dari pemasok" adalah pertanyaan harga.
     (SKILL_PRICE, ("harga", "price", "kuotasi", "quote", "tarif")),
+    # Surplus ANTAR WILAYAH (bukan saldo per SPPG). Semua katanya berfrasa: kata `surplus`
+    # sendirian SENGAJA tidak dipakai, sebab "pasokan beras masih surplus?" adalah laporan
+    # pasokan (default) dan sudah benar — menambah `surplus` telanjang akan merebutnya.
+    # Ditaruh sebelum blok domain-tak-tersedia: "surplus antar wilayah" tidak memuat
+    # kata domain lain, tetapi blok itu memuat `pengiriman`/`stok`.
+    (
+        SKILL_SURPLUS,
+        (
+            "surplus wilayah",
+            "surplus daerah",
+            "surplus antar",
+            "surplus lintas",
+            "surplus per wilayah",
+            "surplus per daerah",
+            "sebaran surplus",
+            "peta surplus",
+            "alih surplus",
+            "alokasi surplus",
+            "rencana alih",
+            "realokasi",
+            "redistribusi",
+        ),
+    ),
     # Domain yang backend-nya BELUM punya endpoint baca. Dijawab jujur sebagai
     # "belum tersedia" — sebelumnya pertanyaan ini dijawab data pasokan, yang
     # tampak benar padahal menjawab hal lain (audit 21 Okt 2026).
@@ -427,6 +456,8 @@ class ReadOnlyBackend(Protocol):
     def price(self, location_id: str, commodity: str) -> dict[str, Any]: ...
     def price_quotes(self, location_id: str, commodity: str) -> dict[str, Any]: ...
     def waste_summary(self) -> dict[str, Any]: ...
+    def surplus_regions(self) -> dict[str, Any]: ...
+    def surplus_allocations(self, commodity: str, limit: int = ...) -> dict[str, Any]: ...
     def supplier_exclusions(self) -> list[dict[str, Any]]: ...
     def supplier_routes(self) -> dict[str, Any]: ...
     def decision_compliance(self, decision_id: str) -> dict[str, Any]: ...
@@ -948,6 +979,32 @@ def render_skill(
             for row in client.supplier_exclusions()
         ]
         return report.supplier_risk_report(exclusions, client.supplier_routes(), note=note)
+
+    if skill == SKILL_SURPLUS:
+        # Satu panggilan `/surplus/regions`, lalu satu panggilan alokasi per komoditas.
+        # Komoditasnya DIBACA dari kiriman backend (bukan daftar tetap), dan kalau pengguna
+        # menyebut satu komoditas, itu yang diperiksa lebih dulu — memotong urutan acak akan
+        # menjawab komoditas yang tidak ditanyakan.
+        wilayah = client.surplus_regions()
+        semua_komoditas = [str(k) for k in (wilayah.get("commodities") or ()) if str(k).strip()]
+        kecil = (teks or "").lower()
+        disebut = [k for k in semua_komoditas if _disebut(kecil, k)]
+        urutan = disebut + [k for k in semua_komoditas if k not in disebut]
+        dipilih = urutan[:SURPLUS_COMMODITY_LIMIT]
+        alokasi: list[Mapping[str, Any]] = []
+        gagal: list[str] = []
+        for komoditas in dipilih:
+            try:
+                alokasi.append(client.surplus_allocations(komoditas))
+            except MealchainRejected as exc:
+                gagal.append(f"rencana alih {komoditas} ({exc})")
+        catatan_gagal = f"Tidak terbaca: {'; '.join(gagal)} — bukan berarti nol." if gagal else None
+        return report.surplus_region_report(
+            wilayah,
+            alokasi,
+            note=_gabung(note, catatan_gagal),
+            dilewati=max(0, len(semua_komoditas) - len(dipilih)),
+        )
 
     if skill == SKILL_EVIDENCE:
         diminta = str((payload or {}).get("decision_id") or "").strip()

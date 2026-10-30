@@ -33,6 +33,7 @@ from app.models import (
     AgentTrace,
     Approval,
     Batch,
+    BatchReceipt,
     Commodity,
     Decision,
     DecisionEvidence,
@@ -891,6 +892,59 @@ def _harga_satuan_invoice(decision: Decision, qty: Decimal) -> Decimal:
     return Decimal("0")
 
 
+async def _antre_penerimaan(
+    db: AsyncSession, dikirim: list[dict], user: User
+) -> list[str]:
+    """Buat antrean penerimaan `menunggu` untuk batch yang baru diberangkatkan.
+
+    Kenapa ada (30 Okt 2026): kasus yang batch-nya belum pernah diterima tidak
+    punya baris penerimaan sama sekali, sehingga layar hanya menulis "catat
+    hasil terima petugas" tanpa tombol apa pun — pembaca menyimpulkan barang
+    tidak bisa diterima. Antrean lahir di sini supaya Kepala SPPG selalu punya
+    baris untuk diperiksa dan diputuskan.
+
+    Batas yang dijaga:
+    - status SELALU `menunggu`; stok tidak bertambah sebelum manusia menyetujui
+      (`POST /receipts/{id}/approve`);
+    - `accepted_kg` TIDAK diisi — timbangan milik petugas, bukan tebakan sistem;
+    - tidak menambah baris bila batch sudah punya catatan apa pun (riwayat
+      penerimaan lama tetap utuh).
+    """
+    if not dikirim:
+        return []
+    id_batch = [uuid.UUID(b["batch_id"]) for b in dikirim]
+    sudah = set(
+        (
+            await db.execute(
+                select(BatchReceipt.batch_id).where(BatchReceipt.batch_id.in_(id_batch))
+            )
+        )
+        .scalars()
+        .all()
+    )
+    dibuat: list[str] = []
+    for baris in dikirim:
+        batch_id = uuid.UUID(baris["batch_id"])
+        if batch_id in sudah:
+            continue
+        batch = await db.get(Batch, batch_id)
+        if batch is None:
+            continue
+        db.add(
+            BatchReceipt(
+                batch_id=batch_id,
+                checked={},
+                recorded_by=user.id,
+                status="menunggu",
+                ordered_kg=batch.quantity_kg,
+                demo_session_id=batch.demo_session_id,
+            )
+        )
+        dibuat.append(str(batch_id))
+    await db.flush()
+    return dibuat
+
+
 async def _commit_purchase_order(
     db: AsyncSession,
     decision: Decision,
@@ -940,6 +994,7 @@ async def _commit_purchase_order(
         sekarang=_now_utc(),
     )
     dikirim, ditahan = await _dispatch_bound_batches(db, decision)
+    await _antre_penerimaan(db, dikirim, user)
     await append_block(
         db,
         action="execute",
