@@ -1505,6 +1505,26 @@ def agent_card(app_url: str) -> AgentCard:
                 outputModes=["text/markdown"],
             ),
             AgentSkill(
+                id=SKILL_SURPLUS,
+                name="Surplus pangan antar wilayah dan rencana alih",
+                description=(
+                    "Surplus dan kekurangan pangan per wilayah beserta SPPG sumbernya, dan "
+                    "rencana pengalihan surplus antar SPPG per komoditas: pasangan asal-tujuan, "
+                    "jumlah kilogram, dan jarak jalannya. Menyebut juga komoditas yang belum "
+                    "punya pasangan alih beserta alasannya. Baca-saja."
+                ),
+                tags=[
+                    "surplus",
+                    "wilayah",
+                    "daerah",
+                    "alih surplus",
+                    "realokasi",
+                    "redistribusi",
+                ],
+                inputModes=modalitas,
+                outputModes=["text/markdown"],
+            ),
+            AgentSkill(
                 id=SKILL_EVIDENCE,
                 name="Bukti dan jejak keputusan",
                 description=(
