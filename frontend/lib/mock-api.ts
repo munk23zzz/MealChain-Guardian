@@ -181,6 +181,17 @@ export async function jawabMock(
   }
 
   const langsung = peta[`${method} ${utuh}`] ?? peta[`${method} ${polos}`];
+
+  // Panel Demo Control memakai endpoint /demo/*, yang di backend hanya boleh
+  // untuk peran SPPG (Monitor BGN menerima 403 — itu terekam apa adanya). Di
+  // demo statis panelnya sengaja dibuka untuk semua akun, jadi datanya dipinjam
+  // dari rekaman peran SPPG supaya panel tidak tampil "belum ada data".
+  if (polos.startsWith("/demo/") && (!langsung || langsung.status >= 400) && peran !== "sppg_head") {
+    const petaSppg = await muatPeran("sppg_head");
+    const pinjam = petaSppg[`${method} ${utuh}`] ?? petaSppg[`${method} ${polos}`];
+    if (pinjam && pinjam.status < 400) return pinjam;
+  }
+
   if (polos === "/demo/session") {
     if (!langsung) return null;
     return sesiDemoAktif

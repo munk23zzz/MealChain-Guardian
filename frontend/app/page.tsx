@@ -834,6 +834,15 @@ export default function Home() {
 
   const isApprover = APPROVER_ROLES.has(role ?? "");
 
+  // Demo statis (GitHub Pages): tidak ada backend yang bisa menyemai data, jadi
+  // sesi demo hanya bisa dimuat dari panel di klien. Kalau tab Demo Control
+  // dibatasi peran approver, akun Monitor BGN tidak punya jalan memuat sesi dan
+  // banner menyuruh "minta Kepala SPPG" padahal tidak ada server. Karena itu di
+  // mode NEXT_PUBLIC_USE_MOCK semua peran demo boleh membuka panel ini; perilaku
+  // aplikasi ber-API (flag mati) tidak berubah.
+  const DEMO_STATIS = process.env.NEXT_PUBLIC_USE_MOCK === "true";
+  const bolehDemoControl = isApprover || (DEMO_STATIS && role !== null);
+
   // S4-03: envelope GET /kpi lewat React Query — satu potret per sesi (scope
   // ditentukan backend: SPPG own, monitor global). Loading dan galat dibaca dari
   // status query; tombol "Coba lagi" memanggil refetch().
@@ -1225,7 +1234,7 @@ export default function Home() {
     { id: "agent-log", label: PAGE_TITLES.agentLog },
     { id: "kpi-kualitas", label: "Performance & Audit" },
     { id: "settings", label: PAGE_TITLES.settings, roles: Array.from(MANAGE_ROLES) },
-    ...(isApprover
+    ...(bolehDemoControl
       ? [{ id: "demo-control" as const, label: "Demo Control" }]
       : []),
   ];
@@ -1346,7 +1355,7 @@ export default function Home() {
         {/* Petunjuk global bahwa data memang sengaja kosong (sesi demo). */}
         <DemoSessionBanner
           token={token}
-          bolehBuka={isApprover}
+          bolehBuka={bolehDemoControl}
           onOpenDemoControl={() => setTab("demo-control")}
         />
         {tab === "today" && (
@@ -1804,7 +1813,7 @@ export default function Home() {
 
         {tab === "settings" && <SettingsPanel token={token} />}
 
-        {tab === "demo-control" && isApprover && (
+        {tab === "demo-control" && bolehDemoControl && (
           /* Demo Control sederhana (keputusan Roy 2026-10-19): tiga blok —
              siapkan data, jalankan agent, bukti. OpsConsole/ChaosPanel (Event
              1/2/3) sengaja dilepas dari tab ini: panel demo dipakai untuk
@@ -1819,7 +1828,12 @@ export default function Home() {
             />
             <DemoControlPanel
               token={token}
-              role={role ?? "sppg_head"}
+              // Demo statis tidak punya backend yang bisa dilindungi RBAC, dan
+              // panel ini satu-satunya jalan memuat sesi demo. Karena itu di
+              // mode mock panel diberi peran Kepala SPPG supaya tombol "Muat
+              // Demo"/"Jalankan agent" hidup untuk akun demo mana pun; di
+              // aplikasi ber-API nilainya tetap peran sebenarnya.
+              role={DEMO_STATIS ? "sppg_head" : role ?? "sppg_head"}
               locationName={me?.location_name ?? null}
               onOpenDecision={bukaKeputusanDariPO}
               onOpenAgentLog={() => setTab("agent-log")}
