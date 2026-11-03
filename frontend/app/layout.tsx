@@ -36,10 +36,31 @@ import "./supplier-summary.css";
 import Providers from "./providers";
 
 /* Tipografi Bento Modern (Fase 0, 2026-10-16): Fira Sans (naratif) + Fira Code
-   (data/telemetri). FONT SELF-HOST (17 Okt 2026): @font-face ada di globals.css
-   dan berkas woff2 di /public/fonts. next/font/google TIDAK dipakai lagi karena
-   build tanpa jaringan hanya menghasilkan fallback Arial — terukur di
-   .next/static/css: tidak ada __Fira_Sans_<hash>, hanya __Fira_*_Fallback_*. */
+   (data/telemetri). FONT SELF-HOST (17 Okt 2026): berkas woff2 di /public/fonts.
+   next/font/google TIDAK dipakai karena build tanpa jaringan hanya menghasilkan
+   fallback Arial.
+
+   @font-face ditulis di sini, bukan di globals.css (3 Nov 2026): url() absolut
+   tidak ikut basePath Next, jadi di GitHub Pages (situs di /<repo>/) semua woff2
+   404. Dengan prefiks NEXT_PUBLIC_BASE_PATH, jalur font benar di akar maupun di
+   sub-path, tanpa mengubah deploy normal. */
+const BASE_PATH = process.env.NEXT_PUBLIC_BASE_PATH || "";
+
+const FONT_FACES = [
+  ["Fira Sans", 400, "fira-sans-latin-400-normal.woff2"],
+  ["Fira Sans", 500, "fira-sans-latin-500-normal.woff2"],
+  ["Fira Sans", 600, "fira-sans-latin-600-normal.woff2"],
+  ["Fira Sans", 700, "fira-sans-latin-700-normal.woff2"],
+  ["Fira Code", 400, "fira-code-latin-400-normal.woff2"],
+  ["Fira Code", 500, "fira-code-latin-500-normal.woff2"],
+  ["Fira Code", 600, "fira-code-latin-600-normal.woff2"],
+]
+  .map(
+    ([famili, bobot, berkas]) =>
+      `@font-face{font-family:"${famili}";font-style:normal;font-weight:${bobot};font-display:swap;` +
+      `src:url("${BASE_PATH}/fonts/${berkas}") format("woff2")}`
+  )
+  .join("\n");
 
 export const metadata: Metadata = {
   title: "MealChain Guardian",
@@ -53,6 +74,9 @@ export default function RootLayout({
 }) {
   return (
     <html lang="id">
+      <head>
+        <style dangerouslySetInnerHTML={{ __html: FONT_FACES }} />
+      </head>
       <body>
         <Providers>{children}</Providers>
       </body>

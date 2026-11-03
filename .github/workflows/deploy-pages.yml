@@ -1,12 +1,14 @@
-# Publikasi UI MealChain Guardian (kode kerja, satu halaman konsol) ke GitHub Pages.
+# Publikasi UI MealChain Guardian ke GitHub Pages sebagai DEMO STATIS.
 #
-# Halaman ini UI asli dari branch `main` — diekspor statis (output: "export"),
-# jadi tidak ada server Next di Pages. Yang perlu dipahami:
-#   * Semua panel mengambil data dari API sungguhan lewat NEXT_PUBLIC_API_URL
-#     (backend FastAPI). Nilai URL itu DIPAKU saat build, jadi kalau alamat API
-#     berubah, workflow ini harus dijalankan ulang dengan nilai baru.
-#   * Backend harus mengizinkan origin https://munk23zzz.github.io di CORS_ORIGINS.
-#   * rewrites()/headers() Next tidak dipakai di mode ekspor (lihat next.config.js).
+# Halaman ini UI asli dari branch `main`, diekspor statis (output: "export") dan
+# memakai data fixture: `public/mock/api-<peran>.json` yang direkam dari API
+# sungguhan (scripts/rekam_fixture_demo.py). Konsekuensinya:
+#   * tidak ada API yang perlu hidup — halaman jalan tanpa backend;
+#   * aksi tulis (approve/execute) dijawab sukses tapi TIDAK mengubah data;
+#   * data hanya seakurat rekaman terakhir: rekam ulang + build ulang bila data
+#     demo berubah.
+# Aplikasi dengan API sungguhan tetap ada di branch yang sama (jalankan lokal
+# atau di server dengan `docker compose up -d`).
 name: Deploy UI ke GitHub Pages
 
 on:
@@ -24,10 +26,11 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  # Alamat API publik yang dipanggil UI dari browser. Nilai ini tetap (Tailscale
-  # Funnel di mesin demo: port 443 → backend:8000). Ganti hanya bila mesin/URL
-  # berubah, lalu jalankan ulang workflow.
-  NEXT_PUBLIC_API_URL: https://mealchain-guardian.tailda91db.ts.net
+  # DEMO STATIS: UI tidak memanggil API sama sekali. Semua data dijawab berkas
+  # `public/mock/api-<peran>.json` (direkam dari API sungguhan oleh
+  # scripts/rekam_fixture_demo.py). Tidak ada server, tidak ada CORS, tidak ada
+  # ketergantungan pada mesin demo yang menyala.
+  NEXT_PUBLIC_USE_MOCK: "true"
 
 jobs:
   build:

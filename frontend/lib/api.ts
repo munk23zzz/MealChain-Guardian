@@ -4,6 +4,16 @@
 import { metodeMenulis, segarkanSetelahTulis } from "./refresh";
 import { balancePath } from "./balance-url";
 import { bacaSse, langkahDari, type LangkahAgent } from "./agent-stream";
+import {
+  jawabMock,
+  peranDariEmail,
+  peranDariHeader,
+  tokenMock,
+} from "./mock-api";
+
+// Mode demo statis (GitHub Pages): semua panggilan dijawab berkas fixture
+// `public/mock/api.json` — tidak ada API, tidak ada jaringan. Lihat lib/mock-api.ts.
+const MOCK = process.env.NEXT_PUBLIC_USE_MOCK === "true";
 
 // Basis URL backend. `??`, BUKAN `||`: nilai kosong ("") adalah konfigurasi
 // yang SENGAJA dipakai `docker-compose.override.yml` untuk mode proxy —
@@ -58,6 +68,24 @@ function pesanDetail(body: unknown): string | null {
 }
 
 export async function request(path: string, init: RequestInit): Promise<any> {
+  // Demo statis: jawab dari fixture, tanpa menyentuh jaringan sama sekali.
+  if (MOCK) {
+    const peran = peranDariHeader(init.headers) ?? "sppg_head";
+    const jawaban = await jawabMock(peran, path, init);
+    if (!jawaban) {
+      throw new ApiError(
+        404,
+        path,
+        `Mode demo statis: data untuk "${path.split("?")[0]}" tidak terekam.`
+      );
+    }
+    if (jawaban.status >= 400) {
+      throw new ApiError(jawaban.status, path, pesanDetail(jawaban.body));
+    }
+    if (metodeMenulis(init.method)) segarkanSetelahTulis();
+    return jawaban.body;
+  }
+
   const resp = await fetch(`${API_URL}${path}`, init);
   // Body dibaca SEKALI, untuk sukses maupun galat: alasan server ikut dibawa
   // ke layar (audit M9), dan body tidak bisa dibaca dua kali.
@@ -88,6 +116,23 @@ export async function request(path: string, init: RequestInit): Promise<any> {
 }
 
 export async function login(email: string, password: string) {
+  // Demo statis: tidak ada /auth/login. Akun demo dipetakan ke peran, dan token
+  // yang dikembalikan menandai peran itu (`mock:<peran>`) supaya seluruh
+  // permintaan berikutnya memakai fixture peran yang benar.
+  if (MOCK) {
+    const peran = peranDariEmail(email);
+    if (!peran) {
+      throw new ApiError(
+        401,
+        "/auth/login",
+        "Mode demo statis: gunakan akun demo sppg.head@demo.local, sppg.nutritionist@demo.local, atau bgn.monitor@demo.local."
+      );
+    }
+    if (!password || !password.trim()) {
+      throw new ApiError(401, "/auth/login", "Mode demo statis: kata sandi tidak boleh kosong.");
+    }
+    return { access_token: tokenMock(peran), token_type: "bearer", role: peran };
+  }
   return request("/auth/login", {
     method: "POST",
     headers: { "Content-Type": "application/json" },

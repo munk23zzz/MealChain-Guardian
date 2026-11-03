@@ -12,55 +12,10 @@
    Berkas woff2 sekarang dilayani dari /fonts — tidak butuh unduhan Google
    saat build, dan bobot 400/500/600/700 benar-benar tersedia.
    ============================================================ */
-@font-face {
-  font-family: "Fira Sans";
-  font-style: normal;
-  font-weight: 400;
-  font-display: swap;
-  src: url("/fonts/fira-sans-latin-400-normal.woff2") format("woff2");
-}
-@font-face {
-  font-family: "Fira Sans";
-  font-style: normal;
-  font-weight: 500;
-  font-display: swap;
-  src: url("/fonts/fira-sans-latin-500-normal.woff2") format("woff2");
-}
-@font-face {
-  font-family: "Fira Sans";
-  font-style: normal;
-  font-weight: 600;
-  font-display: swap;
-  src: url("/fonts/fira-sans-latin-600-normal.woff2") format("woff2");
-}
-@font-face {
-  font-family: "Fira Sans";
-  font-style: normal;
-  font-weight: 700;
-  font-display: swap;
-  src: url("/fonts/fira-sans-latin-700-normal.woff2") format("woff2");
-}
-@font-face {
-  font-family: "Fira Code";
-  font-style: normal;
-  font-weight: 400;
-  font-display: swap;
-  src: url("/fonts/fira-code-latin-400-normal.woff2") format("woff2");
-}
-@font-face {
-  font-family: "Fira Code";
-  font-style: normal;
-  font-weight: 500;
-  font-display: swap;
-  src: url("/fonts/fira-code-latin-500-normal.woff2") format("woff2");
-}
-@font-face {
-  font-family: "Fira Code";
-  font-style: normal;
-  font-weight: 600;
-  font-display: swap;
-  src: url("/fonts/fira-code-latin-600-normal.woff2") format("woff2");
-}
+/* @font-face DIPINDAH ke app/layout.tsx (3 Nov 2026). Alasannya: url() absolut
+   ("/fonts/…") tidak ikut basePath Next, sehingga di GitHub Pages (situs disajikan
+   di /<repo>/) semua woff2 404 dan UI jatuh ke font sistem. Di layout.tsx aturan
+   yang sama disusun dengan prefiks NEXT_PUBLIC_BASE_PATH. */
 
 :root {
   /* Netral & brand — Bento Modern */
