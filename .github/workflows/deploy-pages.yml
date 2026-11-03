@@ -24,9 +24,10 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  # Alamat API publik yang dipanggil UI dari browser. Ganti di sini bila tunnel
-  # atau domain backend berubah, lalu jalankan ulang workflow.
-  NEXT_PUBLIC_API_URL: https://ambassador-observer-molecular-pros.trycloudflare.com
+  # Alamat API publik yang dipanggil UI dari browser. Nilai ini tetap (Tailscale
+  # Funnel di mesin demo: port 443 → backend:8000). Ganti hanya bila mesin/URL
+  # berubah, lalu jalankan ulang workflow.
+  NEXT_PUBLIC_API_URL: https://mealchain-guardian.tailda91db.ts.net
 
 jobs:
   build:
