@@ -57,7 +57,7 @@ async function muatPeran(peran: PeranMock): Promise<PetaPeran> {
   return sedangMemuat[peran];
 }
 
-/** Ambil peran dari header Authorization berisi token `mock:<peran>`. */
+/** Ambil peran dari header Authorization berisi token demo berformat JWT. */
 export function peranDariHeader(headers: HeadersInit | undefined): PeranMock | null {
   if (!headers) return null;
   const mentah =
@@ -69,15 +69,74 @@ export function peranDariHeader(headers: HeadersInit | undefined): PeranMock | n
           (headers as Record<string, string>).authorization ??
           null);
   if (!mentah) return null;
-  const cocok = /^Bearer mock:([a-z_]+)$/.exec(mentah.trim());
-  if (!cocok) return null;
-  return (PERAN_MOCK as readonly string[]).includes(cocok[1]) ? (cocok[1] as PeranMock) : null;
+  const token = mentah.trim().replace(/^Bearer\s+/i, "");
+  const peran = peranDariToken(token);
+  return peran;
+}
+
+/** Baca klaim `role` dari payload token demo (tiga bagian dipisah titik). */
+export function peranDariToken(token: string | null): PeranMock | null {
+  if (!token) return null;
+  const bagian = token.split(".");
+  if (bagian.length !== 3) return null;
+  try {
+    let b64 = bagian[1].replace(/-/g, "+").replace(/_/g, "/");
+    while (b64.length % 4) b64 += "=";
+    const payload = JSON.parse(atob(b64)) as { role?: string };
+    const role = payload?.role ?? "";
+    return (PERAN_MOCK as readonly string[]).includes(role) ? (role as PeranMock) : null;
+  } catch {
+    return null;
+  }
 }
 
 /** Metode yang dianggap menulis (sama dengan `lib/refresh.ts`). */
 function menulis(method: string | undefined): boolean {
   const m = (method ?? "GET").toUpperCase();
   return m === "POST" || m === "PATCH" || m === "PUT" || m === "DELETE";
+}
+
+/**
+ * Sesi demo di memori. Demo statis tidak punya database, jadi "Muat Demo" tidak
+ * bisa benar-benar menyemai data — tetapi statusnya harus berubah, kalau tidak
+ * tombolnya terlihat rusak. Setelah aksi demo apa pun, /demo/session dilaporkan
+ * aktif selama tab ini terbuka; data yang tampil tetap data terekam.
+ */
+let sesiDemoAktif = (() => {
+  try {
+    return typeof sessionStorage !== "undefined" && sessionStorage.getItem("mealchain.demo.sesi") === "aktif";
+  } catch {
+    return false;
+  }
+})();
+
+function tandaiSesi(aktif: boolean) {
+  sesiDemoAktif = aktif;
+  try {
+    if (typeof sessionStorage !== "undefined") {
+      if (aktif) sessionStorage.setItem("mealchain.demo.sesi", "aktif");
+      else sessionStorage.removeItem("mealchain.demo.sesi");
+    }
+  } catch {
+    // sessionStorage diblokir: status sesi cukup di memori.
+  }
+}
+
+function sesiDemoAktifkan(contoh: Record<string, unknown>) {
+  const sekarang = new Date();
+  const kedaluwarsa = new Date(sekarang.getTime() + 4 * 3600 * 1000);
+  return {
+    ...contoh,
+    active: true,
+    enforced: true,
+    session_id: "demo-statis",
+    status: "aktif",
+    mode: "realtime",
+    expires_at: kedaluwarsa.toISOString(),
+    anchor_now: sekarang.toISOString(),
+    server_now: sekarang.toISOString(),
+    remaining_seconds: 4 * 3600,
+  };
 }
 
 function kunci(path: string): { utuh: string; polos: string; pola: string } {
@@ -96,17 +155,38 @@ export async function jawabMock(
   init: RequestInit
 ): Promise<Fixture | null> {
   const method = (init.method ?? "GET").toUpperCase();
-
-  // Tulisan: dibalas sukses tanpa mengubah apa pun.
-  if (menulis(method)) {
-    return { status: 200, body: { ok: true, simulated: true, mode: "demo-statis" } };
-  }
+  const polosPath = path.split("?")[0];
 
   const peta = await muatPeran(peran);
   if (!peta) return null;
-
   const { utuh, polos, pola } = kunci(path);
+  const contohSesi = (peta["GET /demo/session"]?.body ?? {}) as Record<string, unknown>;
+
+  // Tulisan: dibalas sukses tanpa mengubah data. Aksi demo tetap mengubah
+  // status sesi di memori supaya tombol "Muat Demo"/"Akhiri sesi" tidak diam,
+  // dan balasannya berbentuk sesi — UI memakai balasan itu sebagai state.
+  if (menulis(method)) {
+    if (polosPath === "/demo/session/end") {
+      tandaiSesi(false);
+      return {
+        status: 200,
+        body: { ...contohSesi, active: false, status: "kosong", session_id: null, remaining_seconds: 0 },
+      };
+    }
+    if (polosPath.startsWith("/demo/")) {
+      tandaiSesi(true);
+      return { status: 200, body: sesiDemoAktifkan(contohSesi) };
+    }
+    return { status: 200, body: { ok: true, simulated: true, mode: "demo-statis" } };
+  }
+
   const langsung = peta[`${method} ${utuh}`] ?? peta[`${method} ${polos}`];
+  if (polos === "/demo/session") {
+    if (!langsung) return null;
+    return sesiDemoAktif
+      ? { status: 200, body: sesiDemoAktifkan(langsung.body as Record<string, unknown>) }
+      : langsung;
+  }
   if (langsung) return langsung;
 
   // Pola: UUID pada kunci terekam diganti `{id}` supaya id lain tetap kena.
@@ -118,9 +198,19 @@ export async function jawabMock(
   return null;
 }
 
-/** Token palsu untuk sesi demo — bentuknya tidak pernah dipakai backend. */
+/** Token demo berformat JWT: UI membaca klaim `role` dari payload (lib/auth.ts). */
 export function tokenMock(peran: PeranMock): string {
-  return `mock:${peran}`;
+  const b64url = (obj: unknown) =>
+    btoa(JSON.stringify(obj)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+  const header = b64url({ alg: "none", typ: "JWT" });
+  const payload = b64url({
+    sub: `demo-${peran}`,
+    role: peran,
+    demo: true,
+    exp: Math.floor(Date.now() / 1000) + 4 * 3600,
+  });
+  // Tanda tangan palsu: tidak ada verifikasi di demo statis.
+  return `${header}.${payload}.demo-statis`;
 }
 
 /** Peran dari email demo; null bila bukan akun demo yang dikenal. */
