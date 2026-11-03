@@ -85,6 +85,16 @@ const API_ROOTS = [
 // itu sebabnya nilai ini disusun dari variabel, bukan konstanta.
 const DEV = process.env.NODE_ENV === "development";
 
+// ── Ekspor statis (GitHub Pages) ────────────────────────────────────────────
+// Pages hanya menyajikan berkas statis: tidak ada server Next, tidak ada proxy
+// `/auth`, `/kpi`, … Karena itu saat STATIC_EXPORT=true:
+//   * output menjadi "export" (bukan "standalone"),
+//   * basePath mengikuti nama repo (…github.io/<repo>/),
+//   * rewrites()/headers() dilewati — keduanya tidak didukung ekspor statis,
+//   * UI memanggil API lewat NEXT_PUBLIC_API_URL absolut (butuh CORS di backend).
+const STATIC_EXPORT = process.env.STATIC_EXPORT === "true";
+const BASE_PATH = process.env.NEXT_PUBLIC_BASE_PATH || "";
+
 const CSP = [
   "default-src 'self'",
   `script-src 'self' 'unsafe-inline'${DEV ? " 'unsafe-eval'" : ""}`,
@@ -120,7 +130,13 @@ const HEADER_KEAMANAN = [
 ];
 
 const nextConfig = {
-  output: "standalone",
+  output: STATIC_EXPORT ? "export" : "standalone",
+  basePath: BASE_PATH,
+  assetPrefix: BASE_PATH || undefined,
+  // Ekspor statis menulis tiap rute sebagai <rute>/index.html.
+  trailingSlash: STATIC_EXPORT ? true : undefined,
+  // Tidak ada optimizer gambar di ekspor statis.
+  images: STATIC_EXPORT ? { unoptimized: true } : undefined,
   reactStrictMode: true,
   // Folder build bisa dipindah lewat env. Alasan: di Windows, `next dev` yang
   // sedang hidup memegang `.next/trace` sehingga `next build` gagal EPERM
@@ -139,6 +155,8 @@ const nextConfig = {
     proxyTimeout: 180000,
   },
   async headers() {
+    // Ekspor statis tidak mendukung header kustom — dibiarkan kosong.
+    if (STATIC_EXPORT) return [];
     return [
       {
         // Semua halaman & aset. Proxy API (/auth, /kpi, ...) ikut terkena,
@@ -149,6 +167,8 @@ const nextConfig = {
     ];
   },
   async rewrites() {
+    // Ekspor statis tidak punya server untuk mem-proxy; UI memanggil API absolut.
+    if (STATIC_EXPORT) return [];
     return API_ROOTS.map((root) => ({
       source: `/${root}/:path*`,
       destination: `${BACKEND_INTERNAL_URL}/${root}/:path*`,
