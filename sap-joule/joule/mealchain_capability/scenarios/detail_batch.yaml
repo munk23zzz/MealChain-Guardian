@@ -1,0 +1,9 @@
+description: >-
+  Rincian keamanan satu batch pangan: status keamanan tersimpan dan hasil evaluasi
+  terbaru, kelayakan pakai beserta langkah berikutnya, suhu, masa layak, penyimpangan
+  suhu, kesegaran, dan kecukupan bukti observasi. Dipakai saat operator bertanya
+  "batch ini aman atau tidak", "suhu batch mana yang menyimpang", atau "kapan batch
+  kedaluwarsa". Baca-saja, tanpa tindakan.
+target:
+  name: mealchain_query_function
+  type: function

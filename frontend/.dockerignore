@@ -1,0 +1,14 @@
+# Konteks build dibatasi: tanpa ini `docker build` mengirim node_modules/.next
+# ke daemon (ratusan MB) dan build jadi lambat di drive exFAT.
+node_modules
+.next
+.next-build
+.next-dev2
+_qa
+tests
+coverage
+*.log
+.git
+.gitignore
+Dockerfile
+.dockerignore

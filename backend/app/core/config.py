@@ -1,0 +1,112 @@
+"""Konfigurasi aplikasi (Sprint 0).
+
+Semua nilai integrasi (AWS/SAP) TIDAK punya default secret — wajib diisi
+lewat environment/.env (lihat .env.example). DEMO_MODE default False
+(Rules.md §1.4).
+"""
+
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+class Settings(BaseSettings):
+    model_config = SettingsConfigDict(
+        env_file=".env", env_file_encoding="utf-8", extra="ignore"
+    )
+
+    # Database
+    # WAJIB dari env (`.env` lokal, env kontainer, atau CI). Sengaja TIDAK punya
+    # default: dulu di sini ada DSN dev lengkap dengan kata sandi (audit lineage
+    # F-08), sehingga lingkungan yang lupa menyetel env diam-diam menulis ke DB
+    # dev. Tanpa `DATABASE_URL`, Settings gagal dibuat — fail-fast.
+    database_url: str
+
+    # App
+    debug: bool = False
+    #: Mode database yang DIHARAPKAN: "default" (referensi saja) atau "demo".
+    #: Sumber kebenaran isi tetap database itu sendiri (`app.seed.db_mode status`
+    #: membandingkan keduanya dan melaporkan bila tidak cocok). Lihat
+    #: .claude/skills/db-mode/SKILL.md.
+    db_mode: str = "default"
+    demo_mode: bool = False
+    app_name: str = "MealChain Guardian"
+
+    # Sesi demo (permintaan 20 Okt 2026): default KOSONG, data hidup hanya
+    # selama sesi. Sejak 25 Okt 2026 `demo_session_enforce` MENYALA secara
+    # bawaan (keputusan owner): endpoint mutasi menolak 409 bila tidak ada sesi
+    # aktif. Suite tes mematikannya sendiri di `tests/conftest.py` — bukan
+    # diam-diam, tetapi karena 1.200+ tes menyemai data tanpa sesi.
+    demo_session_enforce: bool = True
+    demo_session_minutes: int = 120
+    #: Plafon ABSOLUT satu sesi (2 jam). Dipakai START dan EXTEND; `extend` hanya
+    #: boleh menambal sampai plafon ini, tidak pernah melewatinya.
+    demo_session_max_minutes: int = 120
+    #: Riwayat data yang disemai saat sesi dimulai. Tanpa ini, semua fakta jatuh
+    #: di hari yang sama dan pemilih periode KPI (24 jam / 7 hari / 30 hari)
+    #: menampilkan angka identik — bukan karena jendelanya salah, tetapi karena
+    #: tidak ada baris lebih tua untuk dibedakan.
+    demo_session_history_days: int = 30
+
+    # Review 7 worker agent (P4: orkestrasi siap, flag default MATI sampai panel P5).
+    # `advisory` = agen hanya meninjau keputusan deterministik; bukan pre-decision.
+    multi_agent_review: bool = False
+    agent_review_mode: str = "advisory"
+    agent_review_timeout_seconds: int = 75
+
+    # Konfigurasi demo komoditas (plan Sprint 1 — bukan kolom Schema.md):
+    # shelf life dalam hari: telur 28, ayam 5, wortel 21
+    shelf_life_days_telur: float = 28.0
+    shelf_life_days_ayam: float = 5.0
+    shelf_life_days_wortel: float = 21.0
+    shelf_life_days_beras: float = 180.0
+
+    # Hierarki keputusan lapis 2 & 3 (proposal): gram per porsi untuk
+    # menghitung kebutuhan menu, dan berapa hari cadangan yang HARUS tinggal di
+    # lokasi asal supaya pengiriman antarwilayah tidak memutus makan di sana.
+    # Angka gram adalah asumsi porsi demo — dinyatakan terbuka, bukan data gizi
+    # resmi; ubah lewat env bila komposisi menu berbeda.
+    menu_grams_telur: float = 60.0
+    menu_grams_ayam: float = 50.0
+    menu_grams_wortel: float = 40.0
+    #: Beras tidak dipakai modul rekomendasi, tetapi penulis KPI
+    #: (`services/settlement.py`) membutuhkannya untuk mengubah kg beras yang
+    #: diterima menjadi porsi tersampaikan. Asumsi porsi demo, dinyatakan
+    #: terbuka dan bisa diubah lewat env.
+    menu_grams_beras: float = 100.0
+    #: Penulis data KPI dari aksi nyata: approve penerimaan -> delivery_events,
+    #: PO terbit -> price_signals, catat limbah -> disposal_events. Default
+    #: aktif untuk demo; set false bila ingin KPI hanya bergerak dari seeder.
+    demo_kpi_writeback: bool = True
+    continuity_reserve_days: float = 1.0
+
+    # Safe range suhu rantai dingin demo (°C)
+    safe_temp_min_c: float = 0.0
+    safe_temp_max_c: float = 8.0
+
+    # Integrasi — TANPA default; diisi lewat env saat dibutuhkan (Sprint 3+)
+    aws_region: str = "us-west-2"
+    supervisor_model_primary: str = ""
+
+    # Checkpoint ledger di luar database (Fase 11 MG, butir 2). Berkas JSON yang
+    # ditulis role migrasi dari HOST (`scripts/ledger_anchor.py`), lalu dibaca
+    # aplikasi lewat mount `./data:/data:ro`. Karena aplikasi hanya memegang hak
+    # baca di mount itu, ia TIDAK dapat memalsukan anchor — itulah yang membuat
+    # "valid=true dari database yang sama" bukan lagi satu-satunya bukti.
+    # Path kosong = fitur mati secara eksplisit (laporan `anchor.configured=false`).
+    ledger_anchor_path: str = "/data/anchors/ledger-checkpoint.json"
+
+    # SAP lewat AWS for SAP MCP Server (A4). Default TETAP mock: adapter MCP
+    # hanya dipakai bila diminta eksplisit DAN endpoint-nya ada. Endpoint/token
+    # kosong = penolakan di factory, bukan fallback diam-diam ke data simulasi.
+    sap_provider: str = "mock"
+    sap_mcp_endpoint: str = ""
+    sap_mcp_token: str = ""
+    sap_mcp_timeout_seconds: float = 10.0
+    sap_mcp_allow_write: bool = False
+    sap_mcp_tool_stock: str = "sap_material_stock"
+    sap_mcp_tool_purchase_orders: str = "sap_purchase_orders"
+    sap_mcp_tool_create_purchase_order: str = "sap_create_purchase_order"
+    sap_mcp_tool_business_partner: str = "sap_business_partner"
+    sap_mcp_tool_product_master: str = "sap_product_master"
+
+
+settings = Settings()

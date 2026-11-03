@@ -1,0 +1,39 @@
+{
+  "Version": "2012-10-17",
+  "Comment": [
+    "Fase 11 MG: izin yang BELUM dimiliki user deployment (aws sts get-caller-identity",
+    "= arn:aws:iam::624606539664:user/megu). Bukti: iam:SimulatePrincipalPolicy",
+    "2026-10-28 -> implicitDeny untuk CreateGatewayTarget, InvokeGateway, CreateEvent,",
+    "CreateGatewayTarget, DeleteEvent; iam:CreateRole/PassRole juga implicitDeny.",
+    "Ganti ${AWS_ACCOUNT_ID} dan ${MEMORY_ID} (nilai MEMORY_ID ada di .env",
+    "AGENTCORE_MEMORY_ID) sebelum dilampirkan. Jangan pakai '*' untuk Resource."
+  ],
+  "Statement": [
+    {
+      "Sid": "AgentCoreMemoryDataPlane",
+      "Effect": "Allow",
+      "Action": [
+        "bedrock-agentcore:CreateEvent",
+        "bedrock-agentcore:GetEvent",
+        "bedrock-agentcore:ListEvents",
+        "bedrock-agentcore:DeleteEvent"
+      ],
+      "Resource": "arn:aws:bedrock-agentcore:us-west-2:${AWS_ACCOUNT_ID}:memory/${MEMORY_ID}"
+    },
+    {
+      "Sid": "AgentCoreGatewayTargets",
+      "Effect": "Allow",
+      "Action": [
+        "bedrock-agentcore:CreateGatewayTarget",
+        "bedrock-agentcore:GetGatewayTarget",
+        "bedrock-agentcore:ListGatewayTargets",
+        "bedrock-agentcore:UpdateGatewayTarget",
+        "bedrock-agentcore:DeleteGatewayTarget",
+        "bedrock-agentcore:InvokeGateway"
+      ],
+      "Resource": [
+        "arn:aws:bedrock-agentcore:us-west-2:${AWS_ACCOUNT_ID}:gateway/*"
+      ]
+    }
+  ]
+}

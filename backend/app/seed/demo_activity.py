@@ -1,0 +1,907 @@
+"""Kegiatan demo: banyak kiriman berjalan di seluruh lokasi (permintaan pemilik).
+
+Latar: pemilik ingin aplikasi "terlihat aktif" saat mencoba semua fitur di setiap
+peran. Seed kanonik hanya memuat 9 batch (Jakarta), sehingga peta, papan kiriman,
+dan pemilih kiriman terasa kosong walau angkanya benar.
+
+Aturan yang dipegang:
+1. Semua baris di sini ber-``origin='demo'`` — snapshot kanonik (origin='seed')
+   tidak berubah, sehingga tes yang memaku seed tetap sah.
+2. Id DETERMINISTIK (UUID5 dari lokasi+pemasok+komoditas) sehingga menyegarkan
+   dua kali tidak menggandakan kiriman.
+3. Tiga keadaan perjalanan tersedia merata: belum berangkat, di jalan, sudah tiba —
+   supaya garis peta (padat/putus-putus) dan kartu kiriman punya bahan nyata.
+4. Tidak ada angka karangan di UI: seluruh kolom diisi dari data yang memang
+   dipakai server (jam panen/berangkat, masa layak, mutu, sertifikasi).
+"""
+
+import uuid
+from datetime import datetime, timedelta
+from decimal import Decimal
+
+from sqlalchemy import delete, select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.core.po_number import nomor_po
+from app.models import (
+    Batch,
+    Commodity,
+    DisposalEvent,
+    Location,
+    PriceSignal,
+    Supplier,
+)
+from app.services.demo_cost import hitung_biaya_demo
+
+DEMO_TAG = "demo-aktivitas"
+
+#: Umur simpan per komoditas (hari) — dipakai menghitung `usable_until`.
+SHELF_LIFE_HARI = {"telur": 28, "ayam": 5, "beras": 180, "wortel": 21}
+
+#: Sisa masa layak MINIMUM agar sebuah batch boleh dipakai ulang sebagai sumber
+#: keputusan `executed` (audit 27 Okt 2026). Tanpa ambang ini penyemai bisa
+#: mengikat riwayat "selesai" ke batch yang tinggal beberapa menit lagi layak —
+#: sesaat kemudian `penghalang_sumber` membacanya sebagai kedaluwarsa dan
+#: ringkasan keputusan menampilkan "safety revalidation gagal" pada keputusan
+#: yang statusnya sudah `executed`. Enam jam = horizon satu sesi demo.
+SISA_LAYAK_SUMBER = timedelta(hours=6)
+
+#: Empat keadaan rotasi: 0 = di jalan, 1 = sudah tiba, 2 = belum berangkat,
+#: 3 = di jalan (variasi jam) — supaya tiap lokasi punya campuran.
+ROTASI = (
+    {"state": "di_jalan", "berangkat_menit": -35, "panen_jam": -26},
+    {"state": "sudah_tiba", "berangkat_menit": -300, "panen_jam": -34},
+    {"state": "belum_berangkat", "berangkat_menit": None, "panen_jam": -5},
+    {"state": "di_jalan", "berangkat_menit": -12, "panen_jam": -20},
+)
+
+MUTU = ("pass", "pass", "needs_verification")
+SERTIFIKASI = ("haccp", "hygiene", "none")
+
+# ── Log suhu batch demo (19 Okt 2026) ──────────────────────────────────────
+# Dulu `temperature_log` selalu `[]` padahal `safety_status` dirotasi
+# pass/pending/needs_verification. Akibatnya kartu keamanan menampilkan batch
+# tanpa satu pun pembacaan, dan status FAIL/PASS tidak punya bukti. Log ini
+# deterministik (dari id batch, bukan acak) dan KONSISTEN dengan statusnya.
+SUHU_AMAN_C = 4.0
+SUHU_EXCURSION_C = 12.0
+
+
+def _log_suhu(batch_id, panen: datetime, status: str, sampai: datetime | None = None) -> list[dict]:
+    """Pembacaan suhu yang KONSISTEN dengan status batch.
+
+    Kontrak mesin (`core/temperature.py`): menit-di-luar dihitung dari jarak
+    ke sampel berikutnya. Karena itu:
+      - pass               → 6 sampel per jam di 4,0–4,4 °C (0 menit di luar).
+      - needs_verification → satu simpangan 12 °C yang ditutup 10 menit
+        kemudian: 10 menit di luar, di bawah ambang FAIL 30 menit.
+    Status `pending` tidak dipakai untuk batch demo: tanpa evaluasi, log-nya
+    akan berbunyi "pass" dan status tersimpan jadi bertentangan.
+
+    `sampai` (27 Okt 2026): batas atas pembacaan. Dulu log selalu berhenti di
+    panen+5 jam, sehingga batch yang dipanen 26 jam lalu punya pembacaan
+    terakhir 21 jam sebelum "sekarang" — lebih tua dari `max_observation_age_minutes`
+    (6 jam untuk komoditas rantai dingin). Akibatnya seluruh kandidat Event 1
+    ditahan `temperature_evidence_incomplete` pada evaluasi jam dinding
+    (terukur: 40 dari 50 kegagalan suite gerbang). Bila `sampai` diisi, log
+    diperpanjang per jam sampai batas itu — bukti menutup seluruh perjalanan,
+    bukan hanya lima jam pertama. `None` = perilaku lama dipertahankan.
+    """
+    benih = abs(hash(str(batch_id))) % 100
+    dasar = round(SUHU_AMAN_C + (benih % 5) / 10, 1)  # 4,0–4,4 °C
+
+    def titik(menit: float, suhu: float) -> dict:
+        return {
+            "timestamp": (panen + timedelta(minutes=menit)).isoformat(),
+            "temperature_c": suhu,
+        }
+
+    def jam_terakhir(minimum: int) -> int:
+        """Jumlah jam pengamatan; minimal `minimum`, diperpanjang sampai `sampai`."""
+        if sampai is None:
+            return minimum
+        jarak = (sampai - panen).total_seconds() / 3600.0
+        return max(minimum, int(jarak) + 1)
+
+    if status == "fail":
+        log = [titik(60 * h, dasar) for h in range(3)]
+        log += [titik(180, SUHU_EXCURSION_C), titik(240, SUHU_EXCURSION_C)]
+        log += [titik(60 * h, dasar) for h in range(5, jam_terakhir(5))]
+        return log
+    if status == "needs_verification":
+        log = [titik(60 * h, dasar) for h in range(3)]
+        log += [titik(180, SUHU_EXCURSION_C), titik(190, dasar), titik(240, dasar)]
+        log += [titik(60 * h, dasar) for h in range(5, jam_terakhir(5))]
+        return log
+    return [titik(60 * h, dasar) for h in range(jam_terakhir(6))]
+
+#: Harga PO demo per komoditas (Rp/kg). Satu angka untuk semua komoditas membuat
+#: beras tercatat Rp25.132/kg — 89% di atas pasar — dan itu terbaca sebagai
+#: kesalahan data, bukan variasi.
+HARGA_PO = {
+    "telur": Decimal("25132.39"),
+    "ayam": Decimal("41500"),
+    "wortel": Decimal("23500"),
+    "beras": Decimal("13300"),
+}
+
+#: Acuan harga demo harian: (acuan PIHPS Rp/kg, deviasi kutipan pemasok).
+#: Deviasi sengaja kecil tapi tidak nol: 0% membuat metrik deviasi harga
+#: selalu "sempurna" dan tidak informatif.
+HARGA_HARIAN = {
+    "telur": (Decimal("30500"), Decimal("0.010")),
+    "ayam": (Decimal("41500"), Decimal("0.004")),
+    "wortel": (Decimal("23500"), Decimal("0.014")),
+    "beras": (Decimal("13400"), Decimal("0.006")),
+}
+
+
+def demo_batch_id(lokasi: str, pemasok: str, komoditas: str) -> uuid.UUID:
+    """Id deterministik: menyegarkan dua kali tidak menggandakan kiriman."""
+    return uuid.uuid5(uuid.NAMESPACE_URL, f"mcg:{DEMO_TAG}:{lokasi}:{pemasok}:{komoditas}")
+
+
+def _pemasok_untuk_pasangan(
+    kanonik: set[uuid.UUID] | None, slot: uuid.UUID
+) -> uuid.UUID:
+    """Pemasok batch demo: ikuti kanonik bila ada, selain itu pemasok slot.
+
+    Deterministik (id terkecil) supaya menyegarkan demo tidak menggeser pemasok
+    dari satu pemasok kanonik ke pemasok kanonik lain.
+    """
+    if kanonik:
+        return min(kanonik)
+    return slot
+
+
+def _slot(nama_lokasi: str, index_lokasi: int, semua_pemasok: list[Supplier]):
+    """Empat pemasok bergilir per lokasi — cukup beragam, tanpa penugasan acak."""
+    awal = (index_lokasi * 4) % max(1, len(semua_pemasok))
+    return [semua_pemasok[(awal + i) % len(semua_pemasok)] for i in range(4)]
+
+
+async def seed_demo_activity(session: AsyncSession, now: datetime) -> dict:
+    """Buat/perbarui kiriman demo untuk SEMUA lokasi. Idempoten."""
+    lokasi = list((await session.execute(select(Location).order_by(Location.name))).scalars())
+    pemasok = list((await session.execute(select(Supplier).order_by(Supplier.name))).scalars())
+    komoditas = {
+        c.name: c.id for c in (await session.execute(select(Commodity))).scalars()
+    }
+    tersedia = [nama for nama in SHELF_LIFE_HARI if nama in komoditas]
+    if not lokasi or not pemasok or not tersedia:
+        return {"batch_demo": 0, "dilewati": "data dasar belum ada"}
+
+    # Audit M10 (18 Okt 2026): pemasok kanonik per pasangan (lokasi, komoditas).
+    # Seed demo TIDAK boleh menambah pemasok kedua untuk pasangan yang kanoniknya
+    # tunggal: `resolve_binding` lalu menolak menyimpulkan pemasok
+    # ("supplier_unknown") untuk keputusan tanpa `allocation_binding`, dan pagar
+    # yang benar itu jadi dipicu oleh data demo kita sendiri.
+    kanonik: dict[tuple[uuid.UUID, uuid.UUID], set[uuid.UUID]] = {}
+    for loc_id, com_id, sup_id in (
+        await session.execute(
+            select(Batch.location_id, Batch.commodity_id, Batch.supplier_id).where(
+                Batch.origin != "demo"
+            )
+        )
+    ).all():
+        kanonik.setdefault((loc_id, com_id), set()).add(sup_id)
+
+    # Bersihkan batch demo LAMA yang pemasoknya tidak ada di himpunan kanonik.
+    # Tanpa ini, satu batch basi (dibuat sebelum aturan kanonik berlaku) membuat
+    # pasangan punya dua pemasok selamanya dan `resolve_binding` menolak
+    # menyimpulkan pemasok — persis yang dikunci test_demo_batch_pemasok_tunggal.
+    # Hanya batch demo; batch kanonik tidak pernah disentuh.
+    dihapus = 0
+    id_kanonik_per_pasangan = {
+        pair: sups for pair, sups in kanonik.items() if sups
+    }
+    if id_kanonik_per_pasangan:
+        basi = (
+            await session.execute(
+                select(Batch).where(Batch.origin == "demo")
+            )
+        ).scalars().all()
+        for b in basi:
+            sups = id_kanonik_per_pasangan.get((b.location_id, b.commodity_id))
+            if sups and b.supplier_id not in sups:
+                await session.delete(b)
+                dihapus += 1
+        await session.flush()
+
+    dibuat = 0
+    id_dipakai: list[uuid.UUID] = []
+    # Pemasok dikelompokkan per komoditas: batch ayam tidak boleh dipasok
+    # pemasok telur. Slot bergilir lama mengabaikan hal ini sehingga muncul
+    # baris "beras dipasok CV Barokah Telur Cianjur" — data yang tidak masuk
+    # akal dan membuat profil pemasok bohong.
+    per_komoditas: dict[uuid.UUID, list[Supplier]] = {}
+    for s in pemasok:
+        per_komoditas.setdefault(s.commodity_id, []).append(s)
+    for daftar in per_komoditas.values():
+        daftar.sort(key=lambda x: x.name)
+
+    for i, loc in enumerate(lokasi):
+        for j, _slot_lama in enumerate(_slot(loc.name, i, pemasok)):
+            nama_komoditas = tersedia[(i + j) % len(tersedia)]
+            kandidat_kom = per_komoditas.get(komoditas[nama_komoditas], [])
+            if not kandidat_kom:
+                continue
+            sup = kandidat_kom[j % len(kandidat_kom)]
+            rotasi = ROTASI[(i + j) % len(ROTASI)]
+            id_batch = demo_batch_id(loc.name, sup.name, nama_komoditas)
+            id_dipakai.append(id_batch)
+            panen = now + timedelta(hours=rotasi["panen_jam"])
+            berangkat = (
+                None
+                if rotasi["berangkat_menit"] is None
+                else now + timedelta(minutes=rotasi["berangkat_menit"])
+            )
+            if berangkat is not None and berangkat < panen:
+                berangkat = panen + timedelta(minutes=30)
+            nilai = {
+                "id": id_batch,
+                "commodity_id": komoditas[nama_komoditas],
+                "location_id": loc.id,
+                # Pemasok slot dipakai HANYA bila pasangan ini belum punya
+                # batch kanonik sama sekali. Kalau sudah ada, batch demo ikut
+                # salah satu pemasok kanonik (yang terkecil id-nya, supaya
+                # deterministik) — jangan menambah pemasok baru ke pasangan.
+                "supplier_id": _pemasok_untuk_pasangan(
+                    kanonik.get((loc.id, komoditas[nama_komoditas])), sup.id
+                ),
+                "quantity_kg": Decimal(200 + ((i * 7 + j * 13) % 9) * 100),
+                "harvested_at": panen,
+                "temperature_log": _log_suhu(
+                    id_batch, panen, MUTU[(i + j) % len(MUTU)], sampai=now
+                ),
+                "certification_status": SERTIFIKASI[(i + j) % len(SERTIFIKASI)],
+                "freshness_score": Decimal("0.82"),
+                "safety_status": MUTU[(i + j) % len(MUTU)],
+                "usable_until": panen + timedelta(days=SHELF_LIFE_HARI[nama_komoditas]),
+                "dispatched_at": berangkat,
+                "origin": "demo",
+                "generated_at": now,
+            }
+            ada = await session.get(Batch, id_batch)
+            if ada is None:
+                session.add(Batch(**nilai))
+                dibuat += 1
+            else:
+                for k, v in nilai.items():
+                    setattr(ada, k, v)
+    # Buang HANYA batch milik namespace penyemai ini yang tidak lagi punya slot
+    # (mis. lokasi/pemasok berubah). `origin='demo'` juga dipakai
+    # `jakarta_lengkap`; filter origin saja akan menghapus 40 batch kaya itu dan
+    # membuat tes/suite lain kehabisan batch segar.
+    id_milik = {
+        demo_batch_id(loc.name, sup.name, kom)
+        for loc in lokasi
+        for sup in pemasok
+        for kom in tersedia
+    }
+    usang = delete(Batch).where(
+        Batch.id.in_(id_milik), Batch.id.notin_(id_dipakai)
+    )
+    hasil_usang = await session.execute(usang)
+    dihapus = hasil_usang.rowcount or 0
+    await session.flush()
+    # Barang baru datang untuk kartu Penerimaan: status `pending` (Belum diuji).
+    # Tanpa ini form penerimaan kosong karena semua batch demo sudah dinilai.
+    datang = await _seed_barang_datang(session, now, lokasi, komoditas)
+    return {
+        "batch_demo": dibuat,
+        "diperbarui": len(id_dipakai) - dibuat,
+        "dibuang": dihapus,
+        "barang_datang": datang,
+    }
+
+
+async def _seed_barang_datang(
+    session: AsyncSession,
+    now: datetime,
+    lokasi: list[Location],
+    komoditas: dict[str, uuid.UUID],
+) -> int:
+    """Tiga kiriman baru tiba di Jakarta dengan status `pending` (Belum diuji).
+
+    Id deterministik di namespace sendiri (`...:datang:<komoditas>`), jadi
+    menyegarkan demo tidak menggandakan barang. Pemasok diambil dari batch
+    Jakarta yang sudah ada untuk komoditas itu — bukan pemasok karangan — agar
+    `resolve_binding` tetap menemukan pemasok kanonik.
+    """
+    jakarta = next((loc for loc in lokasi if loc.name == "Jakarta"), None)
+    if jakarta is None:
+        return 0
+    rencana = (
+        ("ayam", Decimal("90"), 4.1),
+        ("beras", Decimal("300"), 27.0),
+        ("wortel", Decimal("120"), 4.2),
+    )
+    jumlah = 0
+    for nama, kg, suhu in rencana:
+        com_id = komoditas.get(nama)
+        if com_id is None:
+            continue
+        contoh = (
+            await session.execute(
+                select(Batch)
+                .where(Batch.location_id == jakarta.id, Batch.commodity_id == com_id)
+                .order_by(Batch.id)
+                .limit(1)
+            )
+        ).scalar_one_or_none()
+        if contoh is None or contoh.supplier_id is None:
+            continue
+        panen = now - timedelta(hours=6)
+        log = [
+            {
+                "timestamp": (panen + timedelta(minutes=30 * i)).isoformat(),
+                "temperature_c": suhu + (0.1 if i == 1 else 0.0),
+            }
+            for i in range(3)
+        ]
+        kunci = uuid.uuid5(uuid.NAMESPACE_URL, f"mcg:{DEMO_TAG}:datang:{nama}")
+        nilai = dict(
+            commodity_id=com_id,
+            location_id=jakarta.id,
+            supplier_id=contoh.supplier_id,
+            quantity_kg=kg,
+            harvested_at=panen,
+            temperature_log=log,
+            certification_status="haccp",
+            freshness_score=Decimal("0.95"),
+            safety_status="pending",
+            usable_until=now + timedelta(days=SHELF_LIFE_HARI.get(nama, 14)),
+            origin="demo",
+            generated_at=now,
+            dispatched_at=now - timedelta(hours=5),
+        )
+        ada = await session.get(Batch, kunci)
+        if ada is None:
+            session.add(Batch(id=kunci, **nilai))
+        else:
+            for k, v in nilai.items():
+                setattr(ada, k, v)
+        jumlah += 1
+    await session.flush()
+    return jumlah
+
+# --------------------------------------------------------------------------
+# Keputusan demo yang SUDAH SELESAI + limbah hari ini
+# --------------------------------------------------------------------------
+# Kenapa: panel KPI menjawab "belum ada data" untuk 4 dari 7 metrik ketika
+# periode = HARI INI, karena seed kanonik berhenti di 8 Okt. Yang dibutuhkan
+# bukan angka karangan di klien, melainkan baris yang MEMANG dipakai server:
+#   - Avoidable Food Loss  : disposal_events hari ini (dibagi supply hari ini)
+#   - Safe Delivered Cost  : PO mock hari ini + decisions.safe_delivered_cost
+#   - Decision Time        : trace DETECT..ACT hari ini + PO committed
+#   - Evidence Completeness: keputusan hari ini, approval hari ini, >=2 jenis
+#                            bukti konsisten SEBELUM approval
+# Semua baris demo, id deterministik (idempoten), dan ikut terhapus saat
+# "Bersihkan data demo" (CASCADE dari decisions).
+
+from app.models import (  # noqa: E402  (impor di bawah agar blok ini mandiri)
+    AgentTrace,
+    Approval,
+    Decision,
+    DecisionEvidence,
+    SapMockPurchaseOrder,
+    User,
+)
+
+#: Tiga kota cukup untuk memperagakan metrik lintas-lokasi tanpa membanjiri UI.
+KOTA_DEMO = ("Jakarta", "Bandung", "Surabaya")
+#: Menit relatif awal keputusan untuk satu jalur agent yang lengkap.
+JALUR_KEPUTUSAN = (("DETECT", 0), ("VERIFY", 4), ("DECIDE", 10), ("ACT", 20))
+#: Bukti harus TEREKAM SEBELUM approval (menit 12) agar dihitung "lengkap".
+BUKTI_SEBELUM_APPROVAL = (("market_price", 6), ("gps", 8))
+
+
+def demo_decision_id(lokasi: str, komoditas: str) -> uuid.UUID:
+    return uuid.uuid5(uuid.NAMESPACE_URL, f"mcg:{DEMO_TAG}:keputusan:{lokasi}:{komoditas}")
+
+
+def demo_source_batch_id(lokasi: str, komoditas: str) -> uuid.UUID:
+    """Id deterministik batch SUMBER milik penyemai keputusan selesai.
+
+    Namespace-nya SENGAJA terpisah dari `demo_batch_id` (batch kiriman demo):
+    keduanya menempati pasangan (lokasi, komoditas) yang sama, dan penyemai ini
+    tidak boleh menimpa status/masa layak kiriman yang dipamerkan papan kiriman.
+    """
+    return uuid.uuid5(
+        uuid.NAMESPACE_URL, f"mcg:{DEMO_TAG}:sumber:{lokasi}:{komoditas}"
+    )
+
+
+def _nilai_batch_sumber(
+    batch_id: uuid.UUID,
+    now: datetime,
+    location_id: uuid.UUID,
+    commodity_id: uuid.UUID,
+    supplier_id: uuid.UUID,
+    nama_komoditas: str,
+) -> dict:
+    """Kolom batch sumber yang LAYAK: `pass`, berlog suhu, dan masih segar.
+
+    Nilainya dihitung dari `now` (bukan dari waktu tulis pertama), sehingga
+    menyemai ulang MENYEGARKAN masa layaknya — batch sumber yang menua tidak
+    boleh membuat riwayat `executed` terbaca "safety revalidation gagal".
+    """
+    panen = now - timedelta(hours=26)
+    return {
+        "commodity_id": commodity_id,
+        "location_id": location_id,
+        "supplier_id": supplier_id,
+        "quantity_kg": Decimal(800),
+        "harvested_at": panen,
+        "dispatched_at": panen + timedelta(hours=6),
+        "usable_until": panen + timedelta(days=SHELF_LIFE_HARI.get(nama_komoditas, 7)),
+        "safety_status": "pass",
+        "certification_status": "haccp",
+        "freshness_score": Decimal("0.92"),
+        "origin": "demo",
+        "generated_at": now,
+        "temperature_log": _log_suhu(batch_id, panen, "pass", sampai=now),
+    }
+
+
+async def seed_demo_completed_decisions(db: AsyncSession, now: datetime) -> dict:
+    """Lengkapi KPI "hari ini": keputusan selesai + limbah. Idempoten."""
+    lokasi = {
+        loc.name: loc
+        for loc in (await db.execute(select(Location))).scalars()
+        if loc.name in KOTA_DEMO
+    }
+    komoditas = {c.name: c.id for c in (await db.execute(select(Commodity))).scalars()}
+    pemasok = list((await db.execute(select(Supplier).order_by(Supplier.name))).scalars())
+    #: Approval demo harus berasal dari approver KOTA ITU SENDIRI. Scope backend
+    #: menolak approve lintas SPPG (403), jadi menyemai approval dari Jakarta
+    #: untuk keputusan Bandung/Surabaya menghasilkan riwayat yang tidak mungkin
+    #: terjadi lewat alur — persis yang diperbaiki 18 Okt (keputusan produk 3A).
+    approver = {
+        (u.location_id, u.role): u
+        for u in (
+            await db.execute(
+                select(User).where(
+                    User.role.in_(("sppg_head", "sppg_nutritionist"))
+                )
+            )
+        ).scalars()
+    }
+    if not lokasi or not komoditas or not pemasok or not approver:
+        return {
+            "keputusan_demo": 0,
+            "limbah_demo": 0,
+            "dilewati": "data dasar belum ada (butuh lokasi, komoditas, pemasok, "
+            "user sppg_head dan sppg_nutritionist)",
+        }
+
+    #: Komoditas yang BENAR-BENAR ada di DB, urut stabil. Daftar tetap berisi
+    #: "beras" pernah membuat Jakarta tidak kebagian keputusan (beras tidak ada),
+    #: sehingga KPI ber-scope Jakarta tetap kosong walau baris lain terbuat.
+    urut_komoditas = [nama for nama in ("telur", "ayam", "wortel") if nama in komoditas]
+    if not urut_komoditas:
+        return {"keputusan_demo": 0, "limbah_demo": 0, "dilewati": "komoditas kosong"}
+
+    dibuat = 0
+    dilewati_kota: list[str] = []
+    # Daftar pekerjaan dibangun dulu, lalu dieksekusi: rotasi 3 kota hanya
+    # memilih telur/ayam/wortel, sehingga beras tidak pernah kebagian. Beras
+    # disemai EKSPLISIT untuk Jakarta supaya panel Decision & Evidence punya
+    # baris beras yang bisa dibuka (permintaan pemilik 18 Okt 2026).
+    pekerjaan: list[tuple[str, object, str]] = []
+    for i, (nama_kota, loc) in enumerate(sorted(lokasi.items())):
+        kepala_kota = approver.get((loc.id, "sppg_head"))
+        nutrisi_kota = approver.get((loc.id, "sppg_nutritionist"))
+        if kepala_kota is None or nutrisi_kota is None:
+            # Jangan menyemai riwayat yang tidak mungkin lahir dari alur: kota
+            # tanpa approver sendiri dilewati, bukan di-approve dari SPPG lain.
+            dilewati_kota.append(nama_kota)
+            continue
+        pekerjaan.append((nama_kota, loc, urut_komoditas[i % len(urut_komoditas)]))
+    jakarta = lokasi.get("Jakarta")
+    if (
+        jakarta is not None
+        and "beras" in komoditas
+        and approver.get((jakarta.id, "sppg_head")) is not None
+        and approver.get((jakarta.id, "sppg_nutritionist")) is not None
+    ):
+        pekerjaan.append(("Jakarta", jakarta, "beras"))
+
+    for nama_kota, loc, nama_komoditas in pekerjaan:
+        kepala_kota = approver[(loc.id, "sppg_head")]
+        nutrisi_kota = approver[(loc.id, "sppg_nutritionist")]
+        # Pemasok WAJIB yang menjual komoditas ini. Rotasi lama memilih pemasok
+        # ke-N dari daftar tanpa melihat komoditasnya, sehingga lahir baris
+        # "keputusan beras dieksekusi oleh CV Barokah Telur Cianjur".
+        # Utamakan pemasok di kota itu; kalau kota tidak punya, pakai pemasok
+        # berkomoditas sama dari kota lain (jangkauan sudah dijaga rute).
+        # Pemasok di KOTA ITU lebih dulu: beras Jakarta tidak masuk akal kalau
+        # dipasok pemasok Medan. Pemasok kota lain hanya dipakai bila kota ini
+        # tidak punya pemasok untuk komoditas tersebut.
+        sekota = sorted(
+            (
+                p for p in pemasok
+                if p.commodity_id == komoditas[nama_komoditas]
+                and p.location_id == loc.id
+            ),
+            key=lambda p: p.name,
+        )
+        kandidat_sup = sekota or sorted(
+            (p for p in pemasok if p.commodity_id == komoditas[nama_komoditas]),
+            key=lambda p: p.name,
+        )
+        if not kandidat_sup:
+            continue
+        sup = kandidat_sup[
+            pekerjaan.index((nama_kota, loc, nama_komoditas)) % len(kandidat_sup)
+        ]
+        did = demo_decision_id(nama_kota, nama_komoditas)
+        mulai = now - timedelta(minutes=44)
+        nilai = {
+            "id": did,
+            # Barang dibeli dari PEMASOK (baris di bawah menunjuk supplier_id),
+            # jadi tipenya pengadaan — bukan penyeimbangan antar-SPPG. Versi
+            # lama memberi tipe `regional_balance` sehingga kartunya berbunyi
+            # "Penyeimbangan pasokan regional" padahal pengirimnya perusahaan.
+            "decision_type": "supplier_procurement",
+            "status": "executed",
+            "proposed_by": "supervisor_agent",
+            "verified_by": "verifier_agent",
+            # `verifier_note` BUKAN kalimat bebas: read model membacanya sebagai
+            # verdict (`_verdict_of` di approval_summary). Kalimat naratif di sini
+            # membuat verdict jatuh ke "unavailable", sehingga layar menulis
+            # "aturan persetujuan: tidak dapat dievaluasi" untuk keputusan yang
+            # buktinya sendiri tercatat konsisten.
+            "verifier_note": "consistent",
+            "iteration": 1,
+            "demo_case": None,
+            "source_location_id": loc.id,
+            "target_location_id": loc.id,
+            "commodity_id": komoditas[nama_komoditas],
+            "quantity_kg": Decimal(600),
+            #: Biaya TIDAK ditulis tangan: `hitung_biaya_demo` menghitungnya
+            #: dari batch, kutipan pemasok, rute, kesegaran, dan status
+            #: keamanan setelah baris ini tersimpan (audit 19 Okt 2026).
+            "safe_delivered_cost": None,
+            "cost_breakdown": None,
+            "supplier_id": sup.id,
+            #: Baris ini RIWAYAT yang sudah dieksekusi, bukan pekerjaan tertunda.
+            #: Tenggat 2 jam dulu membuatnya tampil "decision expired" dua jam
+            #: setelah disemai — penghalang palsu pada keputusan yang sudah tutup.
+            "expires_at": now + timedelta(days=30),
+            "origin": "demo",
+            "generated_at": now,
+            "created_at": mulai,
+        }
+        ada = await db.get(Decision, did)
+        if ada is None:
+            keputusan = Decision(**nilai)
+            db.add(keputusan)
+            dibuat += 1
+        else:
+            for k, v in nilai.items():
+                setattr(ada, k, v)
+
+        # Batch sumber untuk pasangan (lokasi, komoditas) ini. Tanpa baris ini
+        # `revalidate_transfer` melaporkan "tidak ada batch sumber" dan
+        # `resolve_binding` tidak bisa memastikan pemasok — dua penghalang yang
+        # tidak masuk akal pada keputusan yang statusnya sudah `executed`.
+        #
+        # Batch yang SUDAH ada dipakai lebih dulu, tetapi hanya bila ia BENAR
+        # layak menjadi sumber riwayat "selesai" (audit 27 Okt 2026):
+        #   - `safety_status == "pass"` (riwayat selesai tidak boleh bersandar
+        #     pada bahan yang belum/tidak lulus audit);
+        #   - milik PEMASOK keputusan ini (versi lama menimpa `supplier_id`
+        #     batch milik penyemai lain — memindahkan pemilik kiriman orang);
+        #   - `usable_until` masih di DEPAN dengan sisa minimal `SISA_LAYAK_SUMBER`.
+        #     Versi lama tidak melihat masa layak sama sekali, sehingga binding
+        #     bisa menunjuk batch kanonik 8 Okt yang sudah kedaluwarsa atau batch
+        #     yang tinggal hitungan menit; `penghalang_sumber` membacanya sebagai
+        #     blokir dan ringkasan menampilkan "safety revalidation gagal" pada
+        #     keputusan yang katanya sudah dieksekusi.
+        # `usable_until` NULL = masa layak tidak diketahui → tidak dipakai ulang
+        # (fail-closed); penyemai membuat batch sumber sendiri di bawah.
+        batch_sumber: Batch | None = (
+            await db.execute(
+                select(Batch)
+                .where(
+                    Batch.location_id == loc.id,
+                    Batch.commodity_id == komoditas[nama_komoditas],
+                    Batch.supplier_id == sup.id,
+                    Batch.safety_status == "pass",
+                    Batch.usable_until > now + SISA_LAYAK_SUMBER,
+                )
+                # Yang paling lama layak dipakai lebih dulu: pilihannya stabil
+                # antar penyemaian, dan sisa umur simpannya paling panjang.
+                .order_by(Batch.usable_until.desc(), Batch.id)
+            )
+        ).scalars().first()
+        if batch_sumber is None:
+            # Batch sumber milik penyemai ini SENDIRI (id deterministik di
+            # namespace `sumber`, bukan `demo_batch_id` milik penyemai kiriman).
+            # Dibuat ATAU disegarkan: masa layak, jam panen/berangkat, dan log
+            # suhunya dihitung ulang dari `now`, sehingga menyemai ulang
+            # benar-benar menyembuhkan batch yang hilang/kedaluwarsa dan tidak
+            # menabrak primary key saat menyemai kedua kali.
+            kunci_sumber = demo_source_batch_id(nama_kota, nama_komoditas)
+            nilai_sumber = _nilai_batch_sumber(
+                kunci_sumber,
+                now,
+                loc.id,
+                komoditas[nama_komoditas],
+                sup.id,
+                nama_komoditas,
+            )
+            batch_sumber = await db.get(Batch, kunci_sumber)
+            if batch_sumber is None:
+                batch_sumber = Batch(id=kunci_sumber, **nilai_sumber)
+                db.add(batch_sumber)
+            else:
+                for k, v in nilai_sumber.items():
+                    setattr(batch_sumber, k, v)
+
+        # Biaya dihitung dari baris yang baru saja dipastikan ada
+        # pemasok, harga, rute, kesegaran, status keamanan) — bukan angka
+        # literal. `hitung_biaya_demo` mengembalikan False bila bahannya tidak
+        # ada; dalam hal itu kolom biaya dibiarkan kosong, bukan dikarang.
+        await db.flush()
+        await hitung_biaya_demo(db, ada if ada is not None else keputusan, now)
+
+        for etype, menit in BUKTI_SEBELUM_APPROVAL:
+            bukti_id = uuid.uuid5(did, f"bukti:{etype}")
+            kapan = mulai + timedelta(minutes=menit)
+            ada_bukti = await db.get(DecisionEvidence, bukti_id)
+            if ada_bukti is None:
+                db.add(
+                    DecisionEvidence(
+                        id=bukti_id,
+                        decision_id=did,
+                        evidence_type=etype,
+                        payload={"demo": True, "kota": nama_kota},
+                        is_consistent=True,
+                        recorded_at=kapan,
+                    )
+                )
+            else:
+                # Tanggal ikut bergeser: bukti yang tertinggal di hari kemarin
+                # membuat Evidence Completeness & Decision Time kosong besok.
+                ada_bukti.recorded_at = kapan
+                ada_bukti.payload = {"demo": True, "kota": nama_kota}
+                ada_bukti.is_consistent = True
+
+        # Binding eksplisit: menyebut pemasok DAN batch yang dipakai. Tanpa ini
+        # `resolve_binding` harus menyimpulkan dari seluruh batch pasangan itu,
+        # dan pada pasangan dengan lebih dari satu pemasok hasilnya
+        # "supplier_unknown" (409) — layar lalu menampilkan alasan itu untuk
+        # keputusan yang sudah dieksekusi.
+        bind_id = uuid.uuid5(did, "bukti:allocation_binding")
+        binding_payload = {
+            "allocation_binding": True,
+            "supplier_id": str(batch_sumber.supplier_id),
+            "batch_ids": [str(batch_sumber.id)],
+            "demo": True,
+        }
+        bukti_binding = await db.get(DecisionEvidence, bind_id)
+        if bukti_binding is None:
+            db.add(
+                DecisionEvidence(
+                    id=bind_id,
+                    decision_id=did,
+                    evidence_type="human_inspection",
+                    payload=binding_payload,
+                    is_consistent=True,
+                    recorded_at=mulai + timedelta(minutes=9),
+                )
+            )
+        else:
+            # DITULIS ULANG, bukan sekali tulis. Batch demo bisa hilang oleh
+            # "Bersihkan data demo" atau oleh tes yang membersihkan kiriman;
+            # binding yang menunjuk batch hilang membuat resolusi gagal
+            # ("binding batch/supplier berubah") untuk keputusan yang sudah
+            # dieksekusi. Menyemai ulang harus menyembuhkannya.
+            bukti_binding.payload = binding_payload
+            bukti_binding.is_consistent = True
+            bukti_binding.recorded_at = mulai + timedelta(minutes=9)
+
+        acc_id = uuid.uuid5(did, "approval")
+        acc = await db.get(Approval, acc_id)
+        if acc is None:
+            db.add(
+                Approval(
+                    id=acc_id,
+                    decision_id=did,
+                    approved_by=kepala_kota.id,
+                    approved=True,
+                    comment="Disetujui untuk demo lintas lokasi.",
+                    approved_at=mulai + timedelta(minutes=12),
+                )
+            )
+        else:
+            # Reparasi: baris lama (sebelum 18 Okt) memakai approver Jakarta.
+            # Seed bersifat idempoten, jadi ia harus menyembuhkan riwayatnya.
+            acc.approved_by = kepala_kota.id
+            acc.approved_at = mulai + timedelta(minutes=12)
+
+        # Approval kedua: ahli gizi. `regional_balance` operasional wajib dua
+        # role berbeda (`dua_role_wajib`), jadi satu approval saja membuat
+        # riwayat "diekskusi" ini melanggar matriksnya sendiri.
+        acc2_id = uuid.uuid5(did, "approval:nutrisi")
+        acc2 = await db.get(Approval, acc2_id)
+        if acc2 is None:
+            db.add(
+                Approval(
+                    id=acc2_id,
+                    decision_id=did,
+                    approved_by=nutrisi_kota.id,
+                    approved=True,
+                    comment="Disetujui ahli gizi untuk demo lintas lokasi.",
+                    approved_at=mulai + timedelta(minutes=14),
+                )
+            )
+        else:
+            acc2.approved_by = nutrisi_kota.id
+            acc2.approved_at = mulai + timedelta(minutes=14)
+
+        for step, menit in JALUR_KEPUTUSAN:
+            trace_id = uuid.uuid5(did, f"trace:{step}")
+            kapan = mulai + timedelta(minutes=menit)
+            ada_jejak = await db.get(AgentTrace, trace_id)
+            if ada_jejak is None:
+                db.add(
+                    AgentTrace(
+                        id=trace_id,
+                        decision_id=did,
+                        step_name=step,
+                        tool_called=f"demo.{step.lower()}",
+                        input_summary={"demo": True},
+                        output_summary={"ok": True},
+                        duration_ms=800 + menit * 40,
+                        step_at=kapan,
+                    )
+                )
+            else:
+                # Decision Time = DETECT..ACT di jendela; jejak yang tertinggal
+                # di hari kemarin membuat metrik itu kehilangan sampelnya.
+                ada_jejak.step_at = kapan
+                ada_jejak.duration_ms = 800 + menit * 40
+
+        po_id = uuid.uuid5(did, "po")
+        harga_po = HARGA_PO.get(nama_komoditas, Decimal("25132.39"))
+        po_kapan = now - timedelta(minutes=18)
+        ada_po = await db.get(SapMockPurchaseOrder, po_id)
+        if ada_po is None:
+            db.add(
+                SapMockPurchaseOrder(
+                    id=po_id,
+                    # Audit M8: PO demo lahir dari keputusan yang sama seperti
+                    # eksekusi nyata, jadi nomornya memakai aturan yang sama.
+                    po_number=nomor_po(did),
+                    supplier_id=sup.id,
+                    material_number=f"MAT-{nama_komoditas.upper()[:4]}",
+                    ordered_quantity=Decimal(600),
+                    price=harga_po,
+                    decision_id=did,
+                    status="confirmed",
+                    origin="demo",
+                    created_at=po_kapan,
+                )
+            )
+        else:
+            # Safe Delivered Cost berjangkar pada PO.created_at; PO yang tetap
+            # di hari kemarin mengosongkan metrik itu besok pagi.
+            ada_po.created_at = po_kapan
+            ada_po.price = harga_po
+            ada_po.supplier_id = sup.id
+
+    # Limbah hari ini: dua kejadian kecil di Jakarta (alasan dari data kanonik).
+    limbah = 0
+    jakarta = lokasi.get("Jakarta")
+    if jakarta is not None and "telur" in komoditas:
+        #: Satu kejadian dialihkan ke mitra, satu dibuang tanpa mitra: dua
+        #: keadaan itu HARUS terlihat berbeda di panel, bukan sama-sama "—".
+        mitra_hari_ini = ("Bank Sampah Melati", None)
+        for n, (menit, kg) in enumerate(((-150, Decimal("12.5")), (-90, Decimal("8")))):
+            dis_id = uuid.uuid5(uuid.NAMESPACE_URL, f"mcg:{DEMO_TAG}:limbah:jakarta:{n}")
+            kapan = now + timedelta(minutes=menit)
+            mitra = mitra_hari_ini[n]
+            ada_limbah = await db.get(DisposalEvent, dis_id)
+            if ada_limbah is None:
+                db.add(
+                    DisposalEvent(
+                        id=dis_id,
+                        location_id=jakarta.id,
+                        commodity_id=komoditas["telur"],
+                        quantity_kg=kg,
+                        reason="spoilage_cold_chain",
+                        origin="demo",
+                        generated_at=now,
+                        disposed_at=kapan,
+                        partner_name=mitra,
+                    )
+                )
+                limbah += 1
+            else:
+                # Avoidable Food Loss memakai jendela hari ini; limbah yang
+                # tertinggal sehari membuat metriknya kosong besok.
+                ada_limbah.disposed_at = kapan
+                ada_limbah.generated_at = now
+                ada_limbah.partner_name = mitra
+    await db.flush()
+    return {
+        "keputusan_demo": dibuat,
+        "limbah_demo": limbah,
+        "dilewati_kota": dilewati_kota,
+    }
+
+async def seed_demo_daily_prices(session: AsyncSession, now: datetime) -> dict:
+    """Harga demo HARI INI: acuan PIHPS + kutipan pemasok, berpasangan.
+
+    Metrik "Procurement Price Deviation" memasangkan `supplier_quote` dengan
+    `pihps_reference` TERAKHIR SEBELUM kutipan itu, di lokasi+komoditas yang
+    sama. Seed kanonik berhenti di 8 Okt dan deret waktu demo berhenti di hari
+    penenunannya, jadi setiap hari baru metrik itu menjawab "tidak ada record
+    pada periode ini" — padahal datanya ada di hari-hari sebelumnya.
+
+    Baris ditulis untuk kota yang punya keputusan demo (Jakarta, Bandung,
+    Surabaya) dan semua komoditas yang ada di DB, termasuk beras. Id
+    deterministik per (tanggal, kota, komoditas, jenis), sehingga menyegarkan
+    dua kali pada hari yang sama memperbarui baris yang sama.
+    """
+    kota = ("Jakarta", "Bandung", "Surabaya")
+    lokasi = {
+        loc.name: loc
+        for loc in (await session.execute(select(Location))).scalars()
+        if loc.name in kota
+    }
+    komoditas = {c.name: c.id for c in (await session.execute(select(Commodity))).scalars()}
+    pemasok = list((await session.execute(select(Supplier).order_by(Supplier.name))).scalars())
+    if not lokasi or not pemasok:
+        return {"harga_demo": 0, "dilewati": "lokasi/pemasok belum ada"}
+
+    hari = now.date()
+    dibuat = 0
+    for nama_kota, loc in sorted(lokasi.items()):
+        # Kutipan datang dari pemasok KOTA ITU; tanpa pemasok lokal, kutipan
+        # tetap sah tetapi jaraknya tidak masuk akal — jadi kota dilewati.
+        sup = next((p for p in pemasok if p.location_id == loc.id), None)
+        if sup is None:
+            continue
+        for nama, (acuan, deviasi) in HARGA_HARIAN.items():
+            if nama not in komoditas:
+                continue
+            kutipan = (acuan * (Decimal(1) + deviasi)).quantize(Decimal("0.01"))
+            rencana = (
+                ("acuan", acuan, now - timedelta(hours=4), "pihps_reference", None),
+                ("kutipan", kutipan, now - timedelta(hours=3), "supplier_quote", sup.id),
+            )
+            for jenis, harga, kapan, sumber, supplier_id in rencana:
+                pid = uuid.uuid5(
+                    uuid.NAMESPACE_URL,
+                    f"mcg:{DEMO_TAG}:harga:{hari}:{nama_kota}:{nama}:{jenis}",
+                )
+                baris = await session.get(PriceSignal, pid)
+                if baris is None:
+                    session.add(
+                        PriceSignal(
+                            id=pid,
+                            location_id=loc.id,
+                            commodity_id=komoditas[nama],
+                            supplier_id=supplier_id,
+                            price_per_kg=harga,
+                            source=sumber,
+                            recorded_at=kapan,
+                            origin="demo",
+                            generated_at=now,
+                        )
+                    )
+                    dibuat += 1
+                else:
+                    baris.price_per_kg = harga
+                    baris.recorded_at = kapan
+                    baris.supplier_id = supplier_id
+                    baris.generated_at = now
+    await session.flush()
+    return {"harga_demo": dibuat}
+
+

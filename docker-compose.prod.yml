@@ -1,0 +1,159 @@
+# Stack produksi MealChain Guardian (audit DEP-01, 2026-10-24).
+#
+# Bedanya dengan `docker-compose.yml` (stack kerja harian):
+#   - frontend: image target `runner` → `next build` + `next start`, TANPA bind
+#     mount dan tanpa `npm run dev`. Halaman tidak dikompilasi per request.
+#   - backend: tanpa `--reload` dan tanpa bind mount → kode dari image.
+#   - healthcheck aktif untuk postgres, backend, dan frontend; frontend baru
+#     dinyalakan setelah backend benar-benar sehat.
+#   - nama kontainer, volume, dan jaringan diberi akhiran `-prod` supaya stack
+#     ini bisa hidup berdampingan dengan stack dev di mesin yang sama.
+#
+# Pakai:
+#   docker compose -f docker-compose.prod.yml up -d --build
+#   docker compose -f docker-compose.prod.yml ps          # semua harus "healthy"
+#
+# Catatan data: volume `postgres_prod_data` TERPISAH dari stack dev, jadi DB
+# produksi mulai kosong dan perlu disemai sekali:
+#   docker compose -f docker-compose.prod.yml exec backend python -m app.seed.seed_data
+#
+# Sejak 25 Oktober 2026 (temuan D-01) seed MENOLAK memasang password akun demo
+# kecuali demonstrasi dinyatakan eksplisit. Pilih salah satu:
+#   - instance demo:  DEMO_MODE=true docker compose -f docker-compose.prod.yml exec backend \
+#                       python -m app.seed.seed_data --reference-time <ISO> --with-demo-users
+#   - instance nyata: suplai DEMO_PASSWORD_SPPG_HEAD / DEMO_PASSWORD_SPPG_NUTRITIONIST /
+#                     DEMO_PASSWORD_BGN_MONITOR, atau jangan pakai --with-demo-users
+#                     dan buat akun lewat jalur admin.
+#
+# UI produksi memakai jalur relatif (`NEXT_PUBLIC_API_URL=""`) sehingga request
+# API diteruskan Next ke `http://backend:8000` di jaringan compose — satu origin,
+# tanpa CORS dan tanpa membuka port 8000 ke publik.
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    container_name: mealchain-prod-postgres
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-mealchain}
+      # Tanpa fallback password: nilai default yang tertanam adalah credential
+      # yang bisa ditebak. Bila POSTGRES_PASSWORD kosong, compose MENOLAK start
+      # (fail-closed) alih-alih diam-diam memakai password lokal.
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?wajib-diisi-di-.env}
+      POSTGRES_DB: ${POSTGRES_DB:-mealchain}
+    ports:
+      # Hanya loopback host: DB tidak perlu terjangkau dari luar mesin.
+      # Akses operasional tetap bisa lewat `docker compose exec postgres psql`.
+      - "127.0.0.1:${POSTGRES_PORT:-15432}:5432"
+    volumes:
+      - postgres_prod_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-mealchain} -d ${POSTGRES_DB:-mealchain}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - mealchain-prod-network
+
+  backend:
+    restart: unless-stopped
+    image: mealchain-backend-prod:latest
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: mealchain-prod-backend
+    depends_on:
+      postgres:
+        condition: service_healthy
+    env_file:
+      - .env
+      - secrets/aws-app.env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-mealchain}:${POSTGRES_PASSWORD:?wajib-diisi-di-.env}@postgres:5432/${POSTGRES_DB:-mealchain}
+      DEBUG: "false"
+    ports:
+      # Header berkas ini sudah menyatakan API tidak dibuka ke publik: UI
+      # memakai jalur relatif dan Next meneruskan ke `backend:8000` di jaringan
+      # compose. Binding ke loopback membuat pernyataan itu benar; untuk
+      # mengakses API dari luar mesin, pakai SSH tunnel, bukan 0.0.0.0.
+      - "127.0.0.1:${BACKEND_PORT:-8000}:8000"
+    volumes:
+      # Seed sintetis read-only; kode TIDAK di-mount (berbeda dari stack dev).
+      - ./data:/data:ro
+    # `--forwarded-allow-ips` DULU `"*"`: siapa pun bisa mengarang
+    # `X-Forwarded-For` dan pembatas login per-IP (`app/core/rate_limit.py`)
+    # jadi bisa dilewati hanya dengan mengganti header. Sekarang hanya proxy
+    # yang dipercaya, dan daftarnya eksplisit lewat env. Bila instance ini
+    # berada di belakang load balancer sungguhan, set FORWARDED_ALLOW_IPS ke
+    # CIDR LB itu (mis. `10.0.0.0/8`); biarkan bawaan loopback bila tidak ada.
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --proxy-headers --forwarded-allow-ips=${FORWARDED_ALLOW_IPS:-127.0.0.1}
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request,sys;sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/health',timeout=3).status==200 else 1)"
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
+    networks:
+      - mealchain-prod-network
+
+  frontend:
+    restart: unless-stopped
+    # Nama image dipisah dari stack dev supaya `build` di sini tidak menimpa
+    # image dev (dua target berbeda dari Dockerfile yang sama).
+    image: mealchain-frontend-prod:latest
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      # Inilah perbaikannya: image produksi, bukan dev server.
+      target: runner
+    container_name: mealchain-prod-frontend
+    depends_on:
+      backend:
+        condition: service_healthy
+    environment:
+      # Kosong = UI memanggil path relatif, Next meneruskan ke backend:8000.
+      NEXT_PUBLIC_API_URL: ""
+      BACKEND_INTERNAL_URL: http://backend:8000
+    ports:
+      - "${FRONTEND_PORT:-3010}:3000"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:3000/"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      # `next start` menyajikan halaman siap pakai; tidak perlu 120 dtk seperti dev.
+      start_period: 30s
+    networks:
+      - mealchain-prod-network
+
+  mock-sap:
+    restart: unless-stopped
+    image: mealchain-mock-sap-prod:latest
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: mealchain-prod-mock-sap
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-mealchain}:${POSTGRES_PASSWORD:?wajib}@postgres:5432/${POSTGRES_DB:-mealchain}
+      DEMO_MODE: ${DEMO_MODE:-false}
+    ports:
+      # Mock SAP hanya dipakai backend di jaringan compose; tidak perlu publik.
+      - "127.0.0.1:${MOCK_SAP_PORT:-8001}:8001"
+    command: uvicorn app.sap_integration.mock_service:app --host 0.0.0.0 --port 8001
+    networks:
+      - mealchain-prod-network
+
+volumes:
+  postgres_prod_data:
+
+networks:
+  mealchain-prod-network:
+    driver: bridge

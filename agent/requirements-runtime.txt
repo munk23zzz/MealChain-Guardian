@@ -1,0 +1,4 @@
+# Dependensi TAMBAHAN khusus runtime AgentCore (di atas requirements.txt).
+# `bedrock-agentcore` menyediakan BedrockAgentCoreApp: server HTTP 8080 dengan
+# /ping + /invocations, yang diwajibkan AgentCore Runtime.
+bedrock-agentcore>=0.1.0

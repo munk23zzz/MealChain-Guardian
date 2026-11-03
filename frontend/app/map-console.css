@@ -1,0 +1,789 @@
+/**
+ * Peta Overview — chrome TERANG di atas basemap OSM terang.
+ *
+ * Riwayat: 18 Okt pemilik minta "background putih dihapus" -> chrome dibuat kaca
+ * gelap. 19 Okt arah dibalik: "terkait warna tema gelap buat ke tema terang".
+ * Berkas ini kini memberi chrome TERANG dengan aturan kontras yang diukur.
+ *
+ * Pendekatan: satu blok token di `.map-card` (nama token TIDAK berubah, supaya
+ * globals.css dan tes tetap berlaku), lalu setiap komponen memakai token itu —
+ * tidak ada lagi hex gelap yang tersebar di aturan komponen.
+ *
+ * Kontras diukur terhadap permukaan yang benar-benar dipakai. Elemen di DALAM
+ * piringan diukur ke putih #FFFFFF; elemen yang MENGAPUNG di peta diukur ke
+ * empat ekstrem basemap (putih #FFFFFF, jalan #F8F4E8, taman #B5C9A8, air
+ * #AAD3DF):
+ *
+ *   teks   #0F172A -> 17,85 / 16,23 / 10,10 / 11,64:1
+ *   muted  #475569 ->  7,58 /  6,89 /  4,29 /  4,94:1  (di piringan lulus AA;
+ *                     di atas taman 4,29 -> muted hanya dipakai di dalam
+ *                     piringan, tidak pernah mengapung di kanvas)
+ *   aksen  #2563EB ->  5,17 /  4,70 /  2,93 /  3,37:1  (teks/border di piringan
+ *                     lulus; sebagai garis di atas taman gagal -> garis kontrol
+ *                     memakai #1E40AF)
+ *   aksen-tinta #1E40AF -> 8,72 / 7,93 / 4,94 / 5,69:1  (ikon pil, garis kontrol)
+ *   surplus #15803D 5,02:1 · shortage #B91C1C 6,47:1 · seimbang #B45309 5,02:1
+ *   batas kontrol rgba(15,23,42,.45) -> 3,2:1 di putih (WCAG 1.4.11 >=3:1)
+ *
+ * Berkas terpisah dari globals.css dengan sengaja: kanvas peta juga disentuh
+ * sesi lain, dan impor sesudah globals.css membuat berkas ini menang tanpa satu
+ * pun hunk di berkas mereka.
+ */
+
+/* Token lokal, hanya di dalam kartu peta. */
+.map-card {
+  --map-glass: rgba(255, 255, 255, 0.92);
+  --map-glass-solid: #ffffff;
+  --map-glass-deep: rgba(255, 255, 255, 0.97);
+  /* Rambut = PEMISAH dekoratif (tidak menanggung makna). */
+  --map-hair: rgba(15, 23, 42, 0.12);
+  /* Batas KONTROL: 45% tinta di atas putih = 3,2:1 -> lolos WCAG 1.4.11.
+     Rambut 12% hanya 1,4:1 dan membuat tombol tampak tanpa tepi di peta. */
+  --map-hair-strong: rgba(15, 23, 42, 0.45);
+  --map-text: #0f172a;
+  --map-text-muted: #475569;
+  --map-hover: rgba(15, 23, 42, 0.06);
+  --map-accent: #2563eb;
+  /* Warna IKON pil "nyala" (dipakai globals.css sebagai
+     `var(--map-accent-ink, #1e40af)`). Ikon mengapung di atas peta, jadi
+     diukur ke empat ekstrem basemap: 8,72/7,93/4,94/5,69 — satu-satunya
+     kandidat yang lolos 3:1 di keempatnya. */
+  --map-accent-ink: #1e40af;
+  /* Teks aksen DI DALAM piringan putih (6,70:1), bukan di atas peta. */
+  --map-accent-text: #1d4ed8;
+  --map-focus: #1e40af;
+  --map-surplus: #15803d;
+  --map-shortage: #b91c1c;
+  --map-balanced: #b45309;
+  --map-todo: #1d4ed8;
+}
+
+/* Piringan terang yang menampung kanvas + chrome-nya. */
+.map-card .map-body {
+  padding: 10px;
+  border-radius: var(--radius-dock);
+  background: var(--map-glass);
+  border: 1px solid var(--map-hair);
+  -webkit-backdrop-filter: blur(10px) saturate(1.02);
+  backdrop-filter: blur(10px) saturate(1.02);
+  box-shadow: var(--shadow-float);
+  color: var(--map-text);
+}
+
+/* Kanvas: batas kontrol, bukan rambut — tepi kanvas harus terlihat di piringan
+   putih tanpa mengandalkan bayangan. */
+.map-card .map-gl {
+  border-color: var(--map-hair-strong);
+  border-radius: var(--radius-control);
+}
+
+/* Label pin: chip putih, bukan kaca gelap. */
+.map-card .map-pin-label {
+  background: rgba(255, 255, 255, 0.97);
+  border-color: var(--map-hair-strong);
+  color: var(--map-text);
+  box-shadow: var(--shadow-control);
+  font-weight: 600;
+}
+
+/* Pil sakelar lapisan: TANPA piringan (permintaan pemilik). Ikon mengapung di
+   peta dan aturan globals.css (0-4-1) menang atas selektor di sini. Blok ini
+   hanya untuk `.map-legend-toggle` bila kelak dipakai lagi. */
+.map-card .map-legend-toggle {
+  background: var(--map-glass-deep);
+  border-color: var(--map-hair-strong);
+  color: var(--map-text);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+}
+
+/* Chip saringan aktif + tombol rincian lapisan. */
+.map-card .map-filter {
+  background: rgba(37, 99, 235, 0.08);
+  border-color: rgba(37, 99, 235, 0.45);
+  color: var(--map-text);
+}
+.map-card .map-filter-text {
+  color: var(--map-text);
+}
+.map-card .map-filter-clear {
+  background: var(--map-glass-solid);
+  border-color: var(--map-hair-strong);
+  color: var(--map-text);
+}
+.map-card .map-filter-clear:hover {
+  background: var(--map-hover);
+  border-color: var(--map-text);
+}
+
+.map-card .map-layer-info-toggle {
+  background: var(--map-glass-solid);
+  border-color: var(--map-hair-strong);
+  color: var(--map-text-muted);
+}
+.map-card .map-layer-info-toggle:hover,
+.map-card .map-layer-info-toggle[aria-expanded="true"] {
+  background: var(--map-hover);
+  border-color: var(--map-text);
+  color: var(--map-text);
+}
+.map-card .map-layer-tags,
+.map-card .map-layer-tag {
+  color: var(--map-text-muted);
+}
+.map-card .map-layer-tag-sep {
+  color: rgba(15, 23, 42, 0.35);
+}
+.map-card .map-supplier-note {
+  color: var(--map-text-muted);
+  border-left-color: var(--map-hair-strong);
+}
+.map-card .map-layer-hint {
+  color: var(--map-text-muted);
+}
+
+/* Legenda ringkas + baris penanda: batas kelompok cukup rambut 12%. */
+.map-card .map-legend-compact,
+.map-card .map-marker-line,
+.map-card .route-focus,
+.map-card .map-layer-info {
+  border-top: 1px solid var(--map-hair);
+  padding-top: 9px;
+}
+.map-card .map-legend-compact,
+.map-card .map-marker-line {
+  padding-bottom: 2px;
+}
+.map-card .map-legend-compact,
+.map-card .map-marker-line {
+  color: var(--map-text);
+}
+.map-card .map-legend-compact-title,
+.map-card .map-marker-line-title,
+.map-card .map-legend-box-title {
+  color: var(--map-text-muted);
+}
+
+/* Tanda legenda memakai nada yang SAMA dengan kanvas (makna tidak digeser). */
+.map-card .map-legend-line {
+  filter: drop-shadow(0 0 1px rgba(255, 255, 255, 0.9));
+}
+.map-card .map-legend-box-shape,
+.map-card .map-legend-compact-item > i:not([class*="map-legend-line"]) {
+  box-shadow: var(--ring-hairline);
+}
+
+/* Pemilih kiriman (Arah C). */
+.map-card .route-focus-label {
+  color: var(--map-text-muted);
+}
+.map-card .route-focus-pill {
+  background: var(--map-glass-solid);
+  border-color: var(--map-hair-strong);
+  color: var(--map-text);
+}
+.map-card .route-focus-pill:hover {
+  background: var(--map-hover);
+  border-color: var(--map-text);
+}
+.map-card .route-focus-pill.is-active {
+  background: rgba(37, 99, 235, 0.1);
+  border-color: var(--map-accent);
+  color: var(--map-accent-text);
+}
+.map-card .route-focus-state {
+  color: var(--map-text-muted);
+}
+.map-card .route-focus-pill.is-active .route-focus-state {
+  color: var(--map-accent-text);
+}
+
+/* Popup peta + kontrol bawaan MapLibre. */
+.map-card .maplibregl-popup-content {
+  background: var(--map-glass-deep);
+  border: 1px solid var(--map-hair-strong);
+  border-radius: var(--radius-control);
+  color: var(--map-text);
+  box-shadow: var(--shadow-pop);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+}
+.map-card .maplibregl-popup-content .map-popup-note,
+.map-card .maplibregl-popup-content .map-popup-line,
+.map-card .maplibregl-popup-content p {
+  color: var(--map-text-muted);
+}
+.map-card .maplibregl-popup-close-button {
+  color: var(--map-text-muted);
+  font-size: 18px;
+  line-height: 1;
+}
+.map-card .maplibregl-popup-close-button:hover {
+  background: var(--map-hover);
+  color: var(--map-text);
+}
+/* Ujung panah popup: keempat sisi ditulis supaya tidak ada satu pun yang
+   tertinggal gelap saat popup berganti arah. */
+.map-card .maplibregl-popup-anchor-bottom .maplibregl-popup-tip,
+.map-card .maplibregl-popup-anchor-bottom-left .maplibregl-popup-tip,
+.map-card .maplibregl-popup-anchor-bottom-right .maplibregl-popup-tip {
+  border-top-color: var(--map-glass-solid);
+}
+.map-card .maplibregl-popup-anchor-top .maplibregl-popup-tip,
+.map-card .maplibregl-popup-anchor-top-left .maplibregl-popup-tip,
+.map-card .maplibregl-popup-anchor-top-right .maplibregl-popup-tip {
+  border-bottom-color: var(--map-glass-solid);
+}
+.map-card .maplibregl-popup-anchor-left .maplibregl-popup-tip {
+  border-right-color: var(--map-glass-solid);
+}
+.map-card .maplibregl-popup-anchor-right .maplibregl-popup-tip {
+  border-left-color: var(--map-glass-solid);
+}
+
+.map-card .map-reset-view {
+  background: var(--map-glass-solid);
+  border-color: var(--map-hair-strong);
+  color: var(--map-text);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+}
+.map-card .map-reset-view:hover {
+  background: var(--map-hover);
+  border-color: var(--map-text);
+  color: var(--map-text);
+}
+
+/* Leluhur `.map-gl` dinaikkan (0,3,0) karena MapLibre sendiri menulis
+   `.maplibregl-ctrl-group:not(:empty)` (0,2,0): tanpa ini aturan proyek kalah
+   urutan dan bayangan terukur tetap milik MapLibre. Bukan `!important` supaya
+   tema masih bisa menimpanya kelak. */
+.map-card .map-gl .maplibregl-ctrl-group {
+  background: var(--map-glass-solid);
+  border: 1px solid var(--map-hair-strong);
+  border-radius: 999px;
+  /* Klaster pil: tombol zoom/kompas di dalamnya tetap bersudut, jadi sudutnya
+     HARUS dipotong — tanpa ini sudut kotak mencuat keluar busur pil. */
+  overflow: hidden;
+  box-shadow: var(--shadow-control);
+}
+.map-card .maplibregl-ctrl-group button + button {
+  border-top-color: var(--map-hair);
+}
+.map-card .maplibregl-ctrl-group button:hover {
+  background: var(--map-hover);
+}
+/* Ikon navigasi/kompas bawaan SUDAH gelap. Dulu dibalik (`invert`) karena
+   piringannya gelap; di piringan putih filter itu membuat ikonnya putih dan
+   hilang. */
+.map-card .maplibregl-ctrl-group .maplibregl-ctrl-icon {
+  filter: none;
+}
+.map-card .maplibregl-ctrl-scale {
+  background: var(--map-glass-solid);
+  border-color: var(--map-hair);
+  color: var(--map-text-muted);
+}
+/* Atribusi: MapLibre menulis `.maplibregl-ctrl.maplibregl-ctrl-attrib` (dua
+   kelas) dari page.css yang diinject SETELAH layout.css — selektor satu kelas
+   akan kalah, jadi kelasnya ditulis dua kali di sini. */
+.map-card .maplibregl-ctrl.maplibregl-ctrl-attrib {
+  background: var(--map-glass-solid);
+  color: var(--map-text-muted);
+  border-radius: var(--radius-chip);
+}
+.map-card .maplibregl-ctrl.maplibregl-ctrl-attrib a {
+  color: var(--map-accent-text);
+}
+
+/* Fokus keyboard: satu warna harus kontras ke DUA latar yang mungkin —
+   piringan putih (8,7:1) dan ubin peta termasuk taman (4,9:1).
+   `--map-accent` #2563EB gagal di taman (2,93:1), jadi cincin memakai
+   `--map-focus` #1E40AF. */
+.map-card .map-legend-toggle:focus-visible,
+.map-card .map-filter-clear:focus-visible,
+.map-card .map-layer-info-toggle:focus-visible,
+.map-card .route-focus-pill:focus-visible,
+.map-card .map-reset-view:focus-visible,
+.map-card .maplibregl-ctrl-group button:focus-visible {
+  outline: 2px solid var(--map-focus);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .map-card .map-body,
+  .map-card .map-legend-toggle,
+  .map-card .route-focus-pill,
+  .map-card .maplibregl-popup-content {
+    transition: none;
+    animation: none;
+  }
+}
+
+/* Transparansi diminta dikurangi: piringan jadi putih pekat. */
+@media (prefers-reduced-transparency: reduce) {
+  .map-card .map-body,
+  .map-card .maplibregl-popup-content,
+  .map-card .map-legend-toggle,
+  .map-card .map-reset-view,
+  .map-card .maplibregl-ctrl-group,
+  .map-card .map-pin-label {
+    background: var(--map-glass-solid);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+}
+
+/* Mode kontras paksa (Windows High Contrast): serahkan warna ke sistem. */
+@media (forced-colors: active) {
+  .map-card .map-body,
+  .map-card .map-pin-label,
+  .map-card .maplibregl-popup-content {
+    background: Canvas;
+    color: CanvasText;
+    border-color: CanvasText;
+  }
+}
+
+/* Daftar status lokasi (kalau suatu saat dihidupkan di dalam kartu peta) tetap
+   memakai permukaan terang. */
+.map-card .map-body .map-side {
+  color: var(--ink);
+  background: var(--surface);
+  border-radius: var(--radius-control);
+  padding: 8px;
+}
+
+
+/* ══════════════════════════════════════════════════════════════════════════
+   Kartu popup peta (21 Okt 2026)
+   ──────────────────────────────────────────────────────────────────────────
+   Permintaan pemilik: "kalau diklik icon mobil, supplier, dan SPPG muncul
+   informasi — desain UI/UX-nya sebaik mungkin, eye catching."
+   Sebelumnya popup = gelembung putih berisi 2–5 baris teks tanpa hierarki.
+   Sekarang SATU kartu untuk empat jenis penanda, dengan bahasa desain yang
+   sama seperti kartu aplikasi: judul tebal, chip bernada, angka utama
+   (Fira Code), metrik pendek, dan fakta pendukung. Warna aksen berbeda per
+   jenis, tetapi arti selalu ditulis dengan kata di chip/callout.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+.map-card .maplibregl-popup-content {
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid var(--map-hair-strong);
+  border-radius: var(--radius-dock);
+  background: var(--map-glass-solid);
+  box-shadow: var(--shadow-3);
+}
+
+.map-card .map-popup {
+  /* flow-root menahan margin anak (mis. callout) di dalam kartu; tanpa ini
+     margin bawah callout kolaps keluar dan dipotong overflow popup. */
+  display: flow-root;
+  --pop-accent: #1d4ed8;
+  --pop-accent-2: #60a5fa;
+  --pop-accent-soft: #eff6ff;
+  --pop-accent-ink: #1e40af;
+  --pop-ink: #0f172a;
+  --pop-muted: #475569;
+  --pop-hair: rgba(15, 23, 42, 0.1);
+  min-width: 248px;
+  max-width: min(320px, calc(100vw - 80px));
+  color: var(--pop-ink);
+  background: #fff;
+}
+
+.map-card .maplibregl-popup {
+  z-index: 6;
+}
+
+.map-card .map-popup::before {
+  content: "";
+  display: block;
+  height: 3px;
+  background: linear-gradient(90deg, var(--pop-accent), var(--pop-accent-2));
+}
+
+.map-card .map-popup[data-kind="supplier"] {
+  --pop-accent: #0f766e;
+  --pop-accent-2: #2dd4bf;
+  --pop-accent-soft: #f0fdfa;
+  --pop-accent-ink: #115e59;
+}
+
+.map-card .map-popup[data-kind="truck"],
+.map-card .map-popup[data-kind="route"] {
+  --pop-accent: #1d4ed8;
+  --pop-accent-2: #60a5fa;
+  --pop-accent-soft: #eff6ff;
+  --pop-accent-ink: #1e40af;
+}
+
+/* Nada KEADAAN menang atas warna jenis: merah/hijau/amber membawa arti. */
+.map-card .map-popup[data-tone="danger"] {
+  --pop-accent: #b91c1c;
+  --pop-accent-2: #f87171;
+  --pop-accent-soft: #fef2f2;
+  --pop-accent-ink: #991b1b;
+}
+.map-card .map-popup[data-tone="safe"] {
+  --pop-accent: #15803d;
+  --pop-accent-2: #4ade80;
+  --pop-accent-soft: #ecfdf5;
+  --pop-accent-ink: #065f46;
+}
+.map-card .map-popup[data-tone="warning"] {
+  --pop-accent: #b45309;
+  --pop-accent-2: #fbbf24;
+  --pop-accent-soft: #fffbeb;
+  --pop-accent-ink: #8a5a00;
+}
+.map-card .map-popup[data-tone="neutral"] {
+  --pop-accent: #475569;
+  --pop-accent-2: #94a3b8;
+  --pop-accent-soft: #f1f5f9;
+  --pop-accent-ink: #334155;
+}
+
+/* Kepala: ikon (SVG, bukan emoji) + kicker + judul + chip. */
+.map-card .map-popup-head {
+  display: grid;
+  grid-template-columns: 38px minmax(0, 1fr);
+  gap: 10px;
+  align-items: start;
+  padding: 12px 14px 8px;
+}
+.map-card .map-popup-icon {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border-radius: var(--radius);
+  color: var(--pop-accent-ink);
+  background: var(--pop-accent-soft);
+  border: 1px solid var(--pop-hair);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8);
+}
+.map-card .map-popup-icon svg {
+  width: 20px;
+  height: 20px;
+}
+.map-card .map-popup-heading {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  min-width: 0;
+  padding-right: 22px;
+}
+.map-card .map-popup-kicker {
+  font-size: var(--fs-1);
+  font-weight: 700;
+  line-height: 1.4;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--pop-muted);
+}
+.map-card .map-popup-title {
+  margin-top: 2px;
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1.25;
+  letter-spacing: -0.01em;
+  color: var(--pop-ink);
+  overflow-wrap: anywhere;
+}
+.map-card .map-popup-chip {
+  align-self: flex-start;
+  max-width: 100%;
+  margin-top: 6px;
+  padding: 2px 8px;
+  border: 1px solid var(--pop-hair);
+  border-radius: 999px;
+  background: var(--pop-accent-soft);
+  color: var(--pop-accent-ink);
+  font-size: var(--fs-1);
+  font-weight: 700;
+  line-height: 1.45;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Angka utama: satu hal yang paling ingin diketahui dari penanda ini. */
+.map-card .map-popup-hero {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 4px 10px;
+  padding: 0 14px 9px;
+}
+.map-card .map-popup-hero-label {
+  min-width: 0;
+  font-size: var(--fs-1);
+  font-weight: 600;
+  line-height: 1.4;
+  color: var(--pop-muted);
+}
+.map-card .map-popup-hero-value {
+  flex: none;
+  max-width: 100%;
+  font-family: var(--font-data);
+  font-size: 20px;
+  font-weight: 600;
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+  color: var(--pop-accent-ink);
+  text-align: right;
+}
+
+/* Metrik pendek: maksimal tiga, satu baris bila ruang cukup. */
+.map-card .map-popup-metrics {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(82px, 1fr));
+  gap: 1px;
+  margin: 0 14px 10px;
+  padding: 0;
+  border: 1px solid var(--pop-hair);
+  border-radius: var(--radius-control);
+  background: var(--pop-hair);
+  overflow: hidden;
+}
+.map-card .map-popup-metric {
+  min-width: 0;
+  padding: 7px 9px;
+  background: #f8fafc;
+}
+.map-card .map-popup-metric dt {
+  font-size: var(--fs-1);
+  font-weight: 700;
+  line-height: 1.4;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--pop-muted);
+}
+.map-card .map-popup-metric dd {
+  margin: 2px 0 0;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.35;
+  font-family: var(--font-data);
+  font-variant-numeric: tabular-nums;
+  color: var(--pop-ink);
+  overflow-wrap: anywhere;
+}
+
+/* Bar progres/keandalan. */
+.map-card .map-popup-meter {
+  display: grid;
+  gap: 4px;
+  padding: 0 14px 10px;
+}
+.map-card .map-popup-meter-track {
+  display: block;
+  height: 6px;
+  border-radius: 999px;
+  background: #e2e8f0;
+  overflow: hidden;
+}
+.map-card .map-popup-meter-fill {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--pop-accent), var(--pop-accent-2));
+  transition: width var(--dur-3) var(--ease-standard);
+}
+.map-card .map-popup-meter-text {
+  font-size: var(--fs-1);
+  line-height: 1.4;
+  color: var(--pop-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Kotak sorot: kiriman aktif / exclusion / peringatan mutu. */
+.map-card .maplibregl-popup-content .map-popup-callout {
+  margin: 0 14px 10px;
+  padding: 7px 10px;
+  border: 1px solid var(--pop-hair);
+  border-left: 3px solid var(--pop-accent);
+  border-radius: var(--radius-control-sm);
+  background: var(--pop-accent-soft);
+  color: var(--pop-accent-ink);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+.map-card .maplibregl-popup-content .map-popup-callout[data-tone="danger"] {
+  border-left-color: #b91c1c;
+  background: #fef2f2;
+  color: #991b1b;
+}
+.map-card .maplibregl-popup-content .map-popup-callout[data-tone="warning"] {
+  border-left-color: #b45309;
+  background: #fffbeb;
+  color: #8a5a00;
+}
+
+/* Fakta pendukung (jalur, perjalanan, masa layak). */
+.map-card .map-popup-line {
+  display: flex;
+  gap: 7px;
+  margin: 0;
+  padding: 0 14px 4px;
+  font-size: var(--fs-1);
+  line-height: 1.45;
+  color: var(--pop-muted);
+}
+.map-card .map-popup-line::before {
+  content: "";
+  flex: none;
+  width: 4px;
+  height: 4px;
+  margin-top: 6px;
+  border-radius: 50%;
+  background: var(--pop-accent);
+}
+.map-card .map-popup-line:last-child {
+  padding-bottom: 12px;
+}
+
+/* Tinggi popup dibatasi supaya SELALU muat di kanvas 400 px, dan isinya bisa
+   digulir. Sejak lantai tipografi 12 px ditegakkan (audit 22 Okt 2026) popup
+   jalur setinggi 402 px: keluar dari peta dan `jagaPopup` menyerah karena
+   tingginya melebihi tinggi peta − 24 px, sehingga kartu menggantung di luar.
+   Batas 340 px menyisakan ruang untuk panah + inset atas 24 px. */
+.map-card .maplibregl-popup-content {
+  max-height: 340px;
+  overflow-y: auto;
+}
+
+.map-card .map-popup-note {
+  display: block;
+  margin: 0;
+  padding: 8px 14px 11px;
+  border-top: 1px dashed var(--pop-hair);
+  background: var(--bg-page);
+  color: var(--pop-muted);
+  font-size: var(--fs-1);
+  line-height: 1.45;
+}
+
+/* Tombol tutup MapLibre: bulat, tidak menabrak chip. */
+.map-card .maplibregl-popup-close-button {
+  top: 8px;
+  right: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border: 1px solid var(--pop-hair);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.92);
+  color: var(--pop-muted);
+  font-size: 16px;
+  line-height: 1;
+}
+.map-card .maplibregl-popup-close-button:hover {
+  background: #f1f5f9;
+  color: var(--pop-ink);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .map-card .map-popup-meter-fill {
+    transition: none;
+  }
+}
+
+@media (forced-colors: active) {
+  .map-card .map-popup,
+  .map-card .map-popup-icon,
+  .map-card .map-popup-chip,
+  .map-card .map-popup-metrics,
+  .map-card .map-popup-metric,
+  .map-card .map-popup-callout {
+    background: Canvas;
+    color: CanvasText;
+    border-color: CanvasText;
+  }
+}
+
+/* Layar sempit: angka utama sedikit lebih kecil supaya "kurang 780 kg"
+   tidak terpotong di kartu 274 px. Ditaruh SETELAH aturan dasar, bukan
+   sebelum — kalau tidak, font-size 20px di atasnya menang. */
+@media (max-width: 480px) {
+  .map-card .map-popup-hero-value {
+    font-size: 18px;
+  }
+  .map-card .map-popup-hero-label {
+    font-size: var(--fs-1);
+  }
+
+  /* Kartu truk lebih tinggi dari kartu SPPG (judul 2 baris + metrik 3 +
+     fakta). Di peta ponsel hanya ~320 px, jadi pada 375 px dipadatkan:
+     fakta "Sisa …" yang mengulang meter disembunyikan, teks meter juga
+     (angka besar sudah menyatakan progres), dan padding dirapatkan.
+     Fakta "Layak dipakai s/d …" tetap tampil — itu satu-satunya tempat
+     batas keamanan terlihat di popup. */
+  .map-card .map-popup[data-kind="truck"] .map-popup-line:not(:last-child) {
+    display: none;
+  }
+  .map-card .map-popup[data-kind="truck"] .map-popup-meter-text,
+  .map-card .map-popup[data-kind="supplier"] .map-popup-meter-text {
+    display: none;
+  }
+  .map-card .map-popup-head {
+    grid-template-columns: 34px minmax(0, 1fr);
+    gap: 8px;
+    padding: 10px 12px 6px;
+  }
+  .map-card .map-popup-icon {
+    width: 34px;
+    height: 34px;
+  }
+  .map-card .map-popup-kicker {
+    font-size: var(--fs-1);
+  }
+  .map-card .map-popup-title {
+    font-size: 14.5px;
+    line-height: 1.2;
+  }
+  .map-card .map-popup-chip {
+    margin-top: 4px;
+    padding: 1px 7px;
+    font-size: var(--fs-1);
+  }
+  .map-card .map-popup-hero,
+  .map-card .map-popup-meter {
+    padding-left: 12px;
+    padding-right: 12px;
+    padding-bottom: 6px;
+  }
+  .map-card .map-popup-metrics {
+    margin-left: 12px;
+    margin-right: 12px;
+    margin-bottom: 7px;
+  }
+  .map-card .map-popup-callout {
+    margin: 0 12px 8px;
+    padding: 6px 8px;
+    font-size: var(--fs-1);
+  }
+  .map-card .map-popup-metric {
+    padding: 6px 7px;
+  }
+  .map-card .map-popup-metric dt {
+    font-size: var(--fs-1);
+  }
+  .map-card .map-popup-metric dd {
+    font-size: var(--fs-1);
+  }
+  .map-card .map-popup-line {
+    padding: 0 12px 3px;
+    font-size: var(--fs-1);
+  }
+  .map-card .map-popup-line:last-child {
+    padding-bottom: 10px;
+  }
+}

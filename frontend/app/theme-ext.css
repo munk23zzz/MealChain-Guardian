@@ -1,0 +1,1663 @@
+/* ============================================================
+   theme-ext.css — tambahan UI per halaman (17 Okt 2026)
+
+   Sengaja DIPISAH dari globals.css: sesi lain aktif menyunting
+   peta/legenda di berkas itu. Pekerjaan halaman berikutnya cukup
+   menambah blok di sini, jadi tidak ada dua penulis di satu berkas.
+   Dimuat setelah globals.css (lihat app/layout.tsx) supaya bisa
+   menimpa aturan dasar tanpa !important.
+   ============================================================ */
+
+/* ---------- Keamanan Pangan: tabel batch ----------
+   Sumber semantik (bukan karangan): lib/food-safety.ts
+   safetyTone(): pass=ok, fail=danger, needs_verification=warn, pending=muted
+   expiryState(): expired / urgent / watch
+   Sebelumnya "urgent" dan "watch" sama-sama amber → tingkat berat dan
+   sedang tidak bisa dibedakan. Sekarang tiga tingkat punya tinta sendiri. */
+.safety-state-watch {
+  background: var(--sev-medium-bg);
+  color: var(--sev-medium-ink);
+  border-color: var(--sev-medium-line);
+}
+.safety-state-urgent {
+  background: var(--sev-hard-bg);
+  color: var(--sev-hard-ink);
+  border-color: var(--sev-hard-line);
+}
+.safety-state-expired {
+  background: var(--sev-critical-bg);
+  color: var(--sev-critical-ink);
+  border-color: var(--sev-critical-line);
+}
+
+/* Baris: zebra tipis + aksen tepi kiri sesuai status keamanan.
+   Badge tetap membawa teksnya, jadi warna bukan satu-satunya penanda. */
+.board-page .location-table tbody tr:nth-child(even) {
+  background: var(--surface-sunken);
+}
+.board-page .location-table tbody tr:hover {
+  background: var(--cat-blue-bg);
+}
+.board-page .location-table tbody tr:has(.board-badge-danger) {
+  box-shadow: inset 3px 0 0 var(--sev-critical-solid);
+}
+.board-page .location-table tbody tr:has(.board-badge-warn) {
+  box-shadow: inset 3px 0 0 var(--sev-medium-solid);
+}
+
+/* Kolom sempit: badge tidak boleh pecah dua baris. */
+.board-page .location-table .board-badge {
+  white-space: nowrap;
+}
+.board-page .location-table td:first-child {
+  font-weight: 500;
+}
+
+/* 375 px: "3 kiriman · +4 lain" tidak boleh mendorong halaman melebar.
+   Diukur: header kartu 286 px, teks 317 px (nowrap) → luapan 43 px. */
+@media (max-width: 720px) {
+  .board-page .card-header {
+    flex-wrap: wrap;
+  }
+  .board-page .shipment-count {
+    white-space: normal;
+  }
+}
+
+/* ---------- Decision & Evidence: metrik bukti + lini masa ----------
+   Metrik diberi identitas per label (data-metrik dari DecisionEvidence).
+   Warna = kategori, bukan status; label & angkanya tetap ada. */
+.evidence-metric {
+  box-shadow: inset 0 3px 0 var(--metrik-line, transparent);
+}
+.evidence-metric dt {
+  color: var(--metrik-ink, var(--ink-subtle));
+}
+.evidence-metric dt::before {
+  content: "";
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-right: 6px;
+  border-radius: 999px;
+  background: var(--metrik-ink, var(--ink-subtle));
+  vertical-align: 1px;
+}
+.evidence-metric[data-metrik^="kuantitas"] {
+  --metrik-bg: var(--cat-blue-bg);
+  --metrik-line: var(--cat-blue-line);
+  --metrik-ink: var(--cat-blue-ink);
+}
+.evidence-metric[data-metrik^="biaya"] {
+  --metrik-bg: var(--cat-violet-bg);
+  --metrik-line: var(--cat-violet-line);
+  --metrik-ink: var(--cat-violet-ink);
+}
+.evidence-metric[data-metrik^="selisih"] {
+  --metrik-bg: var(--cat-amber-bg);
+  --metrik-line: var(--cat-amber-line);
+  --metrik-ink: var(--cat-amber-ink);
+}
+.evidence-metric[data-metrik^="tujuan"],
+.evidence-metric[data-metrik^="lokasi"] {
+  --metrik-bg: var(--cat-teal-bg);
+  --metrik-line: var(--cat-teal-line);
+  --metrik-ink: var(--cat-teal-ink);
+}
+
+/* Lini masa: tone "warn"/"muted" sebelumnya jatuh ke abu-abu yang sama.
+   Sekarang tiap nada punya tinta sendiri + rel tepi untuk danger/warn. */
+.audit-warn .audit-mark {
+  border-color: var(--sev-medium-line);
+  background: var(--sev-medium-bg);
+  color: var(--sev-medium-ink);
+}
+.audit-muted .audit-mark {
+  border-color: var(--neutral-border);
+  background: var(--neutral-bg);
+  color: var(--neutral-ink);
+}
+.audit-item.audit-danger {
+  box-shadow: inset 3px 0 0 var(--sev-critical-solid);
+}
+.audit-item.audit-warn {
+  box-shadow: inset 3px 0 0 var(--sev-medium-solid);
+}
+
+/* ---------- Surplus & Limbah: dua sisi neraca ----------
+   Surplus = ketersediaan (teal), kekurangan = defisit (rose). Hanya label
+   dan rel tepi yang diberi warna; angka tetap netral supaya "0" tidak
+   terbaca seperti masalah. */
+.balance-side-surplus {
+  border-left: 3px solid var(--cat-teal-line);
+  padding-left: 10px;
+}
+.balance-side-surplus .balance-label {
+  color: var(--cat-teal-ink);
+}
+.balance-side-shortage {
+  border-right: 3px solid var(--cat-rose-line);
+  padding-right: 10px;
+}
+.balance-side-shortage .balance-label {
+  color: var(--cat-rose-ink);
+}
+
+/* ============================================================
+   Audit design system — 22 Okt 2026 (seluruh halaman)
+   Tiga cacat lintas halaman yang "diam": tidak ada error, hanya tampil beda.
+   Dimuat setelah globals.css, jadi menang urutan tanpa !important.
+   ============================================================ */
+
+/* 1) KONTROL FORM tidak mewarisi tipografi proyek: bawaan peramban membuat
+   `button` tampil Arial 13,3333 px (satu-satunya ukuran bukan skala dokumen di
+   setiap halaman) dan `select` berteks hitam murni — terukur di Demo Control.
+   `font: inherit` + `color: inherit` menutup keduanya; ukuran yang memang
+   ditulis komponen tetap menang karena selektornya lebih spesifik. */
+button,
+input,
+select,
+textarea {
+  font: inherit;
+  color: inherit;
+}
+/* Daftar pilihan `select` dirender peramban di lapisan terpisah; tanpa ini
+   pilihannya tampil dengan huruf berbeda dari kontrolnya. */
+option {
+  font: inherit;
+}
+
+/* 2) ALIAS TOKEN LAMA → token kanonik. Semuanya dulu ditulis sebagai
+   `var(--x, #hex)` dengan `--x` yang tidak pernah dideklarasikan, jadi hex
+   fallback yang menang tanpa error: `.integrity-warning` memakai cokelat
+   #92400e sementara peringatan lain memakai amber --warn-ink #8A5A00;
+   `.dc-session` diberi tepi #b45309, bukan --status-warning; dan `--surface-2`
+   jatuh ke --surface sehingga panel bersarang kehilangan lapisannya. */
+:root {
+  --warning-ink: var(--warn-ink);
+  --warning-bg: var(--warn-bg);
+  --warning-line: var(--warn-border);
+  --status-warn: var(--status-warning);
+  --safe: var(--status-safe);
+  --warn: var(--warn-ink);
+  --surface-2: var(--surface-sunken);
+  /* Alias yang DIRUJUK globals.css tetapi belum pernah didefinisikan: aturan
+     yang memakainya dibuang browser tanpa error dan tanpa jejak di konsol
+     (terukur 28 Okt 2026: var(--slate) 12x, var(--brand) 2x, var(--status-ok)
+     1x, var(--status-neutral) 1x). Karena itu teks sekunder tampil sehitam teks
+     utama dan tiga garis aksen kiri hilang, termasuk BORDER PUTUS-PUTUS
+     `.ops-event1` yang jadi tidak terlihat sama sekali.
+     Peran semantik, bukan nilai baru: slate = teks sekunder, brand = aksen
+     merek, status-ok = aman, status-neutral = keadaan netral (garis). */
+  --slate: var(--ink-muted);
+  --brand: var(--accent);
+  --status-ok: var(--status-safe);
+  --status-neutral: var(--ink-muted);
+  /* Bayangan merek untuk logo rail: dulu literal rgba() di globals.css. */
+  --shadow-brand: 0 2px 8px rgba(15, 23, 42, 0.18);
+}
+
+/* 3) SATU GERAK MASUK PER LAYAR. Sebelum audit hanya 4 dari 11 layar punya
+   gerak masuk (Hari Ini, Overview, Recommendations, Evidence); sisanya muncul
+   mendadak sehingga perpindahan tab terasa seperti dua aplikasi berbeda.
+   Reveal ini milik PANEL, bukan setiap kartu: opacity + 6 px, 240 ms, easing
+   standar. Keyframe berakhir di `transform: none` (bukan translateY(0)) supaya
+   tidak meninggalkan containing block yang merusak elemen `position: fixed`
+   di dalam panel. */
+@keyframes page-reveal {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .app-content > * {
+    animation: page-reveal var(--dur-3) var(--ease-standard) both;
+  }
+}
+
+/* ---------- Kelas yang dipakai FoodSafetyBoard.tsx tanpa aturan CSS ----------
+   Dua kelas ini dipakai di dialog karantina (`<Popup>` di FoodSafetyBoard.tsx)
+   tetapi tidak pernah didefinisikan di globals.css maupun di berkas ini, jadi
+   elemen mengambil gaya bawaan peramban:
+   - `.field-label`: label "Alasan (tercatat di ledger)" mewarisi `.field`
+     (13 px / 600, tinta penuh) sehingga tidak terbaca sebagai label — ia sama
+     persis dengan isi kolomnya.
+   - `.popup-actions`: baris dua tombol (Batal · Simpan keputusan) tanpa
+     `display: flex`, jadi kedua tombol menempel ke kiri tanpa jarak dan tidak
+     sejajar dengan kaki dialog lain.
+   Tidak ada nilai baru: tinta & jarak memakai token yang sudah ada. */
+.field-label {
+  color: var(--ink-muted);
+  font-size: var(--fs-2);
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
+.popup-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+}
+
+/* Di layar sentuh tombol kaki dialog memakai lebar penuh supaya target
+   sentuhnya tetap 44 px (dua tombol berdempet di 375 px = target < 44 px). */
+@media (max-width: 720px), (pointer: coarse) {
+  .popup-actions > .button {
+    flex: 1 1 100%;
+    min-height: 44px;
+  }
+}
+
+/* `.field input` punya gaya lengkap di globals.css (garis, radius, padding,
+   13 px, tinta navy, latar permukaan) tetapi `.field textarea` TIDAK PERNAH
+   didefinisikan — dan dialog karantina memakai <textarea>. Akibatnya satu-
+   satunya kolom teks di konsol ini tampil dengan gaya bawaan peramban (garis
+   inset 2 px, huruf 13.33 px sistem, tanpa radius, tanpa cincin fokus),
+   berdampingan dengan input lain yang sudah rapi. Disamakan ke token yang
+   sama dengan `.field input`, bukan nilai baru. */
+.field textarea {
+  border: 1px solid var(--line-input);
+  border-radius: var(--radius-control-sm);
+  padding: 10px 12px;
+  font-family: inherit;
+  font-size: var(--fs-3);
+  font-weight: 400;
+  line-height: 1.5;
+  color: var(--navy-900);
+  background: var(--surface);
+  min-height: 88px;
+  resize: vertical;
+}
+
+.field textarea:focus {
+  outline: 2px solid var(--accent-strong);
+  outline-offset: 1px;
+  border-color: var(--accent-strong);
+}
+
+/* ============================================================
+   KPI — pemadatan 28 Okt 2026 (permintaan pemilik: "banyak informasi
+   yang tidak seharusnya ada di situ"). Yang diubah hanya SUSUNAN, bukan
+   angka: setiap kartu dulu bisa memuat 9 blok teks (nama, nilai, skala
+   0–maks, arah, dua pil, alasan, sampel/cakupan, bukti+basis, definisi,
+   baris fakta) dan di atas grid ada tiga baris paragraf penjelas.
+
+   Sesudah pass ini, satu kartu terlihat = nama + angka + bar + satu baris
+   pil (keadaan · arah · bukti) + alasan bila `no_data` + asal historis.
+   Teks penjelas pindah ke SATU lipatan per kartu ("Rincian angka"); dua
+   paragraf metode/latar pindah ke lipatan "Cara membaca angka ini".
+   Semua elemen tetap ada di DOM (tes mem-pin sebagian teksnya), hanya
+   tidak lagi terbentang.
+   ============================================================ */
+
+/* Periode dan cakupan berbagi satu baris: dulu dua baris terpisah, masing-
+   masing dengan labelnya sendiri, sehingga atas halaman terasa berlapis. */
+.kpi-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 18px;
+  margin: 0 0 8px;
+}
+
+.kpi-controls .kpi-period,
+.kpi-controls .kpi-scope-toggle {
+  margin: 0;
+}
+
+/* `kpi-prov-evidence` dulu hidup di dalam `.kpi-prov` (14px, redup). Kini ia
+   menjadi salah satu pil di baris keadaan, jadi ukurannya mengikuti pil lain
+   dan tetap redup supaya tidak bersaing dengan angka. */
+.kpi-card-flags .kpi-prov-evidence {
+  font-size: var(--fs-1);
+  color: var(--ink-muted);
+}
+
+.kpi-card-flags .kpi-prov-evidence strong {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+/* Satu lipatan per kartu. Marker bawaan peramban DIPERTAHANKAN
+   (`display: list-item`), karena `<summary>` yang ditata flex kehilangan
+   segitiga penanda dan lipatan jadi tidak terlihat bisa dibuka. */
+/* Subjudul arti metrik (satu baris, English) — di bawah nama kartu. */
+.kpi-card-desc {
+  margin: 2px 0 6px;
+  font-size: var(--fs-1);
+  line-height: 1.35;
+  color: var(--ink-muted);
+}
+
+.kpi-more,
+.card-note-more {
+  margin: 8px 0 0;
+}
+
+.kpi-more > summary,
+.card-note-more > summary {
+  display: list-item;
+  cursor: pointer;
+  font-size: var(--fs-1);
+  color: var(--ink-muted);
+}
+
+.kpi-more > summary:hover,
+.card-note-more > summary:hover {
+  color: var(--accent);
+}
+
+.kpi-more > summary:focus-visible,
+.card-note-more > summary:focus-visible {
+  outline: 2px solid var(--accent-strong);
+  outline-offset: 2px;
+}
+
+.kpi-more dl {
+  margin: 6px 0 0;
+}
+
+/* Di layar sempit, `summary` ikut menjadi target sentuh 44 px supaya lipatan
+   bisa dibuka tanpa presisi berlebih. `display` SENGAJA tidak diubah menjadi
+   flex di sini: flex pada `<summary>` menghapus segitiga penanda bawaan
+   peramban, sehingga lipatan berfungsi tanpa terlihat bisa dibuka. */
+@media (pointer: coarse), (max-width: 720px) {
+  .kpi-more > summary,
+  .card-note-more > summary {
+    min-height: 44px;
+    padding: 12px 0;
+    display: list-item;
+  }
+}
+
+/* ============================================================
+   Ringkasan pengawasan (Keamanan Pangan) — 28 Okt 2026, putaran keempat.
+
+   Riwayat yang menentukan bentuk ini:
+   - 27 Okt pemilik menolak bidang berwarna: permukaan band tetap PUTIH.
+   - 28 Okt pemilik menolak angka hero / kalimat besar berwarna dan meminta
+     huruf lebih kecil ("no ai slop dan terlalu besar fontnya").
+
+   Karena itu bentuknya mengikuti bahasa tabel halaman lain, bukan bahasa
+   kartu pemasaran: empat sel angka dipisah garis rambut, angka 18 px (bukan
+   24/32/40), label 12 px kapital, bar komposisi 5 px, tanpa panel berlatar,
+   tanpa bayangan, tanpa gradien. Tidak ada satu angka pun yang dinaikkan
+   menjadi "hero" — hierarki dibawa oleh warna tinta status (gagal/kuning)
+   dan oleh urutan baca, bukan oleh ukuran yang mencolok.
+   ============================================================ */
+
+/* 8 px: dengan 14/15 px padding, jarak 6 px membuat kepala dan kalimat putusan
+   terasa menempel. */
+.safety-band {
+  gap: 8px;
+}
+
+/* Tepi kartu berwarna 3 px DILEPAS 30 Okt 2026 (permintaan pemilik: "hapus
+   warna garis yang tidak terlalu penting supaya clean"). Hari yang sehat
+   membuat kartu ini bergaris hijau tebal — aksen yang tidak membawa informasi
+   baru, karena putusan sudah menyebut keadaannya dengan kata. Kartu sekarang
+   bertepi 1 px netral seperti kartu lain; warna hanya dipakai pada angka yang
+   memblokir alokasi dan pada tenggat yang sudah lewat. */
+.safety-band[data-tone="danger"],
+.safety-band[data-tone="warn"],
+.safety-band[data-tone="ok"] {
+  border-left: 1px solid var(--line);
+}
+
+/* Titik kategori: warna yang SAMA dengan segmen bar komposisi di bawah
+   (--safe-ink-tint / --warn-ink / --danger-ink / --neutral-ink). Ini satu-
+   satunya alasan warna di bar bisa dibaca tanpa legenda terpisah. Titik duduk
+   di awal baris label, jadi tepi kiri sel tetap sejajar dengan angka di atasnya. */
+
+/* Label boleh terpotong elipsis, bukan mendorong lebar kolom. */
+
+.safety-band .board-alert,
+.safety-band .evidence-note {
+  margin: 0;
+}
+
+/* Satu lipatan untuk empat baris fakta. Marker bawaan peramban dipertahankan
+   (`display: list-item`) supaya lipatan terlihat bisa dibuka. */
+.safety-band .safety-more {
+  margin: 0;
+}
+
+.safety-band .safety-more > summary {
+  display: list-item;
+  cursor: pointer;
+  font-size: var(--fs-1);
+  color: var(--ink-subtle);
+}
+
+.safety-band .safety-more > summary:hover {
+  color: var(--accent);
+}
+
+.safety-band .safety-more > summary:focus-visible {
+  outline: 2px solid var(--accent-strong);
+  outline-offset: 2px;
+}
+
+.safety-band .safety-more .fact-list {
+  margin-top: 6px;
+}
+
+@media (pointer: coarse), (max-width: 720px) {
+  .safety-band .safety-more > summary {
+    min-height: 44px;
+    padding: 12px 0;
+  }
+
+  
+}
+
+/* Persentase per sel ("Aman 25%") dibuang: untuk empat angka yang sudah
+   berjumlah empat, persentase hanya mengulang porsi yang sudah digambar bar
+   komposisi di bawahnya. Angka dan totalnya tetap terbaca (dan tetap ada di
+   aria-label untuk pembaca layar). */
+
+/* Garis rambut di bawah kepala kartu: memisahkan judul dari deret angka
+   sehingga angka terbaca sebagai satu baris data, bukan lanjutan judul. */
+.safety-band .board-card-head {
+  /* Garis bawah dilepas 30 Okt 2026: kartu sudah punya tepi sendiri, dan baris
+     ini membuat kepala kartu terbaca sebagai tabel kecil. */
+  padding-bottom: 4px;
+}
+
+/* Peringatan: tetap bertepi kiri tebal (pagar bahaya, keputusan Fase 5),
+   tetapi padding di dalam band dirapatkan supaya tidak terbaca sebagai
+   kartu di dalam kartu. */
+.safety-band .board-alert {
+  margin: 0;
+  padding: 7px 10px;
+  font-size: var(--fs-2);
+  border-radius: var(--radius-chip);
+}
+
+/* Kalimat putusan (29 Okt 2026): dulu duduk di kaki kartu, sekarang tepat di
+   bawah kepala. Peran tipografinya "jawaban dulu", bukan catatan kaki — jadi
+   hurufnya sedikit lebih tegas daripada .evidence-note biasa, tanpa bingkai
+   kedua di dalam kartu yang sudah bertepi. */
+/* ---------- Ringkasan: putusan + lima angka (29 Okt 2026) ----------------
+   Aturan visual yang dijaga:
+   - putusan berupa SATU titik status + teks; tidak ada bidang merah selebar
+     kartu yang membuat kartu terbaca seperti halaman galat;
+   - lima angka dipisah garis rambut vertikal (bukan kotak), angka 24 px
+     sebagai titik pindai pertama;
+   - keterangan menempel pada angka yang diterangkannya (berat karantina di
+     bawah "Ditahan"), bukan melayang di kaki kartu. */
+.safety-band .safety-verdict {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  margin: 0;
+  font-size: var(--fs-2);
+  line-height: 1.5;
+  color: var(--ink);
+}
+
+.safety-band .safety-verdict-dot {
+  flex: 0 0 auto;
+  width: 8px;
+  height: 8px;
+  margin-top: 6px;
+  border-radius: 999px;
+  background: var(--neutral-ink);
+}
+
+.safety-band .safety-verdict.is-danger .safety-verdict-dot {
+  background: var(--status-warning);
+}
+
+/* Hijau dan kuning pada titik dilepas 30 Okt 2026 (permintaan pemilik:
+   "hapus warna yang tidak terlalu penting supaya clean"). Hari yang normal tidak
+   perlu tanda berwarna; teksnya sudah menyatakan "tidak ada batch gagal".
+   Warna kini hanya dipakai untuk satu hal yang memblokir alokasi. */
+.safety-band .safety-verdict.is-warn .safety-verdict-dot,
+.safety-band .safety-verdict.is-ok .safety-verdict-dot {
+  background: var(--ink-subtle);
+}
+
+.safety-band .safety-verdict.is-danger {
+  color: var(--ink);
+}
+
+/* auto-fit + minmax: lima kolom di lebar penuh, otomatis turun menjadi 3/2
+   kolom di layar sempit TANPA media query. Media query bergantung pada lebar
+   viewport, sedangkan kartu ini bisa lebih sempit dari viewport (sidebar,
+   panel), dan di situlah label dulu terpotong. */
+.safety-band .safety-counts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(118px, 1fr));
+  margin: 0;
+  padding: var(--space-2) 0;
+  /* Satu garis pemisah dari putusan di atasnya; garis bawah dilepas 30 Okt
+     2026 karena baris ringkas di bawahnya kini punya garisnya sendiri. */
+  border-top: 1px solid var(--line);
+  /* Wadah kueri: pemisah vertikal hanya dipasang saat strip benar-benar
+     selebar lima kolom. Saat angka terlipat, garis kiri akan menggantung di
+     awal baris — persis yang terjadi ketika aturannya memakai media query
+     viewport. */
+  container-type: inline-size;
+}
+
+.safety-band .safety-count {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+@container (min-width: 620px) {
+  /* Pemisah vertikal dilepas 30 Okt 2026: enam garis rambut di dalam satu
+     baris membuat strip angka terbaca sebagai tabel. Jarak antar kolom sudah
+     cukup memisahkan, dan angka rata kirinya tetap sejajar. */
+  .safety-band .safety-count {
+    padding: 0 var(--space-3);
+  }
+
+  .safety-band .safety-count:first-child {
+    padding-left: 0;
+  }
+
+  .safety-band .safety-count:last-child {
+    padding-right: 0;
+  }
+}
+
+.safety-band .safety-count-value {
+  font-size: var(--fs-7);
+  font-weight: 650;
+  line-height: 1.05;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+}
+
+/* Label angka: huruf kapital kecil + jarak huruf. Tujuannya memisahkan
+   "label" dari "nilai" secara tipografis, sehingga lima angka terbaca sebagai
+   satu strip data — bukan lima paragraf pendek. */
+.safety-band .safety-count-label {
+  font-size: var(--fs-1);
+  line-height: 1.25;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--ink-subtle);
+}
+
+/* Berat di bawah angka: keterangan, bukan peringatan. Warnanya sama dengan
+   label (redup) sejak 30 Okt 2026 — kuning di enam tile sekaligus membuat
+   kartu terbaca kuning padahal hanya satu yang perlu ditindak. */
+.safety-band .safety-count-note {
+  font-size: var(--fs-1);
+  line-height: 1.25;
+  color: var(--ink-subtle);
+  font-variant-numeric: tabular-nums;
+}
+
+.safety-band .safety-count.is-danger .safety-count-value {
+  color: var(--status-warning);
+}
+
+/* Angka "perlu verifikasi" tidak lagi berwarna (30 Okt 2026). Satu-satunya
+   angka berwarna di kartu ini adalah yang memblokir alokasi (gagal uji). */
+.safety-band .safety-count.is-warn .safety-count-value {
+  color: var(--ink);
+}
+
+.safety-band .safety-count.is-muted .safety-count-value {
+  color: var(--ink-subtle);
+}
+
+.safety-band .safety-counts-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-1) var(--space-3);
+  padding-top: var(--space-1);
+  font-size: var(--fs-1);
+  color: var(--ink-subtle);
+}
+
+.safety-band .safety-counts-foot .safety-more {
+  margin: 0;
+}
+
+.safety-band .safety-counts-foot summary {
+  color: var(--ink-muted);
+  cursor: pointer;
+}
+
+.safety-band .safety-counts-foot summary:hover {
+  color: var(--ink);
+}
+
+/* Di baris yang terlipat, pemisah kiri pada kolom pertama baris tidak lagi
+   memisahkan apa pun. */
+.safety-band .safety-counts {
+  row-gap: var(--space-2);
+}
+
+/* ── Baris "Paling mendesak" (29 Okt 2026, lanjutan) ───────────────────────
+   Lima angka menjawab "berapa", bukan "kapan". Baris ini menyebut satu batch
+   yang masih BOLEH dipakai dan paling cepat kedaluwarsa — informasi waktu yang
+   tidak dikodekan ulang dari angka di bawahnya (keputusan 29 Okt: satu angka
+   satu arti, tanpa bar/legenda). Labelnya memakai bahasa label mikro yang sama
+   dengan `.safety-count-label`, sehingga baris ini terbaca sebagai keterangan
+   kartu, bukan judul kedua. */
+.safety-band .safety-deadline {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 4px var(--space-2);
+  /* Jarak kecil dari kalimat putusan di atasnya: dua baris keadaan, bukan satu
+     paragraf yang dipenggal. */
+  margin: var(--space-1) 0 0;
+  font-size: var(--fs-2);
+  line-height: 1.5;
+  color: var(--ink);
+}
+
+.safety-band .safety-deadline-label {
+  flex: 0 0 auto;
+  font-size: var(--fs-1);
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--ink-subtle);
+}
+
+.safety-band .safety-deadline-body {
+  display: inline-flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: 0;
+}
+
+.safety-band .safety-deadline-time {
+  /* Tinta peringatan dilepas 30 Okt 2026: yang perlu menonjol hanyalah angka
+     tenggatnya, dan tebal sudah cukup untuk itu. */
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+/* ── Baris kecukupan bukti suhu di Ringkasan pengawasan (29 Okt 2026) ───────
+   Ringkasan pengawasan menjawab "apakah pangan ini aman" — dan status uji saja
+   tidak cukup: rantai dingin yang tidak terbukti membuat batch yang lulus uji
+   tetap tidak boleh dialokasikan. Baris ini memakai bahasa label mikro yang
+   sama dengan baris "Paling mendesak" di atasnya (label kapital 12 px), angka
+   di tengah, dan tautan rincian di ujung kanan supaya barisnya tidak berhenti
+   di tengah dan menyisakan setengah baris kosong. */
+.safety-band .safety-temp {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 4px var(--space-2);
+  margin: var(--space-1) 0 0;
+  font-size: var(--fs-2);
+  line-height: 1.5;
+  color: var(--ink);
+}
+
+.safety-band .safety-temp-label {
+  flex: 0 0 auto;
+  font-size: var(--fs-1);
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--ink-subtle);
+}
+
+.safety-band .safety-temp-body {
+  min-width: 0;
+}
+
+/* "x dari y cukup bukti" tetap tebal; warna kuning dilepas 30 Okt 2026 supaya
+   kartu tidak memakai tiga warna sekaligus untuk tiga tingkat kepentingan. */
+.safety-band .safety-temp[data-keadaan="kurang"] .safety-temp-body strong {
+  color: var(--ink);
+}
+
+.safety-band .safety-temp-link {
+  margin-left: auto;
+  font-size: var(--fs-1);
+  white-space: nowrap;
+}
+
+/* Sudah lewat: tinta bahaya, karena tidak ada tenggat yang perlu dikejar —
+   barangnya tidak boleh dipakai. */
+.safety-band .safety-deadline[data-keadaan="lewat"] .safety-deadline-time,
+.safety-band .safety-deadline[data-keadaan="lewat"] .safety-deadline-label {
+  color: var(--danger-ink);
+}
+
+/* Berat di bawah "Gagal uji": tinta bahaya dilepas 30 Okt 2026 — angkanya
+   sendiri sudah berwarna, dan label + nilai yang berwarna sama membuat satu
+   tile memakai dua sinyal untuk satu fakta. */
+.safety-band .safety-count.is-danger .safety-count-note {
+  color: var(--ink-muted);
+}
+
+/* ── Terminal log "Proses pengambilan data" (Demo Control, 29 Okt 2026) ──────
+   Pemilik meminta proses pengambilan data terlihat seperti terminal. Yang
+   diambil dari bahasa terminal hanya MONO + jam + baris yang mengalir; warna
+   tetap memakai token terang yang sudah ada (.trace-output, .agent-console),
+   karena chrome jendela gelap dan titik merah/kuning/hijau sudah ditolak di
+   acuan desain. */
+.dc-term {
+  margin: 10px 0 4px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface-sunken);
+  overflow: hidden;
+}
+.dc-term-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--line);
+  background: var(--surface);
+}
+/* Lampu keadaan: satu-satunya titik yang berdenyut, hanya saat siaran hidup. */
+.dc-term-lampu {
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: var(--ink-muted);
+  flex: none;
+}
+.dc-term[data-keadaan="live"] .dc-term-lampu {
+  background: var(--ok-ink);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--ok-ink) 16%, transparent);
+  animation: dc-term-denyut 1.6s ease-in-out infinite;
+}
+.dc-term-judul {
+  font-family: var(--font-data);
+  font-size: var(--fs-1);
+  color: var(--ink-muted);
+  letter-spacing: 0;
+}
+.dc-term-jumlah {
+  margin-left: auto;
+  font-size: var(--fs-1);
+  color: var(--ink-muted);
+  font-variant-numeric: tabular-nums;
+}
+.dc-term-ikut {
+  font: inherit;
+  font-size: var(--fs-1);
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 2px 10px;
+  cursor: pointer;
+}
+.dc-term-ikut:hover { background: var(--surface-sunken); }
+.dc-term-ikut:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+.dc-term-pil {
+  font-family: var(--font-data);
+  font-size: var(--fs-1);
+  /* Lantai tipografi 12 px (docs/design.md §Tipografi). */
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-muted);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 1px 7px;
+}
+.dc-term-pil[data-keadaan="live"] {
+  color: var(--ok-ink);
+  border-color: color-mix(in srgb, var(--ok-ink) 40%, var(--line));
+}
+.dc-term-pil[data-keadaan="galat"] {
+  color: var(--danger-ink);
+  border-color: color-mix(in srgb, var(--danger-ink) 40%, var(--line));
+}
+/* Badan log: tinggi tetap supaya blok log proses tidak melompat setiap baris
+   baru; gulir terjadi DI DALAM kotak, halaman tidak ikut memanjang. */
+.dc-term-badan {
+  max-height: 232px;
+  overflow-y: auto;
+  padding: 8px 10px;
+  font-family: var(--font-data);
+  font-size: var(--fs-1);
+  line-height: 1.55;
+  scrollbar-gutter: stable;
+}
+.dc-term-baris {
+  display: grid;
+  /* Sumber data & ringkasan satu kolom: log dibaca dari atas ke bawah, jadi
+     tepi kiri kolom isi harus lurus untuk semua baris. */
+  /* Kolom nama langkah minimal 96 px: nama dari jejak tersimpan lebih panjang
+     dari DETECT/VERIFY (OPTIMIZE, SUPERVISE) dan tidak boleh terpotong "…". */
+  grid-template-columns: 58px minmax(96px, auto) minmax(0, 1fr);
+  align-items: baseline;
+  gap: 10px;
+  margin: 0;
+  padding: 1px 0;
+}
+.dc-term-sumber {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-right: 6px;
+  vertical-align: baseline;
+}
+.dc-term-sumber-item {
+  padding: 0 6px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--ink-subtle);
+  font-family: var(--font-data);
+  /* Lantai tipografi aplikasi 12 px (kontrak token). */
+  font-size: var(--fs-1);
+  line-height: 16px;
+  white-space: nowrap;
+}
+.dc-term-jam {
+  color: var(--ink-subtle);
+  font-variant-numeric: tabular-nums;
+}
+.dc-term-langkah {
+  color: var(--ink);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.dc-term-isi {
+  color: var(--ink-muted);
+  overflow-wrap: anywhere;
+}
+.dc-term-jam--kosong {
+  /* Sebagian baris punya jam, sebagian tidak: kolomnya tetap dipesan supaya
+     tepi kiri nama langkah lurus. */
+  visibility: hidden;
+}
+.dc-term-baris--tanpa-jam {
+  /* Tidak satu pun baris punya jam (dibaca dari jejak tersimpan): kolom jam
+     dilipat, log mulai dari tepi kiri kartu. */
+  grid-template-columns: minmax(96px, auto) minmax(0, 1fr);
+}
+.dc-term-baris--galat .dc-term-isi { color: var(--danger-ink); }
+.dc-term-kursor {
+  margin-left: 2px;
+  animation: dc-term-kedip 1s steps(2, start) infinite;
+}
+@keyframes dc-term-denyut {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
+@keyframes dc-term-kedip {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .dc-term[data-keadaan="live"] .dc-term-lampu,
+  .dc-term-kursor { animation: none; }
+}
+/* 390 px: jam dan nama langkah tetap satu baris, ringkasan turun ke bawahnya. */
+@media (max-width: 640px) {
+  .dc-term-baris { grid-template-columns: 52px 1fr; }
+  .dc-term-isi { grid-column: 2; }
+  .dc-term-baris--tanpa-jam { grid-template-columns: 1fr; }
+  .dc-term-baris--tanpa-jam .dc-term-isi { grid-column: 1; }
+  .dc-term-badan { max-height: 260px; }
+}
+
+/* ── KPI: kartu = satu bentuk yang bisa diklik + panel penjelasan ───────────
+   Revisi 29 Okt 2026: segitiga buka-tutup (`details`) dihapus dari kartu, dan
+   SELURUH kartu yang bisa diklik — bukan hanya namanya. Panel di bawah grid
+   memuat penjelasan informatif (arti angka, cara membaca, periode, sumber),
+   bukan label audit. */
+.kpi-card {
+  cursor: pointer;
+  transition: border-color 0.12s ease, box-shadow 0.12s ease;
+}
+.kpi-card:hover {
+  border-color: var(--line-strong);
+  box-shadow: var(--shadow-1);
+}
+.kpi-card:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+/* Kartu yang sedang terbuka: garis aksen + latar tipis, supaya panel di bawah
+   jelas milik kartu yang mana. */
+.kpi-card[data-aktif="true"] {
+  border-color: var(--accent);
+  box-shadow: inset 3px 0 0 var(--accent);
+  background: var(--surface);
+}
+.kpi-card[data-aktif="true"] .kpi-card-name {
+  color: var(--accent-strong);
+}
+
+/* Panel tunggal di bawah grid — bahasa desain kartu yang sama (putih, radius
+   12, judul 14/600, meta redup), supaya tidak terbaca sebagai dialog asing. */
+.kpi-detail {
+  margin-top: 12px;
+  /* Jarak aman terhadap bar kepala + navigasi bagian yang lengket: saat panel
+     digulir ke layar (`scrollIntoView`, tahap 3 redesign 29 Okt 2026) judulnya
+     tidak boleh berhenti di bawah kepala yang menutupi. Nilai 132 px sama
+     dengan jangkar `.section-jump` lain di aplikasi. */
+  scroll-margin-top: 132px;
+  border-radius: var(--radius);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  padding: 14px 16px 12px;
+}
+.kpi-detail-head {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+.kpi-detail-title {
+  margin: 0;
+  font-size: var(--fs-2);
+  font-weight: 600;
+  color: var(--ink);
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.kpi-detail-canon {
+  font-family: var(--font-data);
+  font-size: var(--fs-1);
+  font-weight: 500;
+  color: var(--ink-muted);
+  letter-spacing: 0;
+}
+/* Judul panel menerima fokus TERPROGRAM saat panel dibuka (tahap 3, 29 Okt
+   2026). Peramban lalu menggambar kotak fokus persegi di atas judul — terbaca
+   sebagai kotak nyasar, bukan petunjuk (terlihat di tangkapan 1360 px). Fokus
+   di sini bukan sarana menekan apa pun (judul bukan kontrol), jadi cincinnya
+   dimatikan HANYA di elemen ini; semua kontrol tetap memakai cincin fokus
+   aplikasi. */
+.kpi-detail-title:focus,
+.kpi-detail-title:focus-visible {
+  outline: none;
+}
+.kpi-detail-close {
+  margin-left: auto;
+  width: 32px;
+  height: 32px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  font: inherit;
+  font-size: 18px;
+  line-height: 1;
+  color: var(--ink-muted);
+  background: transparent;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  cursor: pointer;
+}
+.kpi-detail-close:hover { color: var(--ink); background: var(--surface-sunken); }
+.kpi-detail-close:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+
+/* Angka besar di panel: satu pandangan cukup untuk tahu nilainya. */
+.kpi-detail-hero {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin: 6px 0 10px;
+  flex-wrap: wrap;
+}
+.kpi-detail-value {
+  margin: 0;
+  font-size: 28px;
+  font-weight: 650;
+  line-height: 1.1;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+.kpi-detail-value small {
+  font-size: var(--fs-2);
+  font-weight: 500;
+  color: var(--ink-muted);
+}
+.kpi-detail-state {
+  margin: 0;
+  font-size: var(--fs-1);
+  color: var(--ink-muted);
+}
+.kpi-detail-state[data-state="no_data"] { color: var(--ink-muted); }
+.kpi-detail-state[data-state="unavailable"] { color: var(--danger-ink); }
+.kpi-detail-trend { color: var(--ink-muted); }
+
+/* Bagian penjelasan: judul kecil kapital + satu paragraf pendek. */
+.kpi-detail-block { margin: 0 0 10px; }
+.kpi-detail-block h4 {
+  margin: 0 0 2px;
+  font-size: var(--fs-1);
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--ink-muted);
+}
+.kpi-detail-block p {
+  margin: 0;
+  font-size: var(--fs-2);
+  line-height: 1.5;
+  color: var(--ink);
+  max-width: 76ch;
+}
+
+.kpi-detail-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 4px 0 0;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+}
+.kpi-detail-meta > div {
+  background: var(--surface-sunken);
+  border-radius: var(--radius-control-sm);
+  padding: 6px 10px;
+}
+.kpi-detail-meta dt {
+  font-size: var(--fs-1);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ink-muted);
+}
+.kpi-detail-meta dd {
+  margin: 2px 0 0;
+  font-size: var(--fs-2);
+  color: var(--ink);
+}
+
+@media (max-width: 640px) {
+  .kpi-detail { padding: 12px; }
+  .kpi-detail-value { font-size: 24px; }
+  /* Layar sentuh: X setinggi 44 px untuk area ketuk, bukan 32 px. */
+  .kpi-detail-close { width: 44px; height: 44px; }
+}
+
+/* ── Drawer kanan: popup penerimaan barang (Dok 05 §1–§2) ────────────────────
+   Cangkang `.popup` di globals adalah dialog TENGAH (640 px, 86vh). Dokumen
+   menyebut popup penerimaan berbentuk DRAWER KANAN, jadi bentuknya dimodifikasi
+   lewat kelas tambahan — dialog lain yang memakai cangkang yang sama tidak ikut
+   berubah. Latar tetap memakai `.popup-backdrop` (blur 8 px) supaya bahasa
+   modalnya satu.
+   Di layar sempit drawer mengambil lebar penuh: panel 560 px di viewport 375 px
+   menyisakan 0 px untuk konteks, dan ceklis di dalamnya jadi sempit. */
+/* ── Popup penerimaan barang: dialog di TENGAH (29 Okt 2026) ────────────────
+   Versi pagi ini drawer kanan 560 px. Pemilik meminta popup di tengah: keputusan
+   terima/tolak dibaca sebagai dialog, dan tabel di belakangnya tidak perlu
+   tertutup separuh. Lebar 720 px dipilih supaya tujuh butir dengan tiga opsi
+   tetap satu kolom (tidak ada grid dua kolom yang memaksa mata melompat), dan
+   tinggi dibatasi 88% layar supaya tepi atas-bawah masih terlihat.
+   Yang menggulir tetap `.popup-body` bawaan — jangan menambah `overflow` di
+   panel, dua wadah bergulir bersarang membuat scroll "nyangkut" di tengah. */
+.popup.popup-receipt {
+  width: min(720px, 100%);
+  max-height: min(88vh, 100%);
+  animation: receipt-dialog-in var(--dur-3) var(--ease-standard);
+}
+
+@keyframes receipt-dialog-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.99);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (max-width: 720px) {
+  .popup.popup-receipt {
+    width: 100%;
+    max-height: 100%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .popup.popup-receipt {
+    animation: none;
+  }
+}
+
+/* ── Baris tabel yang bisa diklik (29 Okt 2026) ─────────────────────────────
+   Tabel yang punya tombol per baris kini juga bereaksi saat barisnya diklik.
+   Tombolnya tetap ada (jalur papan ketik + penanda aksi); baris hanya
+   memperbesar sasaran klik. Kontrol di dalam baris tidak menggandakan aksi —
+   aturannya di `lib/baris-klik.ts`. */
+tr[data-klik-baris="true"] {
+  cursor: pointer;
+}
+tr[data-klik-baris="true"]:hover > td {
+  background: var(--surface-sunken);
+}
+tr[data-klik-baris="true"]:hover > td:first-child {
+  box-shadow: inset 3px 0 0 var(--line-strong);
+}
+
+/* ── Jejak agent: peringatan urutan waktu + baris status model kosong ───────
+   Dua kejujuran yang ditambahkan bersama tanggal pada jejak (29 Okt 2026). */
+.trace-causality {
+  margin: 8px 12px 10px;
+  padding: 8px 10px;
+  border-radius: var(--radius-control-sm);
+  border: 1px solid var(--warn-border);
+  background: var(--warn-bg);
+  font-size: var(--fs-1);
+  line-height: 1.45;
+  color: var(--ink);
+}
+.aa-run-empty {
+  margin: 6px 0 0;
+  font-size: var(--fs-2);
+  color: var(--ink-muted);
+}
+
+/* ---------- Panel audit performa (konsep Performance & Audit, 29 Okt 2026) ----------
+   Panel ini menjawab "dari mana angka ini", jadi kepadatannya sengaja lebih
+   tinggi dari kartu KPI: label kecil, nilai tabular, tanpa hiasan. Tabel cakupan
+   tidak boleh memaksa lebar halaman — ia menggulir sendiri di layar sempit. */
+.perf-audit {
+  margin: var(--space-4) 0 0;
+  padding: var(--space-3) var(--space-4);
+}
+
+.perf-audit-head {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0 0 var(--space-3);
+}
+
+.perf-audit-title {
+  margin: 0;
+  font-size: var(--fs-3);
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.perf-audit-sub {
+  margin: 0;
+  font-size: var(--fs-1);
+  color: var(--ink-muted);
+  max-width: 90ch;
+}
+
+.perf-audit-h4 {
+  margin: var(--space-4) 0 var(--space-2);
+  font-size: var(--fs-2);
+  font-weight: 600;
+  color: var(--ink);
+}
+
+/* Tahap 4 (29 Okt 2026): enam jejak perhitungan jadi SATU strip enam sel.
+   Sebelumnya `auto-fit minmax(180px)` mengalir jadi 2–3 baris (222 px) untuk
+   enam fakta pendek — panel audit jadi lebih tinggi dari kartu yang diaudit.
+   Satu baris = satu pemindaian; sel dibatasi `minmax(0,1fr)` supaya nilai
+   panjang ("1 hari (asumsi siklus harian SPPG)") membungkus, bukan melebarkan
+   halaman. */
+.perf-audit-strip {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  margin: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-control);
+  background: var(--surface);
+  overflow: hidden;
+}
+
+.perf-audit-cell {
+  min-width: 0;
+  padding: var(--space-2) var(--space-3);
+  border-left: 1px solid var(--line);
+}
+
+.perf-audit-cell:first-child {
+  border-left: 0;
+}
+
+.perf-audit-cell dt {
+  /* 30 Okt 2026: 11px literal melanggar lantai tipografi 12 px (design.md §token). */
+  font-size: var(--fs-1);
+  line-height: 1.3;
+  color: var(--ink-muted);
+  overflow-wrap: anywhere;
+}
+
+.perf-audit-cell dd {
+  margin: 3px 0 0;
+  font-size: var(--fs-1);
+  font-weight: 600;
+  line-height: 1.35;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
+/* Di bawah 1180 px enam kolom memaksa label dua-tiga baris; tiga kolom lebih
+   terbaca dan tetap satu blok (bukan enam kartu terpisah). */
+@media (max-width: 1180px) {
+  .perf-audit-strip {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .perf-audit-cell:nth-child(3n + 1) {
+    border-left: 0;
+  }
+
+  .perf-audit-cell:nth-child(n + 4) {
+    border-top: 1px solid var(--line);
+  }
+}
+
+@media (max-width: 620px) {
+  .perf-audit-strip {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  /* Empat kolom tidak muat di 346 px tanpa mengorbankan kolom "Sebab": kalimat
+     cakupan jatuh ke 4–6 baris (terukur 229 px per baris saat lebar kolom
+     dipaku). Di layar sempit tiap metrik jadi DUA BARIS: identitas + keadaan +
+     sampel di baris pertama, "Sebab" selebar kartu di bawahnya. Tidak ada
+     gulir mendatar, dan kalimat sebab tidak perlu digeser. (Kartu per metrik
+     sempat dicoba: 191 px per metrik, total panel 1.637 px — lebih tinggi dari
+     versi tabelnya sendiri. Dua baris = 90 px per metrik.) */
+  .perf-audit-table thead {
+    display: none;
+  }
+
+  .perf-audit-table,
+  .perf-audit-table tbody {
+    display: block;
+    min-width: 0;
+    width: 100%;
+  }
+
+  .perf-audit-table tbody tr {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    gap: 2px var(--space-2);
+    align-items: center;
+    padding: var(--space-2) 0;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .perf-audit-table tbody tr:last-child {
+    border-bottom: 0;
+  }
+
+  .perf-audit-table tbody th[scope="row"] {
+    grid-column: 1;
+    padding: 0;
+    border-bottom: 0;
+    font-weight: 600;
+  }
+
+  .perf-audit-table tbody td {
+    padding: 0;
+    border-bottom: 0;
+  }
+
+  .perf-audit-table tbody td[data-label="Keadaan"] {
+    grid-column: 2;
+  }
+
+  .perf-audit-table tbody td[data-label="Sampel"] {
+    grid-column: 3;
+    text-align: right;
+  }
+
+  .perf-audit-table tbody td[data-label="Sebab"] {
+    grid-column: 1 / -1;
+    padding-top: 2px;
+  }
+
+  /* Label kolom dibawa `data-label`; di tata letak dua baris ini labelnya
+     cukup untuk pembaca layar (th/td tetap semantik), jadi tidak dicetak. */
+  .perf-audit-table tbody td::before {
+    content: none;
+  }
+
+  .perf-audit-cell:nth-child(n) {
+    border-left: 1px solid var(--line);
+    border-top: 1px solid var(--line);
+  }
+
+  .perf-audit-cell:nth-child(2n + 1) {
+    border-left: 0;
+  }
+
+  .perf-audit-cell:nth-child(-n + 2) {
+    border-top: 0;
+  }
+}
+
+.perf-audit-note {
+  margin: var(--space-2) 0 0;
+  font-size: var(--fs-1);
+  line-height: 1.5;
+  color: var(--ink-muted);
+  max-width: 100ch;
+}
+
+.perf-audit-table-wrap {
+  overflow-x: auto;
+}
+
+.perf-audit-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--fs-1);
+}
+
+.perf-audit-table th,
+.perf-audit-table td {
+  padding: 6px 8px;
+  text-align: left;
+  vertical-align: top;
+  border-bottom: 1px solid var(--line);
+}
+
+.perf-audit-table thead th {
+  font-size: var(--fs-1);
+  font-weight: 600;
+  color: var(--ink-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+
+.perf-audit-table tbody th {
+  font-weight: 500;
+  color: var(--ink);
+}
+
+/* Tahap 4: angka sampel rata kanan supaya bisa dibandingkan sekilas, dan
+   lebar kolom TIDAK dipaku. Terukur di app hidup: memaku kolom (30/15/9 %)
+   memaksa kalimat "Sebab" membungkus dua baris sehingga baris 31 → 49 px dan
+   panel justru 85 px LEBIH TINGGI dari versi lama. Lebar otomatis memberi
+   kolom "Sebab" ruang yang ia butuhkan.
+   Selektor ditulis `td.perf-audit-sampel` (bukan `.perf-audit-sampel`): aturan
+   umum `.perf-audit-table th, .perf-audit-table td { text-align: left }` lebih
+   kuat daripada satu kelas, dan tanpa ini angka tetap rata kiri (terukur:
+   `text-align` = left sebelum diperbaiki). */
+.perf-audit-table td.perf-audit-sampel {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* Kepala kolom "Sampel" ikut rata kanan supaya sejajar dengan angkanya —
+   terlihat di tangkapan 1440 px: label kiri, angka kanan terbaca seperti dua
+   kolom berbeda. */
+.perf-audit-table thead th:nth-child(3) {
+  text-align: right;
+}
+
+/* Baris bermasalah: nada hangat + garis tepi. Penanda utamanya tetap KATA
+   ("Belum ada data" / "Tidak tersedia") — warna hanya penguat, jadi pembaca
+   layar dan pembaca yang tidak dapat membedakan warna tidak kehilangan apa
+   pun. `box-shadow` dipasang pada sel pertama, bukan pada <tr>: bayangan pada
+   baris tabel tidak dilukis peramban saat `border-collapse: collapse`. */
+.perf-audit-row.is-bermasalah > th,
+.perf-audit-row.is-bermasalah > td {
+  background: var(--warn-bg);
+}
+
+.perf-audit-row.is-bermasalah > th:first-child {
+  box-shadow: inset 3px 0 0 var(--warn-border);
+}
+
+.perf-audit-row[data-state="unavailable"] > th,
+.perf-audit-row[data-state="unavailable"] > td {
+  background: var(--neutral-bg);
+}
+
+.perf-audit-row[data-state="unavailable"] > th:first-child {
+  box-shadow: inset 3px 0 0 var(--neutral-border);
+}
+
+.perf-audit-state {
+  display: inline-block;
+  padding: 1px 6px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
+.perf-audit-state.is-available {
+  background: var(--ok-bg);
+  border-color: var(--ok-border);
+  color: var(--ok-ink);
+}
+
+.perf-audit-state.is-no_data {
+  background: var(--warn-bg);
+  border-color: var(--warn-border);
+  color: var(--warn-ink);
+}
+
+.perf-audit-state.is-unavailable {
+  background: var(--neutral-bg);
+  border-color: var(--line);
+  color: var(--ink-muted);
+}
+
+.perf-audit-reason {
+  display: block;
+  margin-top: 2px;
+  color: var(--ink-muted);
+}
+
+
+/* Ringkasan metrik bermasalah (Tahap 6, 29 Okt 2026): satu kalimat di atas
+   tabel, bukan penanda tersembunyi di dalam baris. Nada hangat + garis kiri
+   tebal, tetapi penandanya tetap KATA ("perlu perhatian") — bukan warna saja. */
+.perf-audit-bermasalah {
+  margin: 12px 0 0;
+  padding: 8px 12px;
+  border-left: 3px solid var(--warn-ink);
+  border-radius: var(--radius-chip);
+  background: var(--warn-bg);
+  color: var(--warn-ink);
+  font-size: var(--fs-2);
+  line-height: var(--lh-body);
+}
+.perf-audit-bermasalah strong { font-weight: 600; }
+.perf-audit-empty {
+  padding: 12px 8px;
+  color: var(--ink-muted);
+}
+
+/* Tabel dilipat HANYA saat semua metrik tersedia (Tahap 4). Saat terlipat,
+   penanda baris metriknya tetap ada — pembaca tahu ada tujuh baris di balik
+   tombol ini, bukan kotak kosong. */
+.perf-audit-fold {
+  margin-top: var(--space-4);
+}
+
+.perf-audit-summary {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 44px;
+  padding: 0 var(--space-1);
+  font-size: var(--fs-2);
+  font-weight: 600;
+  color: var(--ink);
+  cursor: pointer;
+  list-style: none;
+}
+
+.perf-audit-summary::-webkit-details-marker {
+  display: none;
+}
+
+/* Chevron digambar CSS, bukan emoji/ikon gambar: tidak ada aset tambahan dan
+   arahnya mengikuti keadaan buka/tutup. */
+.perf-audit-summary::before {
+  content: "";
+  width: 7px;
+  height: 7px;
+  border-right: 2px solid var(--ink-muted);
+  border-bottom: 2px solid var(--ink-muted);
+  transform: rotate(-45deg);
+  transition: transform 160ms ease;
+}
+
+.perf-audit-fold[open] .perf-audit-summary::before {
+  transform: rotate(45deg);
+}
+
+.perf-audit-summary:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+  border-radius: var(--radius-control-sm);
+}
+
+.perf-audit-fold .perf-audit-h4 {
+  margin-top: var(--space-2);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .perf-audit-summary::before {
+    transition: none;
+  }
+}
+
+/* ---------- Kartu KPI seragam, 4 per baris (permintaan pemilik, 29 Okt 2026) ----------
+   Grid sudah empat kolom, tetapi TINGGI kartu belum sama: baris 1 dan baris 2
+   berbeda karena panjang alasan/deskripsi tiap metrik tidak sama. Dua aturan
+   di bawah ini menyamakan bentuknya tanpa memotong isi:
+
+   1. `grid-auto-rows: 1fr` membuat semua baris setinggi baris tertinggi, dan
+      `height: 100%` membuat kartu mengisi selnya — jadi delapan kartu punya
+      kotak yang persis sama.
+   2. `margin-top: auto` pada baris keadaan menempelkan status/arah/bukti dan
+      alasan ke dasar kartu, sehingga angka besar tiap kartu duduk di garis
+      yang sama.
+
+   Tidak ada teks yang dipotong di sini: alasan `no_data` adalah informasi yang
+   harus terbaca utuh, jadi tinggi yang menyesuaikan isi — bukan isi yang
+   dipotong demi tinggi. */
+.kpi-grid {
+  grid-auto-rows: 1fr;
+}
+
+.kpi-grid > .kpi-card {
+  height: 100%;
+}
+
+.kpi-card-flags {
+  margin-top: auto;
+}
+
+/* ---------- Location Network — upgrade visual: tenang & bersih ----------
+   Permintaan pemilik (30 Okt 2026): "upgrade tampilan ... enak dilihat, namun
+   simple clean". Arahnya bukan menambah hiasan, tetapi MENGURANGI derau dan
+   menaikkan hierarki. Diukur sebelum perubahan (1440 px): judul kartu 14 px
+   (hanya 1 px di atas teks sel 13 px), zebra #F1F5F9 dirangkap garis rambut,
+   dan kolom "Selisih" 495 px sehingga nilainya melayang jauh dari namanya.
+   Semua aturan di-scope `.network-page` (kelas yang hanya dipasang
+   LocationNetworkBoard) supaya tab lain tidak ikut bergeser. */
+
+/* 1. Napas: satu jarak halaman, kartu sedikit lebih lega. */
+.network-page {
+  gap: 14px;
+}
+.network-page .card {
+  padding: 18px;
+}
+
+/* 2. Hierarki judul kartu: 14 → 16 px, jarak ke isi 10 → 12 px. */
+.network-page .board-card-head {
+  margin-bottom: 12px;
+}
+.network-page .board-card-head h2 {
+  font-size: var(--fs-4);
+  font-weight: 600;
+  letter-spacing: var(--track-tight);
+}
+
+/* 3. Tabel: zebra dihapus, baris dipisah garis rambut, hover netral.
+   Zebra + garis + badge berwarna = tiga penanda untuk satu baris. */
+.network-page .network-table tbody tr:nth-child(even) {
+  background: transparent;
+}
+.network-page .network-table tbody tr {
+  border-bottom: 1px solid var(--line);
+}
+.network-page .network-table tbody tr:last-child {
+  border-bottom: 0;
+}
+.network-page .network-table tbody tr:hover {
+  background: var(--surface-sunken);
+}
+
+/* 4. Baris yang terbuka tetap menyala, dan rinciannya tidak lagi tampak
+   seperti baris data lain. */
+.network-page .network-table tbody tr:has([aria-expanded="true"]) {
+  background: var(--surface-sunken);
+}
+
+/* 5. Chevron digambar, bukan glyph font: ukuran dan posisinya pasti. */
+.row-chevron {
+  display: inline-block;
+  flex: none;
+  width: 5px;
+  height: 5px;
+  margin-right: 2px;
+  border-right: 1.5px solid var(--ink-muted);
+  border-bottom: 1.5px solid var(--ink-muted);
+  transform: rotate(-45deg);
+  transition: transform 0.16s ease;
+}
+.row-chevron[data-open="true"] {
+  transform: rotate(45deg);
+}
+
+/* 6. Desktop: kolom "Selisih" diberi lebar tetap dan rata kanan supaya angka
+   tetap dekat teksnya, bukan menempel tepi kartu 1.400 px. Di ≤760 px tabel
+   sudah menjadi kartu, jadi aturan ini tidak boleh ikut masuk. */
+@media (min-width: 761px) {
+  .network-page .network-table tbody td {
+    padding-top: 10px;
+    padding-bottom: 10px;
+  }
+  .network-page .network-table thead th {
+    border-bottom: 1px solid var(--line-strong);
+    letter-spacing: 0.01em;
+  }
+  .network-page .network-table th:first-child,
+  .network-page .network-table td:first-child {
+    width: 30%;
+  }
+  .network-page .network-table th:last-child,
+  .network-page .network-table td:last-child:not([colspan]) {
+    width: 230px;
+    text-align: right;
+  }
+}
+
+/* 7. Hormati preferensi gerak. */
+@media (prefers-reduced-motion: reduce) {
+  .row-chevron {
+    transition: none;
+  }
+}

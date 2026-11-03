@@ -1,0 +1,10 @@
+description: >-
+  This skill reports regional food surplus: how much each region holds, which SPPG locations
+  are the sources, and the transfer plan between SPPG per commodity (origin, destination,
+  kilograms, distance, value). It states which commodities have no transfer
+  pair and why, so an empty plan is never read as "no surplus". Use it for surplus wilayah,
+  surplus antar wilayah, surplus daerah, sebaran surplus per daerah, peta surplus, alih
+  surplus, rencana alih, realokasi, redistribusi pangan antar SPPG. Read-only.
+target:
+  name: mealchain_query_function
+  type: function

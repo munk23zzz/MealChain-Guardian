@@ -1,0 +1,9 @@
+description: >-
+  This skill reports supplier risk data for Indonesian school-meal kitchens (SPPG): which
+  vendors are excluded at which hub and why, whether the exclusion is still active or was
+  revoked, and the active shipments with their road distance, travel duration, and current
+  trip state. Use it for questions about eksklusi, exclusion, blacklist, rute, route, or
+  jarak tempuh kiriman. Read-only: it never removes or restores an exclusion.
+target:
+  name: mealchain_query_function
+  type: function

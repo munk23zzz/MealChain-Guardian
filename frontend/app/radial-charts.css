@@ -1,0 +1,263 @@
+/* Cincin Overview — "Kecukupan pasokan" & "Surplus wilayah lain" (29 Okt 2026).
+ *
+ * Kenapa cincin: kedua kartu menjawab pertanyaan berbentuk bagian-dari-acuan,
+ * bukan perbandingan panjang antar kategori.
+ *   - kiri  : cakupan ÷ kebutuhan tiap komoditas (28%, 30%, 73%, 93%) —
+ *             acuannya 100% = satu lingkaran penuh;
+ *   - kanan : surplus wilayah ÷ wilayah terbesar — acuannya wilayah terbesar.
+ * Batang memaksa pembaca membandingkan panjang; cincin menunjukkan "seberapa
+ * penuh" terhadap acuan, dan angka tetap tercetak di tengah supaya tidak
+ * bergantung pada warna atau sudut.
+ *
+ * Kontrak bentuk:
+ *   .rc-row    daftar cincin (satu cincin per komoditas/wilayah)
+ *   .rc-item   satu cincin; mewarisi --ac-bar / --ac-ink dari ac-tone-*
+ *   .rc-track  acuan penuh, putus-putus (padanan garis acuan)
+ *   .rc-arc    busur nilai; berputar dari pukul 12
+ *   .rc-over   cincin tipis di luar acuan untuk nilai > 100%
+ */
+
+/* Bidang cincin — mengisi sisa tinggi kartu dan menengahkan cincin secara
+   vertikal, sehingga ruang lebih dibagi atas-bawah, bukan menganga di kaki. */
+.rc-plot {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  justify-content: center;
+  min-height: 0;
+}
+
+.rc-row {
+  display: grid;
+  /* Lebar cincin mengikuti ruang: 96 px bila cukup, menyusut sampai 62 px
+     sebelum pindah baris — supaya 4 cincin tetap sebaris di kartu 320 px,
+     bukan pecah 3+1. */
+  grid-template-columns: repeat(auto-fit, minmax(62px, 1fr));
+  justify-content: center;
+  gap: var(--space-3) var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* Satu cincin saja (satu wilayah surplus): beri panggung lebih besar. */
+.rc-row[data-count="1"] {
+  grid-template-columns: minmax(0, 132px);
+}
+
+.rc-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  text-align: center;
+}
+
+/* Cincin kecil dipakai saat kartu memuat lebih dari 6 cincin (10 lokasi BGN). */
+.rc-item.is-small .rc-note {
+  white-space: normal;
+}
+
+.rc-btn,
+.rc-static {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: center;
+  cursor: default;
+}
+
+.rc-btn {
+  cursor: pointer;
+  border-radius: var(--radius-control-sm);
+}
+
+.rc-btn:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 3px;
+}
+
+.rc-fig {
+  position: relative;
+  display: block;
+  width: 100%;
+  aspect-ratio: 1;
+  max-width: 96px;
+}
+
+.rc-item.is-hero .rc-fig {
+  max-width: 132px;
+}
+
+.rc-fig svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+/* Acuan 100%: putus-putus, memakai token batas kontrol (>= 3:1 di putih)
+   supaya terbaca sebagai garis, bukan hiasan. */
+.rc-track {
+  fill: none;
+  stroke: var(--line-input);
+  stroke-width: 1.5;
+  stroke-dasharray: 2.2 3.2;
+  vector-effect: non-scaling-stroke;
+}
+
+.rc-arc {
+  fill: none;
+  stroke: var(--ac-bar, var(--accent));
+  stroke-width: 7.5;
+  stroke-linecap: round;
+  transform: rotate(-90deg);
+  transform-origin: 50% 50%;
+  transition: stroke-dasharray 420ms cubic-bezier(0.22, 0.8, 0.24, 1);
+}
+
+/* Ketebalan busur dinormalkan agar cincin 68/96/132 px punya bobot garis yang
+   sama di mata (±7 px), bukan makin gemuk saat cincin membesar. */
+.rc-item.is-hero .rc-arc,
+.rc-item.is-hero .rc-track {
+  stroke-width: 5.5;
+}
+
+.rc-item.is-small .rc-arc,
+.rc-item.is-small .rc-track {
+  stroke-width: 10;
+}
+
+/* Nilai > 100%: busur mentok di lingkaran penuh, kelebihannya ditandai cincin
+   tipis di luar acuan — bukan busur yang tumpah keluar kotak. */
+.rc-over {
+  fill: none;
+  stroke: var(--ac-bar, var(--accent));
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  opacity: 0.55;
+}
+
+.rc-value {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0;
+  color: var(--ink);
+  font-size: var(--fs-4);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.05;
+  pointer-events: none;
+}
+
+.rc-value-angka {
+  display: block;
+  max-width: 100%;
+  letter-spacing: -0.01em;
+}
+
+/* Satuan di dalam cincin: 12 px (lantai tipografi), tinta sekunder 5,4:1. */
+.rc-unit {
+  color: var(--ink-subtle);
+  font-size: var(--fs-1);
+  font-weight: 600;
+  letter-spacing: 0;
+}
+
+.rc-item.is-small .rc-value {
+  font-size: var(--fs-2);
+}
+
+.rc-item.is-small .rc-unit {
+  font-size: var(--fs-1);
+  transform: scale(0.92);
+}
+
+.rc-label {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.rc-name {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--ink);
+  font-size: var(--fs-1);
+  font-weight: 600;
+  line-height: 1.25;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+}
+
+/* Selisih memakai tinta status (4,5:1), bukan warna busur (3:1): 12 px wajib
+   lolos ambang teks. */
+.rc-note {
+  color: var(--ac-ink, var(--ink-muted));
+  font-size: var(--fs-1);
+  font-variant-numeric: tabular-nums;
+  line-height: 1.25;
+  white-space: nowrap;
+}
+
+.rc-item.is-hero .rc-value {
+  font-size: var(--fs-5);
+}
+
+.rc-item.is-hero .rc-name {
+  font-size: var(--fs-2);
+}
+
+.rc-item.is-hero .rc-note {
+  font-size: var(--fs-2);
+}
+
+/* Wilayah di bawah ambang: dipucatkan, tetap digambar. */
+.rc-item.is-muted .rc-arc {
+  opacity: 0.45;
+}
+
+/* Masuk berurutan, satu kali per kartu; pagar reduced-motion di bawah. */
+.rc-item {
+  animation: rc-masuk 420ms cubic-bezier(0.22, 0.8, 0.24, 1) both;
+  animation-delay: calc(var(--i, 0) * 45ms);
+}
+
+@keyframes rc-masuk {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rc-item {
+    animation: none;
+  }
+
+  .rc-arc {
+    transition: none;
+  }
+}

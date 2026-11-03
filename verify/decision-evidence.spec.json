@@ -1,0 +1,1064 @@
+{
+  "name": "mealchain-decision-evidence-readonly",
+  "artifact_dir": "verify-out-evidence",
+  "_comment": "GATE READ-ONLY untuk halaman sidebar 'Decision & Evidence' (frontend/app/page.tsx tab id 'evidence', komponen components/DecisionEvidence.tsx dkk). Stack demo SUDAH hidup: semua service external:true (gate tidak pernah start/stop container), DB dibaca lewat `docker exec mealchain-postgres psql` dan TIDAK ada satu pun tulis ke DB. Satu-satunya POST adalah /auth/login. Fixture keputusan dipilih dari baris SEED deterministik (UUID v5 hasil app/seed/demo_template.py, mis. 2ae7e0f9-...-5baf) supaya tidak hilang saat demo dibangun ulang, plus satu keputusan supplier_procurement ber-source_location_id NULL (6911bddf-...) yang memang dibuat lewat POST /decisions oleh sesi lain - premise-nya diverifikasi eksplisit oleh cek DB, jadi kalau baris itu dipurge gate gagal dengan nama fixture, bukan diam-diam lolos. Status TIDAK dipatok untuk keputusan non-terminal (bisa berubah oleh sesi lain di stack demo); yang dipatok adalah field imutabel (decision_type, target_location, quantity_kg, iteration, source_location null) dan status hanya untuk baris terminal (executed).",
+  "log_fail_patterns": [
+    "Traceback (most recent call last)",
+    "CRITICAL",
+    "Unhandled exception"
+  ],
+  "services": [
+    {
+      "name": "postgres",
+      "external": true,
+      "port": 15432,
+      "timeout": 20
+    },
+    {
+      "name": "backend",
+      "external": true,
+      "port": 8000,
+      "health": "http://127.0.0.1:8000/health",
+      "health_timeout": 20,
+      "health_retries": 3,
+      "logs_command": "docker logs mealchain-backend --tail 400",
+      "log_fail_patterns": [
+        "Traceback (most recent call last)",
+        "CRITICAL",
+        "Unhandled exception"
+      ]
+    },
+    {
+      "name": "frontend",
+      "external": true,
+      "port": 3010,
+      "health": "http://127.0.0.1:3010/",
+      "health_timeout": 60,
+      "health_retries": 4,
+      "logs_command": "docker logs mealchain-frontend --tail 300",
+      "log_fail_patterns": [
+        "Unhandled Runtime Error",
+        "Module not found",
+        "ENOENT"
+      ]
+    },
+    {
+      "name": "mock-sap",
+      "external": true,
+      "port": 8001,
+      "timeout": 20,
+      "logs_command": "docker logs mealchain-mock-sap --tail 200"
+    }
+  ],
+  "containers": [
+    "mealchain-backend",
+    "mealchain-frontend",
+    "mealchain-postgres",
+    "mealchain-mock-sap"
+  ],
+  "logins": {
+    "head_jkt": {
+      "as": "Kepala SPPG Jakarta (sppg_head, lokasi Jakarta)",
+      "url": "http://127.0.0.1:8000/auth/login",
+      "json": {
+        "email": "sppg.head@demo.local",
+        "password": "Demo#SPPG2026"
+      },
+      "token_path": "access_token"
+    },
+    "nut_jkt": {
+      "as": "Ahli gizi SPPG Jakarta (sppg_nutritionist, lokasi Jakarta)",
+      "url": "http://127.0.0.1:8000/auth/login",
+      "json": {
+        "email": "sppg.nutritionist@demo.local",
+        "password": "Demo#Nut2026"
+      },
+      "token_path": "access_token"
+    },
+    "monitor": {
+      "as": "BGN monitor (read-only nasional)",
+      "url": "http://127.0.0.1:8000/auth/login",
+      "json": {
+        "email": "bgn.monitor@demo.local",
+        "password": "Demo#BGN2026"
+      },
+      "token_path": "access_token"
+    }
+  },
+  "http": [
+    {
+      "name": "F1 detail · supplier_exclusion_restoration target Jakarta, sumber NULL",
+      "method": "GET",
+      "url": "http://127.0.0.1:8000/decisions/2ae7e0f9-1834-5baf-bb3d-e2e935b4f6e1",
+      "as": "head_jkt",
+      "expect_status": 200,
+      "expect_keys": [
+        "decision_id",
+        "decision_type",
+        "status",
+        "proposed_by",
+        "source_location",
+        "source_location_id",
+        "target_location",
+        "supplier",
+        "quantity_kg",
+        "iteration",
+        "valid",
+        "expires_at",
+        "created_at"
+      ],
+      "expect_json": {
+        "decision_id": "2ae7e0f9-1834-5baf-bb3d-e2e935b4f6e1",
+        "decision_type": "supplier_exclusion_restoration",
+        "proposed_by": "sppg_head",
+        "target_location": "Jakarta",
+        "source_location": null,
+        "source_location_id": null,
+        "quantity_kg": null,
+        "iteration": 1,
+        "supplier.name": "CV Ayam Kampung Cugenang"
+      },
+      "extract": "decision_id",
+      "store": "api_did_F1",
+      "max_ms": 5000
+    },
+    {
+      "name": "F1 detail · nama lokasi tujuan = Jakarta (dibandingkan ke DB)",
+      "method": "GET",
+      "url": "http://127.0.0.1:8000/decisions/2ae7e0f9-1834-5baf-bb3d-e2e935b4f6e1",
+      "as": "head_jkt",
+      "expect_status": 200,
+      "expect_json": {
+        "target_location": "Jakarta"
+      },
+      "extract": "target_location",
+      "store": "api_target_F1",
+      "max_ms": 5000
+    },
+    {
+      "name": "F1 approval-summary · wajib 2 approval (head + nutritionist)",
+      "method": "GET",
+      "url": "http://127.0.0.1:8000/decisions/2ae7e0f9-1834-5baf-bb3d-e2e935b4f6e1/approval-summary",
+      "as": "head_jkt",
+      "expect_status": 200,
+      "expect_keys": [
+        "decision_id",
+        "status",
+        "approval_requirement",
+        "approval_state",
+        "approvals",
+        "can_approve",
+        "can_execute",
+        "blocking_reasons",
+        "verifier"
+      ],
+      "expect_json": {
+        "decision_id": "2ae7e0f9-1834-5baf-bb3d-e2e935b4f6e1",
+        "approval_requirement.min_approvals": 2,
+        "approval_requirement.required_roles": [
+          [
+            "sppg_head"
+          ],
+          [
+            "sppg_nutritionist"
+          ]
+        ],
+        "approval_state.satisfied": false,
+        "can_execute": false
+      },
+      "max_ms": 6000
+    },
+    {
+      "name": "F1 chain · satu iterasi, anchor = keputusan itu sendiri",
+      "method": "GET",
+      "url": "http://127.0.0.1:8000/decisions/2ae7e0f9-1834-5baf-bb3d-e2e935b4f6e1/chain",
+      "as": "head_jkt",
+      "expect_status": 200,
+      "expect_keys": [
+        "anchor_id",
+        "chain"
+      ],
+      "expect_json": {
+        "anchor_id": "2ae7e0f9-1834-5baf-bb3d-e2e935b4f6e1"
+      },
+      "extract_len": "chain",
+      "store": "api_chain_F1",
+      "max_ms": 5000
+    },
+    {
+      "name": "F1 traces · jejak agen terisi (detection + supervisor)",
+      "method": "GET",
+      "url": "http://127.0.0.1:8000/decisions/2ae7e0f9-1834-5baf-bb3d-e2e935b4f6e1/traces",
+      "as": "head_jkt",
+      "expect_status": 200,
+      "expect_keys": [
+        "decision_id",
+        "steps"
+      ],
+      "expect_json": {
+        "decision_id": "2ae7e0f9-1834-5baf-bb3d-e2e935b4f6e1"
+      },
+      "extract_len": "steps",
+      "store": "api_traces_F1",
+      "max_ms": 6000
+    },
+    {
+      "name": "F1 audit-facts · bukti tersimpan + exclusion dapat dinilai",
+      "method": "GET",
+      "url": "http://127.0.0.1:8000/decisions/2ae7e0f9-1834-5baf-bb3d-e2e935b4f6e1/audit-facts",
+      "as": "head_jkt",
+      "expect_status": 200,
+      "expect_keys": [
+        "decision_id",
+        "decision_type",
+        "sdc_check",
+        "evidence",
+        "batch_sumber",
+        "exclusion",
+        "ledger",
+        "citations"
+      ],
+      "expect_json": {
+        "decision_id": "2ae7e0f9-1834-5baf-bb3d-e2e935b4f6e1",
+        "decision_type": "supplier_exclusion_restoration",
+        "evidence.count": 1,
+        "exclusion.dapat_dinilai": true,
+        "exclusion.aktif": false,
+        "citations.decision_id": "2ae7e0f9-1834-5baf-bb3d-e2e935b4f6e1"
+      },
+      "max_ms": 15000
+    },
+    {
+      "name": "F1 compliance · bundle tersimpan + tanda tangan terverifikasi",
+      "method": "GET",
+      "url": "http://127.0.0.1:8000/decisions/2ae7e0f9-1834-5baf-bb3d-e2e935b4f6e1/compliance",
+      "as": "head_jkt",
+      "expect_status": 200,
+      "expect_keys": [
+        "decision",
+        "evidence",
+        "approvals",
+        "traces",
+        "decision_id",
+        "content_address",
+        "signature",
+        "verify"
+      ],
+      "expect_json": {
+        "decision_id": "2ae7e0f9-1834-5baf-bb3d-e2e935b4f6e1",
+        "decision.id": "2ae7e0f9-1834-5baf-bb3d-e2e935b4f6e1",
+        "signature.state": "signed",
+        "verify": true
+      },
+      "extract": "content_address",
+      "store": "api_addr_F1",
+      "max_ms": 15000
+    },
+    {
+      "name": "F1 dossier · content address + ECDSA signed",
+      "method": "GET",
+      "url": "http://127.0.0.1:8000/decisions/2ae7e0f9-1834-5baf-bb3d-e2e935b4f6e1/dossier",
+      "as": "head_jkt",
+      "expect_status": 200,
+      "expect_keys": [
+        "decision_id",
+        "content_address",
+        "signature",
+        "verify"
+      ],
+      "expect_json": {
+        "decision_id": "2ae7e0f9-1834-5baf-bb3d-e2e935b4f6e1",
+        "signature.state": "signed",
+        "verify": true
+      },
+      "max_ms": 15000
+    },
+    {
+      "name": "F1 supplier-exclusions/context · tanpa relasi batch, usulan ditolak jujur",
+      "method": "GET",
+      "url": "http://127.0.0.1:8000/supplier-exclusions/context/2ae7e0f9-1834-5baf-bb3d-e2e935b4f6e1",
+      "as": "head_jkt",
+      "expect_status": 200,
+      "expect_keys": [
+        "suppliers",
+        "exclusions",
+        "scope_location_id",
+        "can_propose",
+        "reason_unavailable"
+      ],
+      "expect_json": {
+        "suppliers": [],
+        "can_propose": false,
+        "scope_location_id": "275d1be7-5bb8-5a37-8004-a2d40a51eb7e"
+      },
+      "max_ms": 6000
+    },
+    {
+      "name": "F2 detail · supplier_procurement executed 600 kg ayam",
+      "method": "GET",
+      "url": "http://127.0.0.1:8000/decisions/b54d0f11-0d61-57ad-88a0-c72b20b66280",
+      "as": "head_jkt",
+      "expect_status": 200,
+      "expect_keys": [
+        "decision_id",
+        "decision_type",
+        "status",
+        "source_location",
+        "target_location",
+        "commodity",
+        "quantity_kg",
+        "safe_delivered_cost",
+        "iteration",
+        "valid"
+      ],
+      "expect_json": {
+        "decision_id": "b54d0f11-0d61-57ad-88a0-c72b20b66280",
+        "decision_type": "supplier_procurement",
+        "status": "executed",
+        "source_location": "Jakarta",
+        "target_location": "Jakarta",
+        "commodity": "ayam",
+        "quantity_kg": 600.0,
+        "iteration": 1,
+        "supplier.name": "PT Nusantara Prima Ayam"
+      },
+      "extract": "status",
+      "store": "api_status_F2",
+      "max_ms": 5000
+    },
+    {
+      "name": "F2 detail · id keputusan (dipakai sebagai kunci cek DB)",
+      "method": "GET",
+      "url": "http://127.0.0.1:8000/decisions/b54d0f11-0d61-57ad-88a0-c72b20b66280",
+      "as": "head_jkt",
+      "expect_status": 200,
+      "expect_json": {
+        "decision_id": "b54d0f11-0d61-57ad-88a0-c72b20b66280"
+      },
+      "extract": "decision_id",
+      "store": "api_did_F2",
+      "max_ms": 5000
+    },
+    {
+      "name": "F2 detail · quantity_kg 600 (dibandingkan ke DB)",
+      "method": "GET",
+      "url": "http://127.0.0.1:8000/decisions/b54d0f11-0d61-57ad-88a0-c72b20b66280",
+      "as": "head_jkt",
+      "expect_status": 200,
+      "expect_json": {
+        "quantity_kg": 600.0
+      },
+      "extract": "quantity_kg",
+      "store": "api_qty_F2",
+      "max_ms": 5000
+    },
+    {
+      "name": "F2 detail · safe_delivered_cost 24.719.375,70 (dibandingkan ke DB)",
+      "method": "GET",
+      "url": "http://127.0.0.1:8000/decisions/b54d0f11-0d61-57ad-88a0-c72b20b66280",
+      "as": "head_jkt",
+      "expect_status": 200,
+      "expect_json": {
+        "safe_delivered_cost": 24719375.7
+      },
+      "extract": "safe_delivered_cost",
+      "store": "api_sdc_F2",
+      "max_ms": 5000
+    },
+    {
+      "name": "F2 approval-summary · dua approval terpenuhi, tidak bisa dieksekusi lagi",
+      "method": "GET",
+      "url": "http://127.0.0.1:8000/decisions/b54d0f11-0d61-57ad-88a0-c72b20b66280/approval-summary",
+      "as": "head_jkt",
+      "expect_status": 200,
+      "expect_keys": [
+        "decision_id",
+        "status",
+        "approval_requirement",
+        "approval_state",
+        "approvals",
+        "can_approve",
+        "can_execute",
+        "blocking_reasons"
+      ],
+      "expect_json": {
+        "decision_id": "b54d0f11-0d61-57ad-88a0-c72b20b66280",
+        "status": "executed",
+        "approval_requirement.min_approvals": 2,
+        "approval_requirement.verdict": "consistent",
+        "approval_state.satisfied": true,
+        "can_approve": false,
+        "can_execute": false,
+        "verifier.verdict": "consistent"
+      },
+      "extract_len": "approvals",
+      "store": "api_appr_F2",
+      "max_ms": 6000
+    },
+    {
+      "name": "F2 chain · anchor tunggal, jumlah langkah dibandingkan ke iterasi DB",
+      "method": "GET",
+      "url": "http://127.0.0.1:8000/decisions/b54d0f11-0d61-57ad-88a0-c72b20b66280/chain",
+      "as": "head_jkt",
+      "expect_status": 200,
+      "expect_keys": [
+        "anchor_id",
+        "chain"
+      ],
+      "expect_json": {
+        "anchor_id": "b54d0f11-0d61-57ad-88a0-c72b20b66280"
+      },
+      "extract_len": "chain",
+      "store": "api_chain_F2",
+      "max_ms": 5000
+    },
+    {
+      "name": "F2 traces · jumlah langkah dibandingkan ke agent_traces",
+      "method": "GET",
+      "url": "http://127.0.0.1:8000/decisions/b54d0f11-0d61-57ad-88a0-c72b20b66280/traces",
+      "as": "head_jkt",
+      "expect_status": 200,
+      "expect_keys": [
+        "decision_id",
+        "steps"
+      ],
+      "expect_json": {
+        "decision_id": "b54d0f11-0d61-57ad-88a0-c72b20b66280"
+      },
+      "extract_len": "steps",
+      "store": "api_traces_F2",
+      "max_ms": 6000
+    },
+    {
+      "name": "F2 audit-facts · SDC cocok, 5 bukti, exclusion tidak aktif",
+      "method": "GET",
+      "url": "http://127.0.0.1:8000/decisions/b54d0f11-0d61-57ad-88a0-c72b20b66280/audit-facts",
+      "as": "head_jkt",
+      "expect_status": 200,
+      "expect_keys": [
+        "decision_id",
+        "sdc_check",
+        "evidence",
+        "batch_sumber",
+        "exclusion",
+        "ledger",
+        "citations"
+      ],
+      "expect_json": {
+        "decision_id": "b54d0f11-0d61-57ad-88a0-c72b20b66280",
+        "sdc_check.cocok": true,
+        "sdc_check.selisih": 0.0,
+        "evidence.count": 5,
+        "exclusion.dapat_dinilai": true,
+        "exclusion.aktif": false,
+        "citations.decision_id": "b54d0f11-0d61-57ad-88a0-c72b20b66280"
+      },
+      "extract": "evidence.count",
+      "store": "api_ev_F2",
+      "max_ms": 15000
+    },
+    {
+      "name": "F2 compliance · 5 bukti + 2 approval + tanda tangan valid",
+      "method": "GET",
+      "url": "http://127.0.0.1:8000/decisions/b54d0f11-0d61-57ad-88a0-c72b20b66280/compliance",
+      "as": "head_jkt",
+      "expect_status": 200,
+      "expect_keys": [
+        "decision",
+        "evidence",
+        "approvals",
+        "traces",
+        "decision_id",
+        "content_address",
+        "signature",
+        "verify"
+      ],
+      "expect_json": {
+        "decision_id": "b54d0f11-0d61-57ad-88a0-c72b20b66280",
+        "decision.id": "b54d0f11-0d61-57ad-88a0-c72b20b66280",
+        "signature.state": "signed",
+        "verify": true
+      },
+      "extract": "content_address",
+      "store": "api_addr_F2",
+      "max_ms": 15000
+    },
+    {
+      "name": "F2 dossier · content address sama dengan /compliance (dibandingkan)",
+      "method": "GET",
+      "url": "http://127.0.0.1:8000/decisions/b54d0f11-0d61-57ad-88a0-c72b20b66280/dossier",
+      "as": "head_jkt",
+      "expect_status": 200,
+      "expect_keys": [
+        "decision_id",
+        "content_address",
+        "signature",
+        "verify"
+      ],
+      "expect_json": {
+        "decision_id": "b54d0f11-0d61-57ad-88a0-c72b20b66280",
+        "signature.state": "signed",
+        "verify": true
+      },
+      "extract": "content_address",
+      "store": "api_dossier_addr_F2",
+      "max_ms": 15000
+    },
+    {
+      "name": "F2 supplier-exclusions/context · satu pemasok, kepala SPPG boleh mengusulkan",
+      "method": "GET",
+      "url": "http://127.0.0.1:8000/supplier-exclusions/context/b54d0f11-0d61-57ad-88a0-c72b20b66280",
+      "as": "head_jkt",
+      "expect_status": 200,
+      "expect_keys": [
+        "suppliers",
+        "exclusions",
+        "scope_location_id",
+        "can_propose",
+        "reason_unavailable"
+      ],
+      "expect_json": {
+        "can_propose": true,
+        "scope_location_id": "275d1be7-5bb8-5a37-8004-a2d40a51eb7e"
+      },
+      "extract_len": "suppliers",
+      "store": "api_sup_F2",
+      "max_ms": 6000
+    },
+    {
+      "name": "F3 detail · procurement beras 600 kg (keputusan berbeda)",
+      "method": "GET",
+      "url": "http://127.0.0.1:8000/decisions/661695b2-c685-5eb2-83e9-d705e0b37960",
+      "as": "head_jkt",
+      "expect_status": 200,
+      "expect_json": {
+        "decision_id": "661695b2-c685-5eb2-83e9-d705e0b37960",
+        "decision_type": "supplier_procurement",
+        "status": "executed",
+        "commodity": "beras",
+        "quantity_kg": 600.0,
+        "safe_delivered_cost": 8667970.74,
+        "target_location": "Jakarta",
+        "supplier.name": "UD Rorotan Jaya Beras"
+      },
+      "max_ms": 5000
+    },
+    {
+      "name": "F3 audit-facts · batch sumber kini FAIL dilaporkan apa adanya",
+      "method": "GET",
+      "url": "http://127.0.0.1:8000/decisions/661695b2-c685-5eb2-83e9-d705e0b37960/audit-facts",
+      "as": "head_jkt",
+      "expect_status": 200,
+      "expect_json": {
+        "decision_id": "661695b2-c685-5eb2-83e9-d705e0b37960",
+        "sdc_check.cocok": true,
+        "batch_sumber.worst_status": "fail",
+        "batch_sumber.count": 1,
+        "evidence.count": 5
+      },
+      "max_ms": 15000
+    },
+    {
+      "name": "F3 compliance · tanda tangan valid untuk keputusan kedua",
+      "method": "GET",
+      "url": "http://127.0.0.1:8000/decisions/661695b2-c685-5eb2-83e9-d705e0b37960/compliance",
+      "as": "head_jkt",
+      "expect_status": 200,
+      "expect_json": {
+        "decision_id": "661695b2-c685-5eb2-83e9-d705e0b37960",
+        "signature.state": "signed",
+        "verify": true
+      },
+      "max_ms": 15000
+    },
+    {
+      "name": "F4 detail · regional_balance 300 kg Bandung -> Jakarta, tanpa pemasok",
+      "method": "GET",
+      "url": "http://127.0.0.1:8000/decisions/3e2e3cc7-f53e-5cee-963d-728e87b6b949",
+      "as": "head_jkt",
+      "expect_status": 200,
+      "expect_json": {
+        "decision_id": "3e2e3cc7-f53e-5cee-963d-728e87b6b949",
+        "decision_type": "regional_balance",
+        "source_location": "Bandung",
+        "target_location": "Jakarta",
+        "commodity": "ayam",
+        "quantity_kg": 300.0,
+        "safe_delivered_cost": 9750000.0,
+        "supplier": null,
+        "supplier_id": null,
+        "iteration": 1
+      },
+      "max_ms": 5000
+    },
+    {
+      "name": "F4 approval-summary · kepala SPPG boleh menyetujui, syarat belum terpenuhi",
+      "method": "GET",
+      "url": "http://127.0.0.1:8000/decisions/3e2e3cc7-f53e-5cee-963d-728e87b6b949/approval-summary",
+      "as": "head_jkt",
+      "expect_status": 200,
+      "expect_json": {
+        "decision_id": "3e2e3cc7-f53e-5cee-963d-728e87b6b949",
+        "can_approve": true,
+        "approval_requirement.min_approvals": 2,
+        "approval_state.satisfied": false,
+        "can_execute": false
+      },
+      "max_ms": 6000
+    },
+    {
+      "name": "F4 traces · jejak orchestrator/verifier terbaca",
+      "method": "GET",
+      "url": "http://127.0.0.1:8000/decisions/3e2e3cc7-f53e-5cee-963d-728e87b6b949/traces",
+      "as": "head_jkt",
+      "expect_status": 200,
+      "expect_json": {
+        "decision_id": "3e2e3cc7-f53e-5cee-963d-728e87b6b949"
+      },
+      "extract_len": "steps",
+      "store": "api_traces_F4",
+      "max_ms": 6000
+    },
+    {
+      "name": "F4 supplier-exclusions/context · tanpa relasi batch -> can_propose false",
+      "method": "GET",
+      "url": "http://127.0.0.1:8000/supplier-exclusions/context/3e2e3cc7-f53e-5cee-963d-728e87b6b949",
+      "as": "head_jkt",
+      "expect_status": 200,
+      "expect_json": {
+        "suppliers": [],
+        "can_propose": false,
+        "scope_location_id": "275d1be7-5bb8-5a37-8004-a2d40a51eb7e"
+      },
+      "max_ms": 6000
+    },
+    {
+      "name": "F5 detail · supplier_exclusion Jakarta tanpa kuantitas",
+      "method": "GET",
+      "url": "http://127.0.0.1:8000/decisions/ae472e84-6197-57cc-8adc-7d5e3fb3ac07",
+      "as": "head_jkt",
+      "expect_status": 200,
+      "expect_json": {
+        "decision_id": "ae472e84-6197-57cc-8adc-7d5e3fb3ac07",
+        "decision_type": "supplier_exclusion",
+        "target_location": "Jakarta",
+        "commodity": null,
+        "quantity_kg": null,
+        "supplier.name": "CV Ayam Kampung Cugenang",
+        "iteration": 1
+      },
+      "max_ms": 5000
+    },
+    {
+      "name": "F5 approval-summary · exclusion butuh 1 approval (head atau nutritionist)",
+      "method": "GET",
+      "url": "http://127.0.0.1:8000/decisions/ae472e84-6197-57cc-8adc-7d5e3fb3ac07/approval-summary",
+      "as": "head_jkt",
+      "expect_status": 200,
+      "expect_json": {
+        "decision_id": "ae472e84-6197-57cc-8adc-7d5e3fb3ac07",
+        "approval_requirement.min_approvals": 1,
+        "approval_requirement.required_roles": [
+          [
+            "sppg_head",
+            "sppg_nutritionist"
+          ]
+        ],
+        "supplier_governance.action": "supplier_exclusion"
+      },
+      "max_ms": 6000
+    },
+    {
+      "name": "F5 chain · langkah rantai dibandingkan ke iterasi DB",
+      "method": "GET",
+      "url": "http://127.0.0.1:8000/decisions/ae472e84-6197-57cc-8adc-7d5e3fb3ac07/chain",
+      "as": "head_jkt",
+      "expect_status": 200,
+      "expect_json": {
+        "anchor_id": "ae472e84-6197-57cc-8adc-7d5e3fb3ac07"
+      },
+      "extract_len": "chain",
+      "store": "api_chain_F5",
+      "max_ms": 5000
+    },
+    {
+      "name": "F6 detail · supplier_procurement dengan source_location_id NULL",
+      "method": "GET",
+      "url": "http://127.0.0.1:8000/decisions/6911bddf-5963-43a7-b2ce-779bb52ad05d",
+      "as": "head_jkt",
+      "expect_status": 200,
+      "expect_keys": [
+        "decision_id",
+        "decision_type",
+        "source_location",
+        "source_location_id",
+        "target_location",
+        "supplier"
+      ],
+      "expect_json": {
+        "decision_id": "6911bddf-5963-43a7-b2ce-779bb52ad05d",
+        "decision_type": "supplier_procurement",
+        "source_location": null,
+        "source_location_id": null,
+        "target_location": "Jakarta",
+        "commodity": "telur",
+        "quantity_kg": 780.0,
+        "supplier.name": "UD Sumber Rejeki Telur",
+        "iteration": 1
+      },
+      "extract": "decision_id",
+      "store": "api_did_F6",
+      "max_ms": 5000
+    },
+    {
+      "name": "F6 audit-facts · SDC cocok, 2 batch sumber, 1 bukti",
+      "method": "GET",
+      "url": "http://127.0.0.1:8000/decisions/6911bddf-5963-43a7-b2ce-779bb52ad05d/audit-facts",
+      "as": "head_jkt",
+      "expect_status": 200,
+      "expect_json": {
+        "decision_id": "6911bddf-5963-43a7-b2ce-779bb52ad05d",
+        "sdc_check.cocok": true,
+        "sdc_check.selisih": 0.0,
+        "batch_sumber.count": 2,
+        "evidence.count": 1
+      },
+      "max_ms": 15000
+    },
+    {
+      "name": "F6 compliance · tanda tangan valid untuk pengadaan tanpa lokasi sumber",
+      "method": "GET",
+      "url": "http://127.0.0.1:8000/decisions/6911bddf-5963-43a7-b2ce-779bb52ad05d/compliance",
+      "as": "head_jkt",
+      "expect_status": 200,
+      "expect_json": {
+        "decision_id": "6911bddf-5963-43a7-b2ce-779bb52ad05d",
+        "signature.state": "signed",
+        "verify": true
+      },
+      "max_ms": 15000
+    },
+    {
+      "name": "F6 supplier-exclusions/context · scope lokasi dibandingkan ke DB",
+      "method": "GET",
+      "url": "http://127.0.0.1:8000/supplier-exclusions/context/6911bddf-5963-43a7-b2ce-779bb52ad05d",
+      "as": "head_jkt",
+      "expect_status": 200,
+      "expect_json": {
+        "can_propose": true,
+        "scope_location_id": "275d1be7-5bb8-5a37-8004-a2d40a51eb7e"
+      },
+      "extract": "scope_location_id",
+      "store": "api_scope_F6",
+      "max_ms": 6000
+    },
+    {
+      "name": "ahli gizi Jakarta boleh membaca F1 (login kedua benar-benar dipakai)",
+      "method": "GET",
+      "url": "http://127.0.0.1:8000/decisions/2ae7e0f9-1834-5baf-bb3d-e2e935b4f6e1",
+      "as": "nut_jkt",
+      "expect_status": 200,
+      "expect_json": {
+        "decision_id": "2ae7e0f9-1834-5baf-bb3d-e2e935b4f6e1",
+        "target_location": "Jakarta"
+      },
+      "max_ms": 5000
+    },
+    {
+      "name": "BGN monitor boleh membaca keputusan Bandung (cakupan nasional)",
+      "method": "GET",
+      "url": "http://127.0.0.1:8000/decisions/5e969ff1-a6fd-50b8-99a1-e34afdde3872",
+      "as": "monitor",
+      "expect_status": 200,
+      "expect_json": {
+        "decision_id": "5e969ff1-a6fd-50b8-99a1-e34afdde3872",
+        "decision_type": "regional_balance",
+        "target_location": "Bandung"
+      },
+      "extract": "decision_id",
+      "store": "api_did_neg",
+      "max_ms": 5000
+    },
+    {
+      "name": "NEG tanpa token: GET /decisions/{id} -> 401",
+      "method": "GET",
+      "url": "http://127.0.0.1:8000/decisions/2ae7e0f9-1834-5baf-bb3d-e2e935b4f6e1",
+      "no_auth": true,
+      "expect_status": [
+        401
+      ],
+      "expect_body_contains": "butuh Bearer token"
+    },
+    {
+      "name": "NEG tanpa token: GET /decisions/{id}/dossier -> 401",
+      "method": "GET",
+      "url": "http://127.0.0.1:8000/decisions/2ae7e0f9-1834-5baf-bb3d-e2e935b4f6e1/dossier",
+      "no_auth": true,
+      "expect_status": [
+        401
+      ],
+      "expect_body_contains": "butuh Bearer token"
+    },
+    {
+      "name": "NEG kepala SPPG Jakarta membuka keputusan Bandung -> 403",
+      "method": "GET",
+      "url": "http://127.0.0.1:8000/decisions/5e969ff1-a6fd-50b8-99a1-e34afdde3872",
+      "as": "head_jkt",
+      "expect_status": [
+        403
+      ],
+      "expect_body_contains": "di luar SPPG"
+    },
+    {
+      "name": "NEG kepala SPPG Jakarta: approval-summary keputusan Bandung -> 403",
+      "method": "GET",
+      "url": "http://127.0.0.1:8000/decisions/5e969ff1-a6fd-50b8-99a1-e34afdde3872/approval-summary",
+      "as": "head_jkt",
+      "expect_status": [
+        403
+      ],
+      "expect_body_contains": "keputusan di cakupan lokasi di luar SPPG Anda"
+    },
+    {
+      "name": "NEG kepala SPPG Jakarta: dossier keputusan Bandung -> 403",
+      "method": "GET",
+      "url": "http://127.0.0.1:8000/decisions/5e969ff1-a6fd-50b8-99a1-e34afdde3872/dossier",
+      "as": "head_jkt",
+      "expect_status": [
+        403
+      ],
+      "expect_body_absent": "content_address"
+    },
+    {
+      "name": "NEG id acak: detail -> 404",
+      "method": "GET",
+      "url": "http://127.0.0.1:8000/decisions/00000000-0000-4000-8000-000000000000",
+      "as": "head_jkt",
+      "expect_status": [
+        404
+      ],
+      "expect_body_contains": "decision tidak ditemukan"
+    },
+    {
+      "name": "NEG id acak: chain -> 404",
+      "method": "GET",
+      "url": "http://127.0.0.1:8000/decisions/00000000-0000-4000-8000-000000000000/chain",
+      "as": "head_jkt",
+      "expect_status": [
+        404
+      ],
+      "expect_body_contains": "decision tidak ditemukan"
+    },
+    {
+      "name": "NEG id acak: compliance -> 404",
+      "method": "GET",
+      "url": "http://127.0.0.1:8000/decisions/00000000-0000-4000-8000-000000000000/compliance",
+      "as": "head_jkt",
+      "expect_status": [
+        404
+      ],
+      "expect_body_contains": "decision tidak ditemukan"
+    }
+  ],
+  "db": {
+    "kind": "command",
+    "target": "postgres:15432/mealchain (docker exec mealchain-postgres psql)",
+    "run": "docker exec mealchain-postgres psql -U mealchain -d mealchain -At -F \"|\" -c \"{sql}\"",
+    "checks": [
+      {
+        "name": "akun kepala SPPG Jakarta ada di tabel users (dipakai login head_jkt)",
+        "sql": "SELECT count(*) FROM users WHERE email = 'sppg.head@demo.local' AND role = 'sppg_head' AND location_id = '275d1be7-5bb8-5a37-8004-a2d40a51eb7e'",
+        "expect": 1
+      },
+      {
+        "name": "akun ahli gizi Jakarta ada di tabel users (dipakai login nut_jkt)",
+        "sql": "SELECT count(*) FROM users WHERE email = 'sppg.nutritionist@demo.local' AND role = 'sppg_nutritionist' AND location_id = '275d1be7-5bb8-5a37-8004-a2d40a51eb7e'",
+        "expect": 1
+      },
+      {
+        "name": "akun BGN monitor ada di tabel users, tanpa lokasi (dipakai login monitor)",
+        "sql": "SELECT count(*) FROM users WHERE email = 'bgn.monitor@demo.local' AND role = 'bgn_monitor' AND location_id IS NULL",
+        "expect": 1
+      },
+      {
+        "name": "premis F1: jenis keputusan di DB",
+        "sql": "SELECT decision_type FROM decisions WHERE id = '{var:api_did_F1}'",
+        "expect": "supplier_exclusion_restoration"
+      },
+      {
+        "name": "premis F1: source_location_id NULL di DB",
+        "sql": "SELECT (source_location_id IS NULL) FROM decisions WHERE id = '{var:api_did_F1}'",
+        "expect": "t"
+      },
+      {
+        "name": "premis F1: iterasi = jumlah langkah chain API",
+        "sql": "SELECT iteration FROM decisions WHERE id = '{var:api_did_F1}'",
+        "expect": 1,
+        "store": "db_iter_F1"
+      },
+      {
+        "name": "premis F1: nama lokasi tujuan dari DB",
+        "sql": "SELECT l.name FROM decisions d JOIN locations l ON l.id = d.target_location_id WHERE d.id = '{var:api_did_F1}'",
+        "expect": "Jakarta",
+        "store": "db_target_F1"
+      },
+      {
+        "name": "premis F2: jenis + tidak ada lokasi sumber NULL untuk pengadaan ini",
+        "sql": "SELECT decision_type FROM decisions WHERE id = '{var:api_did_F2}'",
+        "expect": "supplier_procurement"
+      },
+      {
+        "name": "F2 status di DB (dibandingkan ke API)",
+        "sql": "SELECT status FROM decisions WHERE id = '{var:api_did_F2}'",
+        "expect": "executed",
+        "store": "db_status_F2"
+      },
+      {
+        "name": "F2 quantity_kg di DB (dibandingkan ke API)",
+        "sql": "SELECT quantity_kg FROM decisions WHERE id = '{var:api_did_F2}'",
+        "expect": 600,
+        "store": "db_qty_F2"
+      },
+      {
+        "name": "F2 safe_delivered_cost di DB (dibandingkan ke API)",
+        "sql": "SELECT safe_delivered_cost FROM decisions WHERE id = '{var:api_did_F2}'",
+        "expect": 24719375.7,
+        "store": "db_sdc_F2"
+      },
+      {
+        "name": "F2 iterasi di DB (dibandingkan ke jumlah langkah chain API)",
+        "sql": "SELECT iteration FROM decisions WHERE id = '{var:api_did_F2}'",
+        "expect": 1,
+        "store": "db_iter_F2"
+      },
+      {
+        "name": "F2 jumlah approval di DB (dibandingkan ke API)",
+        "sql": "SELECT count(*) FROM approvals WHERE decision_id = '{var:api_did_F2}'",
+        "expect": 2,
+        "store": "db_appr_F2"
+      },
+      {
+        "name": "F2 jumlah trace agen di DB (dibandingkan ke API)",
+        "sql": "SELECT count(*) FROM agent_traces WHERE decision_id = '{var:api_did_F2}'",
+        "expect": 4,
+        "store": "db_traces_F2"
+      },
+      {
+        "name": "F2 jumlah bukti tersimpan di DB (dibandingkan ke API)",
+        "sql": "SELECT count(*) FROM decision_evidence WHERE decision_id = '{var:api_did_F2}'",
+        "expect": 5,
+        "store": "db_ev_F2"
+      },
+      {
+        "name": "premis F5: iterasi = jumlah langkah chain API",
+        "sql": "SELECT iteration FROM decisions WHERE id = 'ae472e84-6197-57cc-8adc-7d5e3fb3ac07'",
+        "expect": 1,
+        "store": "db_iter_F5"
+      },
+      {
+        "name": "F6 benar-benar supplier_procurement dengan source_location_id NULL (id dari API)",
+        "sql": "SELECT count(*) FROM decisions WHERE id = '{var:api_did_F6}' AND decision_type = 'supplier_procurement' AND source_location_id IS NULL",
+        "expect": 1
+      },
+      {
+        "name": "SQL yang diminta: ada keputusan supplier_procurement dengan source_location_id NULL",
+        "sql": "SELECT id FROM decisions WHERE decision_type = 'supplier_procurement' AND source_location_id IS NULL ORDER BY created_at ASC LIMIT 1",
+        "expect_rows": 1,
+        "store": "db_proc_srcnull_id"
+      },
+      {
+        "name": "lokasi Jakarta di DB (dibandingkan ke scope API)",
+        "sql": "SELECT id FROM locations WHERE name = 'Jakarta'",
+        "store": "db_jakarta_id"
+      },
+      {
+        "name": "premis kontrol negatif: keputusan uji 403 memang ber-target Bandung",
+        "sql": "SELECT l.name FROM decisions d JOIN locations l ON l.id = d.target_location_id WHERE d.id = '{var:api_did_neg}'",
+        "expect": "Bandung"
+      },
+      {
+        "name": "invarian: tidak ada keputusan pending tanpa pengusul",
+        "sql": "SELECT count(*) FROM decisions WHERE status = 'pending_approval' AND proposed_by IS NULL",
+        "expect": 0
+      }
+    ]
+  },
+  "ui": {
+    "name": "kepala SPPG Jakarta -> tab Decision & Evidence -> pilih satu keputusan",
+    "script": "C:/Users/User/AppData/Local/hermes/skills/software-development/fullstack-verification/scripts/ui_check.py",
+    "timeout": 300,
+    "env": {
+      "BASE_URL": "http://127.0.0.1:3010/",
+      "CLICK_SELECTOR": "text=SPPG Head,button:has-text('Masuk'),nav[aria-label='Bagian konsol'] button:has-text('Decision & Evidence'),#pilih-keputusan,.dpick-option[data-value='3e2e3cc7-f53e-5cee-963d-728e87b6b949']",
+      "SETTLE_MS": "2500",
+      "EXPECT_TEXT": "Decision & Evidence,Keputusan yang diperiksa,RINGKASAN KEPUTUSAN,JALUR PERSETUJUAN,GOVERNANCE & PERSETUJUAN,BUKTI,JEJAK & RIWAYAT,Seimbangkan 300 kg ayam,3e2e3cc7",
+      "FORBID_TEXT": "Gagal memuat,Application error,Sebagian bukti gagal dibaca,Papan Pengawasan BGN",
+      "IGNORE_CONSOLE": "defaultProps will be removed",
+      "FAIL_ON_4XX": "1"
+    }
+  },
+  "compare": [
+    {
+      "name": "F2 quantity_kg: respons API == kolom DB",
+      "left": "api_qty_F2",
+      "right": "db_qty_F2",
+      "tolerance": 0.001
+    },
+    {
+      "name": "F2 safe_delivered_cost: respons API == kolom DB",
+      "left": "api_sdc_F2",
+      "right": "db_sdc_F2",
+      "tolerance": 0.01
+    },
+    {
+      "name": "F2 status: respons API == kolom DB",
+      "left": "api_status_F2",
+      "right": "db_status_F2"
+    },
+    {
+      "name": "F2 jumlah approval: API == baris DB",
+      "left": "api_appr_F2",
+      "right": "db_appr_F2"
+    },
+    {
+      "name": "F2 jumlah trace: API == baris DB",
+      "left": "api_traces_F2",
+      "right": "db_traces_F2"
+    },
+    {
+      "name": "F2 jumlah bukti: audit-facts API == baris DB",
+      "left": "api_ev_F2",
+      "right": "db_ev_F2"
+    },
+    {
+      "name": "F1 nama lokasi tujuan: API == DB",
+      "left": "api_target_F1",
+      "right": "db_target_F1"
+    },
+    {
+      "name": "F1 jumlah langkah chain: API == iterasi DB",
+      "left": "api_chain_F1",
+      "right": "db_iter_F1"
+    },
+    {
+      "name": "F5 jumlah langkah chain: API == iterasi DB",
+      "left": "api_chain_F5",
+      "right": "db_iter_F5"
+    },
+    {
+      "name": "F2 chain: jumlah langkah API == iterasi DB",
+      "left": "api_chain_F2",
+      "right": "db_iter_F2"
+    },
+    {
+      "name": "F6 scope lokasi (supplier-exclusions/context) == id lokasi Jakarta di DB",
+      "left": "api_scope_F6",
+      "right": "db_jakarta_id"
+    },
+    {
+      "name": "F2 content address: /dossier == /compliance",
+      "left": "api_dossier_addr_F2",
+      "right": "api_addr_F2"
+    }
+  ]
+}

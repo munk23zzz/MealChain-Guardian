@@ -1,0 +1,58 @@
+/* Tombol pil/oval di SELURUH halaman (permintaan pemilik, 27 Okt 2026).
+ *
+ * Kenapa berkas terpisah: konvensi layout.tsx — menang urutan tanpa
+ * `!important` dan tanpa menambah hunk di `globals.css` yang dipakai bersama
+ * sesi lain (lihat komentar map-console.css / evidence-dossier.css).
+ *
+ * `.button` (semua varian: primary/secondary/danger) sudah dipil di
+ * globals.css; berkas ini menutup kontrol yang punya kelas sendiri.
+ *
+ * SENGAJA TIDAK diikutkan — permukaannya besar dan seluruhnya bisa diklik,
+ * jadi pil membuatnya terbaca sebagai chip, bukan tombol:
+ *   .link-button (kartu rekomendasi) · .map-row-btn (baris peta)
+ *   .sa-row-btn (baris kecukupan) · .queue-item-action (baris antrean)
+ *   .today-tile (kotak statistik) · .segment (segmen grafik suhu)
+ * Chip/lencana yang sudah pil (commodity-pill, filter-chip, board-sort-pill,
+ * kpi-period-pill, map-layer-info-toggle, agenda-*) dibiarkan apa adanya.
+ */
+
+/* Tombol teks & aksi baris — dulu 0–8 px (kotak). */
+.btn-ghost,
+.board-link,
+.today-row-action,
+.queue-open,
+.overview-alert-action,
+.po-pdf-button,
+.integrity-refresh,
+.dpick-trigger {
+  border-radius: 999px;
+}
+
+/* Satu tempat yang aturannya lebih spesifik di globals.css (0,1,1):
+   `.integrity-panel button` (radius-chip) — harus disebut dengan spesifisitas
+   setara atau lebih tinggi, kalau tidak tombolnya tetap kotak. */
+.integrity-panel button {
+  border-radius: 999px;
+}
+
+/* Tombol ikon 32×32 → lingkaran (bentuk pil pada kotak sama sisi). */
+.pager-btn,
+.map-reset-view,
+.side-collapse,
+.side-logout,
+.top-bar-bell {
+  border-radius: 999px;
+}
+
+/* Item rail navigasi kiri — tetap nyaman dipindai karena tinggi 38 px, tapi
+   ujungnya oval seperti tombol lain. */
+.side-tab {
+  border-radius: 999px;
+}
+
+/* Kontrol peta MapLibre: SATU klaster pil; tombol di dalamnya dibiarkan
+   bersudut supaya zoom + / − tidak terbaca sebagai dua lingkaran terpisah.
+   (Berkas map-console.css juga diperbarui agar tidak menyisakan aturan mati.) */
+.map-card .map-gl .maplibregl-ctrl-group {
+  border-radius: 999px;
+}

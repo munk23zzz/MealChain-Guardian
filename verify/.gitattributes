@@ -1,0 +1,3 @@
+# Skrip .sh harus LF: core.autocrlf=true mengubahnya jadi CRLF saat checkout
+# dan bash menolaknya ("$'\r': command not found").
+*.sh text eol=lf

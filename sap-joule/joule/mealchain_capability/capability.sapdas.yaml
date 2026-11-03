@@ -1,0 +1,40 @@
+# Root capability: metadata + peta alias sistem -> BTP Destination.
+#
+# Wajib:
+#   * schema_version >= 3.28.0  (action `agent-request` belum ada di versi bawah)
+#   * namespace: joule.ext      (namespace lain dianggap milik SAP internal dan ditolak saat deploy)
+schema_version: 3.28.0
+
+metadata:
+  namespace: joule.ext
+  name: mealchain_capability
+  # 1.5.0 -> 1.6.0 (30 Okt 2026): scenario `surplus_wilayah` menambahkan surplus per wilayah
+  # dan rencana alih antar SPPG. Sekaligus: `metadata.description` dipendekkan ke <=512
+  # karakter dan bidang `name:` dihapus dari scenarios/detail_batch.yaml — keduanya ditolak
+  # compiler Joule saat deploy ("may only be 512 characters", "additional properties").
+  # MINOR: kemampuan bertambah (15 skill jembatan); lihat docs/peta-cakupan-data.md.
+  version: 1.6.0
+  display_name: MealChain_Guardian
+  description: >-
+    Melihat data MealChain Guardian yang boleh dibaca akun baca-saja: pasokan SPPG, kebutuhan
+    dan prakiraan, harga dan kuotasi pemasok, kehilangan pangan, direktori dan risiko pemasok,
+    antrean usulan, antrean penerimaan barang, status karantina, rincian keamanan satu batch,
+    surplus per wilayah dan rencana alih antar SPPG, bukti serta jejak keputusan, purchase
+    order (PO), dan status integrasi serta ledger bukti. Baca-saja: persetujuan tetap
+    dilakukan manusia di UI MealChain.
+
+system_aliases:
+  # Kunci alias (MEALCHAIN_AGENT) dipakai di functions/*.yaml.
+  # Nilai `destination` HARUS sama dengan nama BTP Destination yang menunjuk jembatan A2A kita.
+  #
+  # NILAI KANONIK = `MEALCHAIN_AGENT_01` (diukur 11 & 18 Okt 2026).
+  # `SWZ_JOULE` BUKAN endpoint A2A: ia milik panitia dan menunjuk
+  # https://aws-sap-hackathon-si4ykj9d.ap10.sapdas.cloud.sap — `POST /` di sana 401 dan
+  # `/.well-known/agent-card.json` 400. Deploy baru yang memakai SWZ_JOULE menghasilkan
+  # "Something went wrong" di chat (JCore - 5802), persis gejala 18 Okt 2026.
+  #
+  # Daftar destination subaccount saat ini (Destination Configuration API):
+  #   MEALCHAIN_AGENT_01 -> https://mealchain-joule-bridge-4sehat3trio.cfapps.ap10.hana.ondemand.com
+  #   SWZ_JOULE          -> https://aws-sap-hackathon-si4ykj9d.ap10.sapdas.cloud.sap (bukan A2A)
+  MEALCHAIN_AGENT:
+    destination: MEALCHAIN_AGENT_01

@@ -1,0 +1,1747 @@
+| S4-112 | Kepala halaman (hero) seragam di semua tab | Frontend | Selesai 30 Okt 2026 | Hermes | Permintaan pemilik: "hero pada semua page gunakan design yang sama". Dulu dua pola: `.page-header` (pita tanpa bingkai, 7 tab) dan `.overview-header` (kartu, Overview + Decision & Evidence), plus `<h1>` sendiri di Pengaturan. Sekarang SATU komponen `PageHeader` berkulit kartu (`padding 14×16`, `--surface`, `1px solid --line`, `--radius`, `--shadow-1`); props baru `id`/`titleId`/`ariaLabel`/`className`. Migrasi: Overview (id `ov-ringkas` + `jump-target` + pil Data simulasi/Sinkron), Evidence (pemilih keputusan ke slot `filters`, grid 2 kolom; ≤640 px 1 kolom), Pengaturan (Muat ulang jadi `meta`). Delapan aturan `.overview-header*` dihapus. Pagar tahap 2 Performance & Audit dipersempit: pil kepala tidak boleh MENGULANG kontrol periode/cakupan, pil jumlah tetap boleh. Ukur pratinjau: kepala 123 px di 1440 (tanpa kulit 93), 135 di 760 (105), 191 di 390 (161) — +30 px seragam, luapan 0, judul 20 px. Temuan sampingan ditutup: `.empty-panel` `--radius-card` → `--radius`; `.perf-audit-cell dt` 11 px → `--fs-1`. Tes baru `hero-seragam` (4) + 4 tes lama diperbarui; 296 berkas / 3164 tes lulus; `next lint` bersih; `next build` sukses BUILD_ID `jUYXLlEXpRbctNm3PnqN9`; `docs/design.md` §55. |
+| S4-113 | Location Network — upgrade visual sederhana & bersih | Frontend | Selesai 30 Okt 2026 | Hermes | Permintaan: "enak dilihat, namun simple clean". Diagnosis terukur 1440 px: judul kartu 14 px (sel 13 px), zebra #F1F5F9 + garis rambut + badge (tiga penanda satu baris), kolom Selisih 495 px sehingga nilai melayang, baris 41 px, chevron glyph font. Perubahan: gap 12→14, padding kartu 14→18, judul kartu 14→16 px/600, zebra dihapus + garis baris & hover netral, baris 41→47 px, kolom 30%/auto/230 px rata kanan (khusus ≥761 px), baris terbuka bertanda `--surface-sunken`, chevron digambar CSS `.row-chevron` (rotate 45° saat terbuka, hormati reduced-motion). Semua aturan di-scope `.network-page` sehingga tab Pemasok tidak bergeser. Sesudah: 1440 gap 14/pad 18/judul 16/baris 47/kolom 416-741-230/luapan 0; 760 & 390 luapan 0. Pratinjau `_qa/preview/ln-upgrade.html` (+ shim CSS modul karena kelas ter-hash). Tes lingkup 133/133; `tsc` 0; lint bersih; build sukses BUILD_ID `kc69BvJblSDfgRLkqNmla`; docs/design.md §56. Suite penuh 3153 lulus / 11 merah dari berkas sesi lain (AdequacyColumns, SurplusRegionPanel — refactor `ac-plot`/`ac-fill`). |
+# TODO.md — Pelacak Progress MealChain Guardian
+
+**Ini adalah memory proyek.** Update baris di sini SETIAP KALI status berubah — jangan tunggu
+sampai akhir sesi. Kalau tidak tercatat di sini, dianggap belum dikerjakan, siapapun/apapun
+yang membaca sesi berikutnya.
+
+Status yang valid: `Not Started` · `In Progress` · `Blocked` · `Done`
+
+> **Angka keadaan** (jumlah keputusan/batch/pemasok/ledger, nilai KPI) tidak dirawat di berkas ini.
+> Sumbernya `docs/state-snapshot.md`, dihasilkan `scripts/snapshot_state.py` (baca-saja). Baris di
+> bawah yang menyebut angka adalah catatan sesi saat itu, bukan keadaan sekarang.
+
+---
+
+## Sprint 0 — Setup
+
+| ID | Task | Kategori | Status | Assignee | Catatan |
+|---|---|---|---|---|---|
+| S0-01 | Init repo + struktur folder sesuai Architecture.md §4 | Setup | Done | Hermes | Commit 687e8bd |
+| S0-02 | Docker Compose (backend, frontend, postgres) | Setup | Done | Hermes | Commit 687e8bd |
+| S0-03 | Migration awal Postgres (master data tables) | Setup | Done | Hermes | Commit 0176540, needs Docker test |
+| S0-04 | Verifikasi akses AWS trial (Bedrock invoke test) | Setup | In Progress | Roy | **Probe Hermes 2026-10-11 (kredensial .env)**: STS OK — akun 679583588036, `arn:aws:iam::679583588036:user/mealchain`. Katalog Bedrock 93 model TEXT / 97 inference profile. **`invoke_model` DITOLAK di lapisan IAM**: `AccessDeniedException` untuk `us.anthropic.claude-opus-4-6-v1` dan `us.meta.llama3-1-8b-instruct-v1:0` (`not authorized to perform: bedrock:InvokeModel`), sedangkan `us.anthropic.claude-3-haiku-20240307-v1:0` dan `claude-3-sonnet-20240229-v1:0` sudah EOL. Menurut taksonomi skill: ini **"akses model belum diberikan"**, BUKAN kuota habis. **Migrasi 2026-10-11 (Hermes)**: akun 679583588036 tidak dapat dimasuki lewat konsol → dependency AWS dipindah ke akun yang user kuasai, **624606539664** (user IAM `megu`); kunci di `secrets/aws-app.env` (terabaikan git) + `docker-compose.yml` `env_file` ganda. Bukti: STS dari dalam kontainer = 624606539664; invoke Bedrock **bukan lagi AccessDenied** melainkan `ThrottlingException: Too many tokens per day` — kuota *tokens per minute* Anthropic di Service Quotas masih **0.0** (adjustable); `get_use_case_for_model_access` sudah terisi. Aksi tersisa (user): Service Quotas → Amazon Bedrock → *tokens per minute* Claude Sonnet 4 + Haiku 4.5 → Request increase. `SUPERVISOR_MODEL_FALLBACK_1` kini Bedrock sonnet-4 nyata; `AGENTCORE_*` dikosongkan (ARN milik akun lama); suite 630 passed + live SAP 3 passed. Rincian + jebakan: `docs/verification/migrasi-akun-aws.md`. |
+| S0-05 | Verifikasi akses AgentCore | Setup | Done | Hermes | Probe 2026-10-11: control plane TERBUKTI dengan kredensial `.env` — `list_agent_runtimes` 1, `list_gateways` 2, `list_memories` 2 (resource sudah ada, bukan nol). Operasi Identity tersedia: `ListApiKeyCredentialProviders` (relevan untuk S4-07/S5-02). |
+| S0-06 | Strands SDK hello-world agent | Setup | Done | Hermes | `agent/supervisor_agent.py` + `agent/prompts/supervisor_system_prompt.md` + `agent/requirements.txt` dibuat 2026-10-16. Hello-world **LIVE** ke Bedrock `us.anthropic.claude-haiku-4-5-20251001-v1:0` dalam 3,4 dtk (akun 624606539664); tes kontrak (Strands di-mock) 4 passed + ruff bersih. **Deploy ke AgentCore Runtime SELESAI 18 Okt 2026** (P6): runtime `mealchain_supervisor_agent-1tWqipEGjw` status READY, ARN `arn:aws:bedrock-agentcore:us-west-2:624606539664:runtime/mealchain_supervisor_agent-1tWqipEGjw` terisi di `.env`; invoke data-plane `task=review_decision` mengembalikan 7 finding + 8 trace row (2,8–7,5 dtk). **Evaluasi AgentCore selesai**: `Builtin.Correctness` 1,0 · `Builtin.Faithfulness` 1,0 · `Builtin.GoalSuccessRate` 1,0 · `Builtin.TrajectoryInOrderMatch` 1,0 pada dua keputusan berbeda (e7150da4, b54d0f11) via API `Evaluate`; span disusun dari run nyata karena Transaction Search masih PENDING. Bukti: `_qa/p6-lokal-2026-10-18.md` §8–§10. Sebelumnya (2026-10-16) klaim yang sah hanya "agent ada + jalan ke Bedrock"; `docs/verification/fase-11.md` adalah bukti sebelum deploy. |
+| S0-07 | `.env.example` + `.env` lokal | Setup | Done | Hermes | Created |
+
+## Sprint 1 — Business logic inti + data
+
+| ID | Task | Kategori | Status | Assignee | Catatan |
+|---|---|---|---|---|---|
+| S1-01 | Seed dataset 10 lokasi x 3 komoditas | Data | Done | Hermes | Commit 81714c7; counts 10×3; docs/verification/sprint-1.md |
+| S1-02 | Endpoint `GET /supply/*` | Backend/API | Done | Hermes | Commit 3fcd920; 13 test API |
+| S1-03 | Endpoint `GET /demand/*` | Backend/API | Done | Hermes | Commit 3fcd920 |
+| S1-04 | Endpoint `POST /freshness/evaluate` | Backend/API | Done | Hermes | Commit edbe5a9 |
+| S1-05 | Endpoint `POST /safety/evaluate` | Backend/API | Done | Hermes | Commit edbe5a9 |
+| S1-06 | Endpoint `GET/POST /price/*` | Backend/API | Done | Hermes | Commit edbe5a9 |
+| S1-07 | Endpoint `POST /logistics/estimate` | Backend/API | Done | Hermes | Commit edbe5a9 |
+| S1-08 | Unit test hard constraints (safety, freshness, capacity, delivery window) | Testing | Done | Hermes | 158 test backend; acceptance 12 test |
+| S1-09 | Mock SAP: material_stock + purchase_orders terisi seed | Mock SAP | Done | Hermes | Commit 2e6cbc9 + 81714c7 |
+| S1-10 | Endpoint `GET /demand/forecast/*` (forecast statistik fallback) | Backend/API | Done | Hermes | Commit 3fcd920 |
+| S1-11 | Freshness `usable_until` pada kontrak evaluate + persistence batch | Backend/API | Done | Hermes | Commit edbe5a9 + eb207ff |
+
+## Sprint 2 — Balancing engine + Auth + Frontend shell
+
+| ID | Task | Kategori | Status | Assignee | Catatan |
+|---|---|---|---|---|---|
+| S2-01 | Endpoint `POST /cost/safe-delivered` | Backend/API | Done | Hermes | Ditutup 26 Okt 2026: `POST /cost/safe-delivered` ada di `backend/openapi.json` (77 operasi, drift test PASS), dipakai kartu keputusan dan `verify/invariants.spec.json`. Opsi A SDC dikunci 2026-10-06 |
+| S2-02 | Endpoint `POST /balance/analyze`, `/balance/recommend` | Backend/API | Done | Hermes | Ditutup 26 Okt 2026: `POST /balance/analyze` dan `POST /balance/recommend` ada di `backend/openapi.json`; tes `tests/test_tool_contracts.py::test_balance_analyze_full_pipeline_with_summary` (gagal order-dependent, bukan karena endpointnya hilang). `/balance/{loc}/{com}` tetap ada |
+| S2-03 | Endpoint `POST /evidence/fuse` | Backend/API | Done | Hermes | Commit `93ca711` (S3-02); RBAC legacy ditutup 2026-10-08 (Revisi 10) |
+| S2-04 | Auth: JWT login + 3 role (sppg_head, sppg_nutritionist, bgn_monitor) | Authentication | Done | Hermes | Commit `77d3fdc` (S3-01) + akun demo; ditandai selesai Roy 2026-10-08 |
+| S2-05 | RBAC middleware per endpoint | Authentication | Done | Hermes | `require_roles`/`get_current_user` di SEMUA endpoint incl. legacy (Revisi 10, TDD + live probe); ditandai selesai Roy 2026-10-08 |
+| S2-06 | Frontend: Login screen | Dashboard | Done | Hermes | S3-12 + polish Revisi 7/8; ditandai selesai Roy 2026-10-08 |
+| S2-07 | Frontend: Dashboard shell + peta 10 lokasi (data statis dulu) | Dashboard | Done | Hermes | S3-12 dashboard shell (feed/detail/trace); peta 10 lokasi digantikan OpsConsole+RoleHero (Revisi 9); ditandai selesai Roy 2026-10-08 |
+| S2-08 | `openapi.json` bersih ter-generate | Backend/API | Done | Hermes | Regenerated 26 paths = set route, security terisi (Revisi 10) |
+
+## Sprint 3 — Agent layer (PALING KRITIS)
+
+> **STATUS: DONE** — final gate PASS dari HEAD `a9eba93` (2026-10-08):
+> backend 463 passed + ruff; frontend 55 + tsc + lint + build; Alembic
+> `008_rejection_loop` (current=heads); Docker 4 service Up + health 200;
+> OpenAPI 26 paths = 26 routes (0 drift); secrets scan 0; live probe
+> auth/RBAC 10/10; AgentCore Runtime live invoke PASS (PONG asli).
+> Evidence: `docs/verification/sprint-3.md`.
+
+| ID | Task | Kategori | Status | Assignee | Catatan |
+|---|---|---|---|---|---|
+| S3-01 | AgentCore Gateway config dari openapi.json | Agent | Done | Hermes | Commit `93ca711`+`e47e11e`; tool registry + gateway config; `backend/openapi.json` 23 paths |
+| S3-02 | Supervisor Agent — panggil 1 tool via Gateway | Agent | Done | Hermes | Commit `77d3fdc` (auth+matrix) + `0c21a39` (orchestrator tool call) |
+| S3-03 | Supervisor Agent — alur penuh Event 1 (DETECT→ACT) | Agent | Done | Hermes | Commit `0c21a39`; + narasi SUPERVISE pasca-gate `92a95fc` |
+| S3-04 | Verifier Agent — audit output Event 1 | Agent | Done | Hermes | Commit `689cf26`; fix verifier_note `5e5525b` |
+| S3-05 | AgentCore Memory terpasang | Agent | Done | Hermes | Commit `dacc592` (memory isolation; ARN/Memory kosong = honest-unavailable) |
+| S3-06 | AgentCore Observability aktif + trace bisa ditarik | Agent | Done | Hermes | Commit `dacc592` (observability + trace) |
+| S3-07 | `agent_traces` table terisi dari trace asli | Backend/Data | Done | Hermes | Commit `ffc22b2` (persistence + whitelist) |
+| S3-08 | Frontend: Recommendation Feed (data asli) | Dashboard | Done | Hermes | Commit `45cb20e`+`4999615` |
+| S3-09 | Frontend: Decision Detail + Evidence view | Dashboard | Done | Hermes | Commit `45cb20e`+`4999615` |
+| S3-10 | Frontend: Agent Activity Log (trace timeline) | Dashboard | Done | Hermes | Commit `45cb20e`; + ProviderPanel `92a95fc` |
+| S3-11 | Approval flow — approve → execute → SAP mock PO | Backend/Dashboard | Done | Hermes | Commit `5e5525b`; E2E `c478d5c` (PO mock `MC-`, data_source=MOCK) |
+
+### Catatan status eksekusi Sprint 3 (agent layer — sinkronisasi tabel penuh di S3-16)
+
+> Penomoran TODO.md berbeda dari plan `.hermes/plans/2026-10-06-sprint3-agent-layer.md`
+> (TODO.md = pandangan fitur; plan = slice eksekusi). Status per 2026-10-06 mengikuti plan:
+>
+> - **S3-00** Preflight: DONE — AWS LIVE via inference profile (STS+Bedrock ok), CRLF `.env` quirk, compose env wiring diperbaiki.
+> - **S3-01** (plan) Auth JWT/RBAC + approval matrix + actions lifecycle + demo users: DONE — commit `77d3fdc`, 323 passed.
+> - **S3-02** (plan) `/cost/safe-delivered`, `/balance/analyze`, `/evidence/fuse` + tool registry + gateway config: DONE — commit `93ca711`, fix `e47e11e`, 332 passed. `backend/openapi.json` ter-generate (22 paths).
+> - **S3-05** (plan) Shared resilience `with_fallback_chain` (primary→fallback 1-3, 429 retryable, timeout, circuit breaker opsional): DONE — commit `a512e5a`, 340 passed.
+> - **S3-06** (plan) Verifier REST client (SAP primary→SAP fallback→Bedrock final via S3-05, guard safety FAIL, UNAVAILABLE→dual approval): DONE — commit `689cf26`, 352 passed. Catatan: system prompt di `app/ai_providers/prompts/` (bukan `agent/prompts/`) karena `agent/` di luar bind-mount container.
+> - **S3-07** (plan) Forecast provider (SAP-RPT-1.6→statistical_fallback 0.5/0.3/0.2 dari core, tanpa fabricate label SAP): DONE — commit `21ee4af`, 358 passed.
+> - **S3-03+04** (plan) Event 1 orchestrator (`services/event1_orchestrator.py`, DETECT→VERIFY→TRACE→PREDICT→OPTIMIZE→DECIDE, AgentTrace persist, tanpa auto-approve): DONE — commit `0c21a39`, 365 passed. Catatan lokasi: di `app/services/` (bukan `agent/` root) karena `agent/` di luar bind-mount container.
+> - **S3-08+09** (plan) Memory isolation + Observability trace (`agent_memory.py`, `agent_observability.py`; AgentCore tanpa konfigurasi = error eksplisit; label `synthetic` anti-promosi bukti palsu): DONE — commit `dacc592`, 379 passed.
+> - **S3-10** (plan) Trace persistence service (`trace_persistence.py`, sanitasi payload + step_name whitelist + step_at monoton): DONE — commit `ffc22b2`, 382 passed.
+> - **S3-11** (plan) Approval+action E2E: **bug nyata ditemukan & diperbaiki** — `/actions/verify` tidak pernah menulis `verifier_note` (jalur API tak pernah bisa CONSISTENT); sekarang verdict tertulis + status `verifier_flagged` + 422 verdict tak dikenal: DONE — commit `5e5525b`, 389 passed.
+> - **S3-12** (plan) Frontend Agent Flow (login, feed polling 5s, decision detail, AgentTraceViewer dari DB, ApprovalModal friksi §1.3, role scope §1.4, badge mock): DONE — commit `45cb20e` + backend read endpoints `4999615` (25 test, tsc+lint+build bersih).
+> - **S3-13+14** (plan) E2E acceptance (4/4: jalur penuh supervisor→PO mock MC-, data_source=MOCK; bug seam verifier_note orchestrator ditemukan & diperbaiki) + resilience acceptance (5/5: matriks 4 cabang chain via failure injection deterministik, UNAVAILABLE→dual AND): DONE — commit `c478d5c`, 401 passed.
+> - **S3-15** (plan) Security/contract review: endpoint baca S3-12 diproteksi auth (unauth 401 — ditemukan via live probe), openapi.json regenerated 23 paths 0 missing, core→api boundary 0 pelanggaran, scan secrets bersih: DONE — commit `6744978`, 402 passed.
+> - **S3-16** (plan) Final gate: fresh verification dari HEAD — alembic `006_decision_persistence (head)`, backend 402 passed + ruff bersih, frontend 25 test + lint bersih, compose 4 service Up (postgres healthy), log scan bersih pada state final, `/health` 200, `/decisions` unauth 401, DB readback bersih. Evidence lengkap: `docs/verification/sprint-3.md`. BLOCKED live (jujur): AgentCore Runtime ARN/Gateway/Memory kosong, model env verifier/forecast/supervisor belum lengkap — jalur lokal tersertifikasi penuh.
+> - Selesai: seluruh slice S3-00..S3-16 (402 backend + 25 frontend test saat gate). Tabel fitur S3-01..S3-11 di atas sudah disinkron ke `Done` + referensi commit (ditandai selesai oleh Roy, 2026-10-06).
+> - **Pasca-gate (permintaan Roy): model chain 3 slot per agent LIVE.** Verifier/Forecast/Supervisor kini primary Bedrock + 2 fallback Inferhub (cb/kimi-k3, cbcn/kimi-k3, ali/qwen3.8-max-0902 — semua terbukti live via probe); AgentCore ARN (bila diisi) jadi primary & menggeser slot env. Supervisor dapat langkah narasi SUPERVISE (non-safety-critical) + frontend ProviderPanel identitas model. Bug live ditemukan & fixed: prompt forecast tanpa kontrak output → parser menolak jawaban array harian model. Evidence: `docs/verification/sprint-3.md`. Backend **437 passed**, frontend **31 test**, ruff/tsc/lint/build bersih.
+> - **Revisi 2 (arah Roy): chain PANJANG frontier-first, kimi/qwen di fallback TERAKHIR.** Probe 2 ronde katalog Inferhub → `cb/gpt-6-astra` (GPT-6 Astra), `cc/`, `cc/` LIVE (503 ronde-1 terbukti transien); `gpt-5.6-sol` 404 di katalog. .env dirapikan: 6 slot/agent identik (Bedrock Claude → Astra → Claude-5-5 → Claude-5 → kimi-k3 → qwen3.8-max), entry 503/502 lama dikosongkan. `AGENTCORE_RUNTIME_ARN` kini TERISI (runtime `mealchain-5iQ9raHpis`, dibuat Roy) → slot `primary:agentcore`, chain total 7. Registry slot 1..9 tanpa cap, `with_fallback_chain(fallbacks=[...])`, label dinamis. Backend **445 passed**, ruff bersih; frontend 31 test + tsc/lint bersih.
+> - **Revisi 10 (2026-10-08): residual RBAC endpoint legacy Sprint 1/2 DITUTUP
+>   + final gate Sprint 3 (arah Roy).** Guard JWT/RBAC di 10 router legacy
+>   (13 endpoint; baca = JWT valid, mutasi = sppg_head/nutritionist —
+>   bgn_monitor read-only 403), TANPA ubah architecture/domain logic
+>   (Architecture.md §232, PRD §77). TDD RED→GREEN; 46 fallout test legacy
+>   dibereskan via fixture `auth_headers` (login JWT nyata, assertion tak
+>   diubah). Final gate PASS: backend **463 passed** + ruff; frontend 55 +
+>   tsc + lint + build; Alembic current=heads=`008_rejection_loop`;
+>   Docker 4 service Up + `/health` 200 + log scan bersih; OpenAPI
+>   regenerated 26 paths = set route (0 drift); secrets scan 0 temuan;
+>   live probe auth/RBAC 10/10 (401/403/200); **AgentCore Runtime live
+>   invoke PASS** (HTTP 200, 4.89s, PONG asli — bukan fallback/synthetic).
+>   Evidence: `docs/verification/sprint-3.md`. **Sprint 3: DONE.**
+> - **Revisi 9 (2026-10-07): Ops Console interaktif + polish semua role.**
+>   Demo-day guard TTL (pending/flagged ≥ 60 mnt pasca-seed, di-guard test).
+>   Frontend: OpsConsole (muat kondisi nyata /balance → analisis agent
+>   /balance/analyze → Ajukan → feed), RoleHero per role, header navy,
+>   label kasus di kartu, tombol Verifikasi (syarat execute eksplisit).
+>   Alur live: analyze → ajukan → 4-eyes approve → verify → execute →
+>   PO mock SAP terbentuk. Backend 458 + ruff; frontend 55 + tsc + lint.
+> - **Revisi 8 (2026-10-07): Rejection loop + 4 kasus demo (arah Roy).**
+>   Penolakan WAJIB alasan (422 bila kosong; tersimpan `rejection_reason`) →
+>   agent re-propose iterasi baru (`supersedes_id`, trace **LEARN** berisi
+>   alasan — bahan learning/memory) → chain v1→v2→v3 via
+>   `GET /decisions/{id}/chain`. Migration 008 (4 kolom). `POST /demo/seed`
+>   idempotent: kuota (v1→v2→v3 fresh), shortage darurat (TTL 15 mnt),
+>   supplier janggal (FLAGGED), gangguan logistik (re-rute). Frontend:
+>   DecisionChain + badge v{n} + tombol alasan wajib & re-propose + "Muat
+>   kasus demo"; link 404 dihapus; brand panel dirapikan (rute ❄ + angka
+>   dihapus per arah Roy). Backend **458 passed** + ruff; frontend **45
+>   passed** + tsc + lint. Live E2E terverifikasi (reject→repropose→chain→LEARN→restore).
+> - **Revisi 7 (2026-10-07): CORS fix + polish UI login.** Keluhan "Failed to
+>   fetch" root cause: backend tanpa `CORSMiddleware` (browser origin
+>   3000 → API 8000 diblokir) → `app.add_middleware(CORSMiddleware)`
+>   allow-list eksplisit `localhost:3000` + `127.0.0.1:3000` (TDD: 3 test
+>   baru di `tests/test_cors.py`, backend **450 passed**). Login di-polish
+>   (frontend-design skill): split layout — panel brand navy dengan signature
+>   rute rantai dingin **Bogor → Jakarta** + angka demo asli (50 km, SDC
+>   Rp16,2 jt, freshness 0,90), chips akun demo klik-isi, state
+>   loading/error. Frontend **36/36** + tsc + lint bersih; verifikasi live:
+>   preflight OPTIONS 200 + header `access-control-allow-origin`,
+>   login 200, dev server restart → page serve desain baru.
+> - **Revisi 6 (2026-10-07): AgentCore GATEWAY LIVE — AgentCore stack tuntas.** Policy file 1 (12 action incl. 3 WorkloadIdentity) di-attach Roy → create ulang sukses → **gateway READY** (`list_gateways` quirk count=0; verifikasi via get_gateway by ID dari host URL) → `AGENTCORE_GATEWAY_URL` append .env (92 char, newline disiplin) → backend recreate → container: gw_url len 92 + mem_id len 30 + provider **agentcore**. Gateway FAILED ronde-1 di-delete. Frontier 5 model: tetap sales-gated (pilihan Roy: ajukan AWS Sales). Kapasitas 12 slot/agent dipertahankan untuk masa depan.
+> - **Revisi 3 (arah Roy, 2026-10-07): tambah fallback baru + koreksi verifikasi.** Probe ronde-3 awal salah sasaran (skrip menambah path pada `INFERHUB_URL` yang sudah endpoint penuh → 404 palsu termasuk kontrol; root cause fixed, probe diulang → SEMUA kandidat LIVE 'pong': `cx/gpt-6-astra` 4s, `cb/gpt-6-sol` 2s, `cx/gpt-6.1-sol` 1s, `cb/kimi-k3` 4s, `cbcn/kimi-k3` 8s, kontrol `cb/gpt-6-astra` 2s). Chain rev3 per agent (total 11 slot incl. AgentCore): primary AgentCore → Bedrock 4.6 → astra cb/cx → sol cb/cx → 2× claude cc/ lama → cb/kimi-k3 → cbcn/kimi-k3 → ali/qwen3.8-max TERAKHIR. `cx/` jadi prefix Inferhub resmi (TDD RED→GREEN). Backend **446 passed** + ruff; frontend 31 test. Dok: `docs/verification/sprint-3.md` (tabel chain + catatan verifikasi ronde-3).
+
+## Sprint 4 — Event 2 & 3, KPI, polish, rehearsal
+
+> **STATUS: IN PROGRESS** (Jangan tandai selesai — Roy yang menandai) —
+> per 2026-10-09 (revisi 3): **final gate Sprint 4 LOLOS** — backend full
+> **551 passed EXIT=0** (390s, pasca-polish; baseline 463→551), frontend
+> **92/92** + tsc 0 + lint 0 + build PASS, Ruff 0, Alembic single head
+> `008_rejection_loop`, OpenAPI live 32 paths + unauth 401 probe bersih,
+> secrets scan 0 secret produksi, DEMO_MODE=False. Live browser: peta
+> skematik Indonesia 10 lokasi (data DB real, Jakarta telur kurang 780 kg)
+> + grafik surplus/shortage + sidebar per role; bgn_monitor read-only
+> (tanpa tab Analisis/tombol mutasi). **Polish UI/UX per role done** (arah
+> Roy): teks ramai dipindah ke sidebar, tab nav per role, `GET /balance/map`
+> (TDD 5/5) + `SupplyMap` + `StockChart`. Laporan gate:
+> `docs/verification/sprint-4-final-gate.md`. Video fallback = waived
+> Owner. Residual: O-KPI 2 metrik menunggu kontrak data; Memory AgentCore
+> IAM (aksi Roy). Sprint tetap IN PROGRESS — Roy yang menandai DONE.
+> **Penulis data KPI (16 Okt 2026, malam).** Layar KPI kosong BUKAN karena
+> halaman rusak: tiga metrik tidak punya produsen data di backend. Ditambal
+> dengan TDD: (1) trace `ACT` kini ditulis di jalur eksekusi (`api/actions.py`)
+> → Decision Time hidup; (2) kolom `decision_evidence.is_consistent` diisi
+> empat penulis bukti lewat `core/evidence_consistency.py` (temperature,
+> market_price, binding, administrative) → Evidence Completeness terukur;
+> (3) kartu Evidence Completeness berpindah penyebut ke "keputusan yang punya
+> cutoff approval" + menampilkan sampel & coverage, jadi angkanya jujur bukan
+> 0 palsu. Bukti live (satu alur penuh, keputusan `4aa0c365`): trace ACT +
+> PO ber-`decision_id` tertulis, Decision Time 0,11 menit, Safe Delivered Cost
+> Rp15.077.905, Imbalance 7,69% (sebelumnya 0,00%). Label satuan `minutes` →
+> "menit" di `KPIDashboard`. Backend **891 passed EXIT=0** (3 skip); frontend
+> **716/716 (67 berkas)**. Laporan: `docs/verification/kpi-penulis-data.md`.
+> Residual: Avoidable Food Loss & Price Deviation tetap "belum ada data" pada
+> jendela 24 jam karena deret data demo berhenti di 8 Okt (bukan bug); Safe
+> Delivered Cost + Decision Time hanya terisi setelah ada eksekusi nyata.
+> **Pemilih periode KPI (16 Okt 2026).** Jendela halaman dulu DIPAKU 24 jam di
+> `useKpi`, jadi tiga kartu selalu kosong walau datanya ada di DB. Sekarang tab
+> KPI punya pil **24 jam / 7 hari / 30 hari** (`KPI_WINDOWS` + `kpiWindowRange`
+> di `lib/kpi.ts`; kunci jendela masuk `queryKeys.kpiLive`), jendela dimiliki
+> halaman dan diteruskan ke hook + board (dipaku `tests/kpi-wiring.test.tsx`).
+> Live: "30 hari" → **7/7 kartu tersedia** (Meal 23,72% · Food Loss 0,04% ·
+> Imbalance 2,30% · SDC Rp15.079.436 · Price Dev 1,20% · Decision Time 0,11 mnt ·
+> Evidence 22,22%). TIDAK ada baris data yang ditambah/diubah — jangkar kanonik
+> 8 Okt & snapshot ekspor tetap utuh. Frontend 69 berkas / 792 uji + tsc 0 +
+> lint 0. Data baru dari jalur nyata: keputusan `2c6ebef3` (executed, PO
+> MC-2C6EBEF348D2) → Evidence Completeness 0% → 66,67%.
+> **KPI 24 jam dimulai dari "belum ada aksi hari ini" (23 Okt 2026, permintaan
+> pemilik).** Saat demo dibuka, jendela 24 jam hanya memuat tiga metrik yang
+> penulisnya memang penyemai (Meal Continuity, Avoidable Food Loss, Procurement
+> Price Deviation); empat metrik berbasis aksi (Regional Imbalance, Safe
+> Delivered Cost, Decision Time, Evidence Completeness) baru menyala setelah
+> operator menjalankan Event 1 → approve → execute (dan Event 3 untuk bukti).
+> Bukan angka karangan: `app/seed/demo_kpi_riwayat.py` menggeser baris AKSI
+> Jakarta di jendela 24 jam ke ~25 jam lalu (satu delta seragam, urutan rantai
+> tetap, `expires_at` tidak ikut, kota lain & pandangan global TIDAK disentuh),
+> dipanggil `demo_template.build_into` + `POST /demo/refresh`. KPI juga berhenti
+> jadi "potret": `kpiQueryPolicy` (`lib/kpi.ts`) + `KPI_POLL_MS` 20 dtk
+> menyegarkan panel hanya di tab Hari Ini & KPI. Live 23 Okt: Jakarta 24 jam
+> **3/7** (Meal 100,00% · Susut 1,15% · Simpangan 2,66%), 0 baris aksi Jakarta
+> dalam 24 jam, 7 hari/1 bulan tetap 7/7, BGN global 7/7; UI "KPI tersedia 3/7"
+> dan tab KPI pil "24 jam" 3 kartu terisi. Poll terukur 20 dtk (03:21:17/37/57/
+> 03:22:17) dan NOL permintaan `/kpi` setelah pindah ke Overview. Tes: backend
+> 5 uji baru `tests/test_demo_kpi_riwayat.py`; frontend `kpi.test.ts` +
+> `kpi-wiring.test.tsx` 21 uji; suite frontend **161 berkas / 1764 uji**;
+> tsc 0; lint 0. Dua bug ketemu & ditutup: baris ORM yang belum di-flush tidak
+> terlihat UPDATE raw SQL, dan `now` di awal build (50 dtk) membuat baris yang
+> lahir belakangan lolos dari saringan jendela.
+> **Meal Continuity 24 jam diperbaiki — kartu unggulan tidak lagi 0,00% (24 Okt 2026,
+> temuan audit KPI-01).** Dua cacat di `app/services/kpi_service.py`: (a) predikat
+> `plan_date < CAST(:end AS date)` membuang rencana HARI INI karena `end` = sekarang,
+> (b) pembilang difilter `delivered_at` sementara penyebut memakai `plan_date` —
+> sumbu waktu berbeda, jadi jendela 24 jam bergulir struktural mentok ±50%. Sekarang
+> kedua sisi memakai sumbu `plan_date` (`_plan_date_range()`, batas inklusif, konversi
+> `Asia/Jakarta` eksplisit supaya 00:30 WIB tidak jatuh ke tanggal UTC kemarin);
+> `delivered_at` tetap fakta yang disimpan, hanya bukan lagi filter. Tes kontrak baru
+> `tests/test_kpi_batas_tanggal.py` (5 uji: hari ini masuk jendela, kiriman kemarin di
+> luar jendela tetap menghitung rencana kemarin, over-delivery ditutup di 100%, jendela
+> 7 & 30 hari). Live: Jakarta 24 jam **0,00% → 100,00%**, 7 hari 85,42% → 100,00%;
+> 46 tes KPI/demo + 30 tes demo/event1 lulus, ruff bersih. Efek pada demo: kartu Meal
+> Continuity menyala penuh sejak awal (metrik fakta), bukan menunggu aksi.
+> **Image frontend produksi + healthcheck backend (24 Okt 2026, temuan audit DEP-01).**
+> `frontend/Dockerfile` sebelumnya satu stage dengan `CMD npm run dev`, jadi image
+> "produksi" menyajikan dev server. Sekarang empat stage: `deps` → `dev`
+> (dipakai `docker compose up` harian, tetap hot reload) / `builder` (next build)
+> → `runner` (`NODE_ENV=production`, `npm ci --omit=dev`, `next start`, user
+> non-root). Tambah `frontend/.dockerignore` (tanpa itu konteks build mengirim
+> `node_modules` + `.next`). Nama image dipisah: `mealchain-frontend-dev` vs
+> `mealchain-frontend-prod` supaya dua target tidak saling menimpa. Berkas baru
+> `docker-compose.prod.yml`: tanpa bind mount, backend tanpa `--reload`,
+> healthcheck untuk postgres/backend/frontend, frontend menunggu backend
+> `service_healthy`, UI memakai jalur relatif (satu origin, tanpa CORS).
+> `docker-compose.yml` (dev) dapat healthcheck backend GET `/health` dan
+> frontend `depends_on: backend: service_healthy`. Verifikasi: image `runner`
+> dibangun, container uji `:3011/` 200, `/kpi` diteruskan ke uvicorn (401 JSON),
+> `/__nextjs_original-stack-frame` 404 (di dev 400), `Config.Cmd`
+> `["npm","run","start"]`; stack dev setelah perubahan: backend & frontend
+> `(healthy)`, `:3010` 200. Belum diverifikasi: `up -d` stack produksi penuh —
+> percobaannya memacetkan Docker Desktop (pulih setelah restart; data aman).
+> Build pertama juga gagal karena `app/page.tsx` sedang disunting (snapshot
+> setengah jadi: `Cannot find name 'feedWindow'`); rebuild setelah `tsc` 0 lulus.
+> **Schema drift ditutup — `alembic check` bersih (24 Okt 2026, temuan audit DB-01).**
+> `alembic check` dulu GAGAL dan `--autogenerate` akan MENGHAPUS tabel
+> `ledger_blocks` (353 blok riwayat audit) karena tabel itu tidak punya model.
+> Sekarang: `app/models/ledger.py` (`LedgerBlock`, DDL apa adanya — unique
+> `ledger_blocks_height_key`, check `ledger_hash_len_check`, index
+> `idx_ledger_blocks_height`), 22 index operasional yang dulu hanya ada di
+> migrasi dideklarasikan di model (`idx_supply_latest`/`idx_demand_latest`
+> dengan `text("recorded_at DESC")`, index parsial `uq_*_source_ref`
+> `WHERE source_ref IS NOT NULL`, `uq_supplier_exclusions_active_scope`, dst.),
+> lima tipe kolom disamakan ke DB (`batches.quarantine_status` → Text;
+> `decisions.origin`/`delivery_events.origin`/`disposal_events.origin` →
+> String; `disposal_events.quantity_kg` → `Numeric(12,2)`;
+> `price_signals.source_ref` → Text), dan FK `disposal_events.commodity_id`
+> memakai `ondelete="RESTRICT"` seperti DB. Verifikasi: `alembic check` →
+> **"No new upgrade operations detected."**, ORM 22 tabel (termasuk
+> `ledger_blocks`), `tests/test_ledger.py` + `test_ledger_linkage.py` 6 lulus,
+> ruff bersih untuk berkas yang disentuh. Jebakan name mismatch:
+> `ix_decisions_origin_created_at` di DB (bukan `idx_...`) — autogenerate
+> membaca nama index, jadi samakan persis.
+> **Rehearsal penuh + satu kasus "bukti hari ini" (23 Okt 2026).** Rehearsal
+> nyata (Event 1 telur → propose → approve head+gizi → execute, lalu Event 3
+> beras FAIL) menaikkan Jakarta 3/7 → **7/7**, tetapi Kelengkapan Bukti berhenti
+> di **0,00%**: keputusan pengadaan hanya membawa SATU jenis bukti konsisten
+> sebelum approval, sedangkan keputusan Event 3 punya dua (human_inspection +
+> temperature) namun verifier menandainya FLAGGED karena batch FAIL adalah
+> blocker absolut. Ditutup dengan DATA DEMO saja, tanpa menyentuh rumus KPI:
+> `app/seed/demo_kasus_bukti.py` menyemai satu kasus ber-`demo_case`
+> "bukti-hari-ini" (Bandung → Jakarta, 300 kg) DI DALAM jendela 24 jam dengan
+> dua jenis bukti konsisten yang direkam sebelum approval, tanpa approval dan
+> tanpa PO — jadi keadaan awal tetap 3/7 (Imbalance & Decision Time mengabaikan
+> baris demo_case, Safe Delivered Cost butuh PO, Kelengkapan Bukti hanya
+> menghitung yang sudah disetujui). Dipanggil setelah penggeser di `build_into`
+> dan `POST /demo/refresh`; keduanya menghapus approval/PO lama supaya cerita
+> bisa diulang. Live: 3/7 → approve kasus (head + gizi) → **4/7** dengan
+> Kelengkapan Bukti **100,00%** → Event 1 → **7/7** dengan Kelengkapan Bukti
+> **50,00%** (1 dari 2 keputusan yang disetujui hari itu berbukti lengkap).
+> Label kartu `CASE_LABELS["bukti-hari-ini"]` = "Kasus: Alokasi
+> Bandung–Jakarta". Tes: `tests/test_demo_kasus_bukti.py` 3 uji, subset demo 24
+> uji lulus, tsc 0, lint 0. Batasnya jujur: 100,00% hanya bertahan bila
+> keputusan Event 1 juga punya ≥2 jenis bukti — itu perubahan produk, belum
+> dikerjakan.
+> **Kalender agenda harian — langkah 1 (16 Okt 2026).** Halaman terpilih: tab
+> **"Hari Ini"** (satu-satunya halaman yang harian tetapi tak punya pemilih hari;
+> `menu_plans` punya 10 baris rencana SETIAP hari 1 Sep–5 Nov yang tak pernah
+> tampil). Endpoint baru **`GET /agenda?start&end`** (`app/api/agenda.py` +
+> `app/services/agenda_service.py`): satu entri per hari tanpa lubang, batas hari
+> **WIB** (bukan UTC), `available: false` pada hari tanpa catatan, scope mengikuti
+> `core/scope.py` (keputusan lewat `target_location_id`, batch lintas lokasi),
+> 7 kueri agregat untuk ≤62 hari. Tes `tests/test_agenda_api.py` 8 uji RED→GREEN;
+> ruff bersih. Live 1–8 Okt: 1 rencana 1200 porsi + 1 kiriman 1200 porsi/hari,
+> limbah 4 kg (4 Okt) & 6 kg (7 Okt), 12 keputusan (7 Okt) & 44 (8 Okt).
+> **Kalender — langkah 2 SELESAI (16 Okt 2026, malam).** Kalender hidup di tab
+> "Hari Ini", tepat di bawah header: grid 42 sel mulai Senin + titik penanda
+> `activity`, panel agenda hari terpilih (rencana menu, kiriman, limbah, pasokan,
+> harga, batch kedaluwarsa, keputusan), navigasi ‹ › + tombol "Hari ini".
+> Berkas baru: `frontend/lib/agenda.ts` (fungsi murni), `lib/hooks/useAgenda.ts`,
+> `components/TodayAgendaCalendar.tsx`. Diubah: `lib/api.ts`, `lib/query.ts`,
+> `components/TodayDashboard.tsx`, `app/page.tsx`, `app/globals.css`,
+> `next.config.js` (**`API_ROOTS` wajib + "agenda"** — tanpa itu /agenda → 404
+> HTML dari Next). 15 uji baru RED→GREEN; gerbang frontend **73 berkas / 854 uji
+> hijau, tsc 0, lint 0**. Live 17 Okt: rencana 1.115 porsi · keputusan 18
+> (11 diusulkan, 3 ditolak, 3 menunggu, 1 ditandai) — cocok dengan DB. Celah UX
+> (klik "Hari ini" tak memindah bulan) ditemukan saat verifikasi hidup & sudah
+> diperbaiki.
+> Detail: docs/verification/kalender-agenda-harian.md.
+> **Kalender — langkah 3: popup pemilih tanggal (permintaan pemilik 2026-10-17).**
+> Judul bulan dulu teks MATI dan navigasinya hanya ‹ ›, jadi melompat setahun =
+> 12 klik. Sekarang judul bulan = TOMBOL dengan ikon kalender kecil yang membuka
+> popup: dropdown **Bulan** (12 nama Indonesia) + **Tahun** (2026–2027, diambil
+> dari rentang data `lib/demo-data.ts` — bukan angka karangan) + grid hari
+> berpenanda catatan, plus tombol "Hari ini"/"Tutup". Tombol ‹ › & "Hari ini" di
+> kartu TETAP; grid besar TETAP (permintaan pemilik). Berkas: baru
+> `components/AgendaDatePicker.tsx` (popup + tipe `AgendaPickerProps`) &
+> `components/AgendaMonthGrid.tsx` (grid dipakai bersama kartu & popup — bentuk
+> sel tak bisa lagi berbeda); diubah `lib/agenda.ts` (`monthChoices`,
+> `pickerYears`), `lib/hooks/useAgenda.ts` (saklar `enabled`), `TodayAgendaCalendar`,
+> `TodayDashboard` (1 prop `agendaPicker`), `app/page.tsx` (bulan DRAFT popup),
+> `components/NavIcon.tsx` (`CalendarIcon`), `app/globals.css`. TANPA dependensi
+> baru (riset: react-day-picker dkk ditolak; `input type=date` native tak bisa
+> menampilkan titik catatan). Bulan draft diminta lewat `useAgenda` yang sama
+> HANYA saat popup terbuka, dan TIDAK menimpa bulan kartu. 25 uji baru RED→GREEN
+> (15 popup jsdom + 3 grid/header + 3 daftar bulan-tahun + 4 wiring); gerbang
+> frontend **80 berkas / 945 uji hijau, tsc 0, lint 0**. Live (SPPG Head, Hari
+> Ini): popup terbuka dari ikon, dropdown Bulan=Oktober/Tahun=2026, grid 42 sel;
+> pilih September 2026 di draft → grid popup 31 Agu–11 Okt berisi titik catatan
+> September sementara KARTU tetap Oktober; klik 1 Sep → popup tertutup, kartu
+> pindah ke September 2026, panel "Selasa, 1 September 2026" rencana 1.217 porsi
+> + pasokan 6 baris (cocok dengan catatan langkah 2); Tahun=2027 → grid 30 Agu–10
+> Okt 2027 tanpa satu pun hari bercatatan (jujur, bukan nol karangan); Escape →
+> popup tertutup & fokus KEMBALI ke tombol pemicu. 0 galat JS baru di konsol.
+> Detail: docs/verification/kalender-pemilih-tanggal.md.
+> Catatan: deret waktu kanonik sempat terhapus oleh tes `purge_demo_rows()`
+> (`GET /demo/data-status` → `demo: 0`) dan sudah dipulihkan via
+> `POST /demo/timeseries` body `{}` → total supply 2220 · price 2318 · menu 660.
+> Suite penuh belum hijau karena isolasi `tests/test_demo_timeseries_api.py`
+> (bukan regresi aplikasi; detail di docs/verification/kalender-agenda-harian.md).
+> **Overhaul visual (arah Roy 2026-10-09, "masih sangat jelek")**: latar
+> abu halus + kartu ber-depth, badge dot-status (EXPIRED tetap tampil —
+> traceable, tidak disembunyikan), **filter chip status + count live**
+> (Semua 63 / PROPOSED 49 / PENDING_APPROVAL 8 / REJECTED 5 / FLAGGED 1 —
+> terverifikasi browser), peta & chart dibingkai panel, angka tabular.
+> FE 93/93 + tsc 0 + lint 0 + build EXIT=0 (served fresh).
+> **MapLibre GL (keputusan Roy 2026-10-09, lanjutan overhaul):** peta
+> skematik SVG diganti MapLibre GL sungguhan (tile OSM raster, tanpa API
+> key) — FE 95/95, build EXIT=0, terverifikasi live 10 marker;
+> `docs/design.md` §3.1/§4/§5 diselaraskan.
+> **PRD 2.4 alignment (keputusan Roy 2026-10-09):** navigasi konsol
+> direstrukturisasi mengikuti 7 screen PRD → 5 tab: **Overview / KPI /
+> Recommendations / Agent Log / Demo Control** (approver-only). Persona
+> label = judul resmi PRD §2 (Operations Lead / Food Safety Officer /
+> National Inspector). Tab KPI **tidak lagi** memuat strip Target KPI Demo
+> Day — dihapus 2026-10-15 atas arahan pemilik (`components/KpiTargets.tsx`
+> dibuang, kontrak barunya diuji di `tests/prd-nav.test.tsx`); halaman KPI
+> hanya menampilkan KPI live yang jujur dari DB. Komponen kripto PRD (Polygon/IPFS/
+> Merkle/FIDO2) & chaos sliders TIDAK dibuat — arsitektur & backend
+> tetap keputusan terakhir. FE 101/101 + tsc 0 + lint 0 + build EXIT=0;
+> live: sppg_head 5 tab + monitor tanpa Demo Control.
+> **Paket 1–6 integrity & KPI (setuju Roy via clarify 2026-10-09/10):**
+> P1 Merkle ledger append-only (migration `010_ledger_blocks` +
+> `ledger_service` sha256 rantai + `GET /ledger/verify` + hook
+> approve/execute); P2 dossier konten-addressed (`mc1-` SHA-256 bundle
+> bukti, `GET /decisions/{id}/dossier`); P3 ECDSA secp256k1 signing per
+> approval (kunci `SIGNING_KEY_HEX` di `.env`, tanpa kunci = `unsigned`
+> jujur); P4 chaos sliders (`ChaosPanel` → `POST /events/safety-disruption`
+> via API resmi + `GET /batches` read-only); P5 telemetry banner jujur di
+> login (tanpa klaim sertifikasi); P6 tabel facts menu_plans/
+> delivery_events/disposal_events (migration `009_kpi_facts_tables`) →
+> **KPI Meal Continuity (100.00%) & Avoidable Food Loss (1.52%) LIVE**
+> deterministik dari DB. FE **107/107** + tsc 0 + lint 0 + build EXIT=0;
+> IntegrityPanel di tab agent-log, ChaosPanel approver-only di demo-control.
+> **Ruling REF seed canonical (Roy 2026-10-09): REF 2026-10-08 12:00 UTC**
+> — dataset demo ter-anchor di situ (id stable_uuid bergantung REF; REF lain
+> menduplikasi baris). Test stale diselaraskan (`test_price_regional_seed`,
+> `test_seed_load_db`, `test_api_supply_demand` LATEST + timestamp insert
+> 10-15) → **backend full 567 passed EXIT=0** (253s, rerun pasca-paket 1–6).
+> Sprint tetap IN PROGRESS — Roy yang menandai DONE.
+> ---
+> Riwayat revisi 2 (2026-10-08): S4-01..S4-04 Done; **S4-05 rehearsal 3 putaran
+> selesai + 2 ruling Owner dieksekusi TDD + putaran 4 bersih LOLOS** —
+> (1) approval-summary/detail lintas lokasi dibuka untuk VERIFIER_ROLES
+> (selaras write path; monitor tetap 403) — terbukti live: nutritionist
+> Bogor membaca summary + approve decision Jakarta via UI (2 approvals
+> DB); (2) pipeline rekomendasi difilter per komoditas panel (`POST
+> /balance/analyze` body opsional `commodity`) — terbukti live: panel ayam
+> → 0 kandidat, panel telur → usulan telur (bug "panel ayam → usul telur"
+> hilang). **Temuan higienitas test fixed**: test_event2 seed tanpa cleanup
+> (polusi lintas-test) → fixture FK-safe + residu historis dibersihkan →
+> full backend **546 passed**. **S4-06 done TANPA video** (arah Roy):
+> evidence `docs/verification/sprint-4.md` + redaksi (`.env.example`
+> dihapus sesuai aturan secrets; scan tracked files 0 secret produksi).
+> DEMO_MODE kembali `False` (recreate terverifikasi). Sisa: polish UI/UX
+> per role (arah Roy: kurangi teks ramai, grafik, map Indonesia, sidebar
+> per role) + final gate.
+
+| ID | Task | Kategori | Status | Assignee | Catatan |
+|---|---|---|---|---|---|
+| S4-01 | Event 2 (price anomaly) end-to-end interaktif | Demo Scenario | Done | Hermes | p2–p4 backend `event2_service` + `Event2Panel`; live: telur Jakarta −0,98% normal, ayam Bogor +0,79% normal (review-only, tanpa decision row) |
+| S4-02 | Event 3 (safety disruption → reroute Bogor) end-to-end interaktif | Demo Scenario | Done | Hermes | p4 `event3_service` + `POST /events/safety-disruption`; live: batch Surabaya 90 mnt → FAIL → `revised` 201; batch ayam aman → `no_disruption` 200; UI trigger menunggu boundary ruling (rehearsal via API resmi) |
+| S4-03 | KPI Dashboard — 7 KPI dari data real | Dashboard | Done | Hermes | p9: kpi core+service+API (20 test) + `KPIDashboard` FE (7/7) + wiring; live probe 7 metrik jujur (2 unavailable + 4 no_data, tanpa fake 0) |
+| S4-04 | Approval Modal — ringkasan lengkap | Dashboard | Done | Hermes | p8: approval-summary read model kanonik + modal; p10: fix gate Setuju `can_execute`→`can_approve` (bug rehearsal, TDD RED→GREEN, 80/80) |
+| S4-05 | Rehearsal checklist (workflows.md §6) — 4x lolos berturut-turut | QA/Demo | Done | Hermes | r1 telur E1-3 ✓+bug approval fixed; r2 ayam E2/E3 ✓; r3 per-role ✓; r4 bersih ruling ✓ (panel ayam 0 kandidat; telur → usulan telur; approve ganda lintas lokasi via UI, 2 rows DB) |
+| S4-06 | Evidence docs + redaksi secrets (TANPA video — arah Roy) | QA/Demo | Done | Hermes | `docs/verification/sprint-4.md`; `.env.example` dihapus + gitignore (aturan secrets); scan tracked 0 secret produksi; DEMO_MODE kembali False |
+| S4-06b | Polish UI/UX per role (arah Roy: kurangi teks ramai, grafik, map Indonesia, sidebar) | Dashboard | Done | Hermes | TDD: `GET /balance/map` (5/5) + FE test baru (RED→GREEN, 80→92); sidebar per role + tab nav (bgn_monitor tanpa tab Analisis), `SupplyMap` peta skematik 10 lokasi data DB real, `StockChart` recharts; tsc 0 + lint 0 |
+| S4-06c | Final Sprint 4 Acceptance Gate (plan §17) | QA/Demo | Done | Hermes | Laporan `docs/verification/sprint-4-final-gate.md`: backend 551 EXIT=0, FE 92/92+build, Ruff 0, Alembic head tunggal, OpenAPI 32 paths + unauth probe, secrets scan bersih, live browser 2 role; video fallback waived Owner; sprint tetap IN PROGRESS — Roy yang menandai DONE |
+| S4-09 | Adaptasi desain Stitch → design system (arah Roy 2026-10-10) | Dashboard | Done | Hermes | Kode Stitch (7 layar) diadaptasi VISUAL-ONLY via token CSS `globals.css` — palet teal Stitch (primary #005c55, container #0f766e, terminal #0F172A, accent #2DD4BF), status tint Stitch, sidebar ala Guardian Core, trace/hash panel terminal gelap, focus-visible ring, transisi 180ms. Struktur komponen, kontrak API (`../lib/api`), gating role (isApprover, monitor read-only) TIDAK diubah. Verifikasi fresh: FE 107/107 + tsc 0 + lint 0 + build EXIT=0; frontend 3000=200, backend health OK |
+| S4-09b | Sinkronisasi UI ke mockupui/ (SSoT DESIGN.md) + audit fungsional penuh (arah Roy 2026-10-10) | Dashboard | Done | Hermes | SSoT = `mockupui/cold_chain_integrity_console/DESIGN.md`: token `:root` disamakan (canvas #F8FAFC, line #E2E8F0/#CBD5E1, ink #0B1C30, slate #64748B, elevasi L1/L2/L3 DESIGN.md, radius 8px); alias legacy navy/grey dipetakan; font Inter + JetBrains Mono via next/font (`layout.tsx`); semua hardcode #f6f8f9 dll. dinormalkan. Audit wiring: 0 tombol tanpa handler (scan otomatis seluruh components+page). Verifikasi live browser: login 3 akun demo OK (chip isi form, submit jalan), RBAC live — monitor read-only tanpa tab Demo Control & approve 403 via API, approver punya Demo Control + Event 2/3 terpicu sukses, Merkle verify valid 123 block, KPI honest no_data (window 24h di luar REF), peta 10 marker + grafik dari DB. Gate: FE 107/107 + tsc 0 + lint 0 + build EXIT=0; BE 567/567 + ruff clean; responsif dipertahankan (breakpoint 720/820/860px) |
+| S4-09c | Sinkronisasi SELURUH layar ke mockupui (ekspansi S4-09b, arah Roy 2026-10-10) | Dashboard | Done | Hermes | 3 subagent paralel restyle per tab, hasil digabung & diverifikasi ulang parent: KPI (header konsol + bento 7 kartu + filter pill + chip trend SVG), Overview (subheader + strip KPI 3 kartu dari mapData real tanpa fake 0 + filter pill komoditas + split 60/40 peta di panel terminal gelap + tabel breakdown), Recommendations/AgentLog/DemoControl (kartu rekomendasi ala mockup, trace terminal gelap, panel demo). Data/logika/API/RBAC tidak diubah; token :root tidak disentuh; test mock fetch diperbarui utk kontrak resp.text (agent-flow, integrity-panel). Bonus: fix kelas pesan error non-JSON di lib/api.ts (tidak lagi bocor "Unexpected token '<'"). Verifikasi live 5 tab (Overview/KPI/Rekomendasi+approve modal jalan/AgentLog Merkle 152 block valid/DemoControl Event 2+3). Gate: FE 107/107 + tsc 0 + lint 0 + build EXIT=0; frontend 200, backend healthy |
+| S4-09d | Adopsi selektif Nabil dan polish Overview | Dashboard/Backend | In Progress | Hermes | Roy meminta eksekusi ketiga plan sampai finish, termasuk schema exclusion lokal per SPPG dan restoration berbukti dengan approval baru. A/B, C, D1 dan D2 telah diimplementasikan; final regression terbaru: FE 138 passed, TypeScript 0, lint 0, build 0, BE 595 passed, Ruff clean, Alembic `011_supplier_exclusions (head)`, health 200. Browser Playwright fresh: 3 role × 3 viewport, 10 rows tanpa horizontal overflow; race komoditas tervalidasi. Compliance dilindungi auth (unauth 401); export dilakukan dari dossier authorized yang sudah dibaca, bukan endpoint publik baru. Tidak ada commit/push atau aktivasi SAP nyata. Sprint tetap In Progress sampai Roy menandai Done. |
+| S4-07 | (Stretch) AgentCore Identity | Stretch | Not Started | | Catatan probe 2026-10-11: control plane AgentCore terbukti dan menyediakan `ListApiKeyCredentialProviders` → jalur identity/credential provider layak dicoba; belum dikerjakan karena prioritas S4-10/S4-11. |
+| S4-08 | (Stretch) Deploy ke AWS App Runner | Stretch | Not Started | | Catatan 2026-10-11: belum diprobe; kredensial AWS ada tetapi izin IAM terbukti sempit (Bedrock ditolak) sehingga izin ECR/App Runner harus dipastikan lebih dulu. |
+| S4-10 | Hidupkan SAP AI Core: RPT-1.6 (forecast primary) + Verifier primary (general 40+) — paket akses SAP (RPT 1.6, Joule Orchestrator chat UI, AI Core general 40+, AI Launchpad) | SAP Integration | Done | Hermes | **SELESAI 2026-10-11.** Data tetap mock; label `SAP-RPT-1.6` hanya untuk response asli. **Akses terbukti**: OAuth 200 (token 7.912 char, `expires_in` 43.199); 8 deployment RUNNING; `sap-rpt-1.6` `d76cf689a05d504f` + `anthropic--claude-4.6-sonnet` `dc9594f579d3e4c1`. **Kontrak terukur**: LLM → `/v2/inference/deployments/{id}/invoke` body gaya Bedrock (subpath `chat/completions`/`messages` DITOLAK); RPT → `/{id}/predict` dengan baris QUERY wajib (target = placeholder); `/oauth/token` WAJIB memuat `grant_type` di body (tanpa itu 400 `invalid_request`). **Kode**: `app/ai_providers/sap_ai_core_caller.py` (token di-cache + `invoke` + `predict`; total forecast dijumlahkan KODE; `confidence` diturunkan dari `confidence_interval` model, bukan diklaim model; rahasia hanya di header dan disapu dari pesan error) + prefix env `sap-ai-core:llm`/`sap-ai-core:rpt` di `model_registry`/`ai_provider_chain`; dua stub lama (`forecast_client._default_sap_rpt_caller`, `verifier_client._default_sap_ai_core_callers`) kini NYATA; `event1_orchestrator` memakai jalur RPT eksplisit supaya label jujur `SAP-RPT-1.6` benar-benar muncul; `.env` primary → `sap-ai-core:rpt`/`sap-ai-core:llm` (+ deployment id, resource group) dan compose meneruskannya. **Verifikasi**: 18 tes unit baru tanpa jaringan (transport disuntik, termasuk penjaga regresi `grant_type`) + 3 tes `-m live` LULUS di kontainer — LLM menjawab; RPT-1.6 mengembalikan 7 prediksi (total 3.164,17 kg, confidence 0,90); `run_forecast` → method `sap_rpt_1_6`, provider `SAP-RPT-1.6`, fallback False. Suite penuh **613 lulus** (sebelumnya 595). **Sisa**: keputusan kuota/biaya AI Core untuk demo dan apakah supervisor juga dipindah ke AI Core (sekarang masih Bedrock). Joule tetap talking point. |
+| S4-11 | Settings/Admin screen (manage users, lokasi) — dipindah dari Backlog BL-01 | Dashboard | Done | Hermes | **SELESAI 2026-10-11.** **Keputusan peran**: skema hanya punya 3 peran final (tidak ada `admin`), jadi pengelolaan diberikan ke `bgn_monitor` — satu-satunya peran nasional tanpa ikatan lokasi; `sppg_*` ditolak 403. Tidak ada endpoint DELETE (pengguna/lokasi dirujuk keputusan & batch historis). Perubahan tidak menulis ulang sejarah: approval merujuk `users.id`, lokasi dirujuk lewat id. **Backend**: `app/core/admin_rules.py` (murni; mencerminkan CHECK constraint DB `role`↔`location_id`, monitor dipaksa `location_id NULL`) + `app/api/admin.py` (`GET/PATCH /admin/users`, `GET/PATCH /admin/locations`; id bukan UUID → 404 bukan 500; nama lokasi bentrok → 422). **Frontend**: tab `Pengaturan` di rail (hanya terlihat oleh monitor, ikon + NavId baru), `components/SettingsPanel.tsx` (dua tabel, ubah peran/lokasi/nama/wilayah, tombol Simpan nonaktif bila tak ada perubahan, `role=status`/`role=alert`), `lib/settings.ts` (murni: `canManageSettings`, `draftUserUpdate` hanya mengirim field yang berubah), helper `fetchAdminUsers/fetchAdminLocations/updateAdminUser/updateAdminLocation` di `lib/api.ts`, gaya `.settings-*` memakai token yang ada dengan tabel ber-`overflow-x:auto` supaya 375px tidak melebar. **Verifikasi**: 17 tes backend baru (9 aturan murni + 8 kontrak API, fixture memulihkan master data) + 5 tes frontend; backend **630 lulus**, frontend **356 lulus (43 berkas)**, `tsc` bersih. **E2E akun demo nyata** (`scripts/verifikasi_admin.py`): monitor → 200 (570 pengguna, 10 lokasi), role tak dikenal → 422, sppg_head → 403, tanpa token → 401. **Catatan**: 570 pengguna itu SISA data dari run tes historis (seed hanya membuat 3 akun demo) → tindak lanjut yang disarankan: filter/paginasi di tabel Pengguna. |
+| S4-12 | Top bar global (header 64px acuan mockup: brand, dropdown cakupan lokasi, status jaringan, chip peran, notifikasi, identitas, keluar) | Dashboard | Done | Hermes | Langkah 1 permintaan Roy 2026-10-11. `components/TopBar.tsx` + `lib/topbar.ts` (logika murni teruji). Cakupan peran: hanya `bgn_monitor` boleh memilih lokasi; peran SPPG terkunci ke lokasi dari `GET /auth/me` (fail-closed). Notifikasi = hitungan keputusan yang menunggu tindakan. Lokasi aktif dari dropdown menyorot marker peta. Peta+identitas dimuat di SEMUA tab (sebelumnya hanya tab Overview). Verifikasi: vitest 166 passed/26 berkas, tsc 0, lint 0, build 0, audit viewport 375/768/1024 tanpa overflow + kontrol 44px di 375. |
+| S4-13 | Peta gaya acuan (peta terang, legenda putih, kontrol MapLibre bawaan) | Dashboard | Done | Hermes | Revisi arah Roy 2026-10-11 (setelah versi panel gelap ditolak): peta kembali TERANG seperti acuan — kanvas OSM apa adanya, legenda putih kiri-bawah ("Status lokasi: Surplus · Seimbang · Shortage") dengan titik sewarna pin, kontrol bawaan MapLibre (zoom+kompas kanan-atas, atribusi kanan-bawah). Semua tambahan versi sebelumnya DIHAPUS sesuai pilihan Roy: kepala panel (judul koridor, jumlah node), toggle tampilan, kaki panel usulan pengiriman, dan panel gelap beserta token `--panel-dark-*`/`--pin-*`. Pin popup dibangun sebagai node DOM (nama lokasi dari database tidak masuk innerHTML). Sisa: `components/SupplyMap.tsx` (prop `console`/`showLabels`/`shortageOnly` dibuang), `components/NodeTelemetry.tsx` (kartu telemetri node tetap), `lib/map-console.ts` (`pinTone`, `pinLabel`, `nodeGauges`). Verifikasi: vitest 171 passed/27 berkas, tsc 0, lint 0, build 0, audit 375/768/1024/1440 tanpa overflow + kanvas 320/380/460 px + legenda & kontrol terukur. Bonus: titik surplus di legenda daftar lokasi disamakan jadi hijau (dulu biru brand, tidak cocok dengan badge baris). |
+| S4-14 | Halaman "Hari Ini" (rekap operasional live) | Dashboard | Done | Hermes | Langkah 3 permintaan Roy 2026-10-11. Tab pertama di rail (halaman setelah login tetap Overview). Lima kartu, semua angka dari API: (1) keputusan menunggu tindakan — /decisions, hanya status actionable (PENDING_APPROVAL/NEEDS_VERIFICATION/VERIFIER_FLAGGED), urut lewat-tenggat dulu lalu terdekat, sisa waktu dari jam KLIEN (`now` prop) supaya tidak ada selisih hidrasi, daftar dipotong 6 baris + "+N lainnya"/"Lihat semua"; (2) batch kedaluwarsa vs <48 jam dari /batches (ambang DUE_SOON_HOURS), batch bertanggal tak terbaca tidak diklaim apa pun; (3) lokasi shortage dari /balance/map komoditas aktif, urut kekurangan terbesar; (4) KPI 24 jam dari /kpi memakai formatter tab KPI (fmtValue/STATE_LABEL diekspor — satu sumber, metrik no_data = "—"); (5) rantai audit /ledger/verify (status + jumlah blok + 10 huruf head). Logika murni di `lib/today.ts` (22 tes) + kontrak markup di `tests/today-dashboard.test.tsx` (21 tes). Catatan: `Number(null) === 0` — jumlah kg harus menyaring null/"" SEBELUM Number() atau total kg jadi 0 palsu (tertangkap tes); `fetchBatches` membuka amplop {batches:[...]} di `lib/api.ts`. Verifikasi: vitest 214 passed/29 berkas, tsc 0, lint 0, build 0; di :3011 angka layar = angka API (11 actionable, 6 batch, 7 metrik/2 tersedia, 758 blok, head 0fb6bff271), tanpa overflow di 1440 & 375. |
+| S4-15 | Halaman "Decision & Evidence" (tab tersendiri, sidebar acuan) | Dashboard | Done | Hermes | Langkah 4 permintaan Roy 2026-10-11: "tambahkan semua halaman yang ada di sidebar referensi lalu disesuaikan". Sidebar acuan (mockupui/*/code.html) berisi 6 halaman: Overview Map & Supply, Recommendation Feed, Decision & Evidence, Agent Activity & Traces, KPI & Analytics, Demo Control Panel. Lima sudah ada; yang belum = Decision & Evidence (sebelumnya menempel di bawah feed Recommendations). Sekarang tab tersendiri: ringkasan + identitas/tenggat, biaya, keamanan & pemasok, governance (DecisionActions), riwayat iterasi (DecisionChain), bukti tersimpan/ledger/ttd (IntegrityPanel) dan ekspor; keadaan kosong menyarankan keputusan yang benar-benar menunggu tindakan + dropdown pemilih. Feed: klik kartu → pindah ke tab ini. Panel integritas PINDAH dari tab Agent Log ke sini (jejak agen vs bukti keputusan). Logika murni `lib/evidence.ts` (+7 helper, 22 tes) + kontrak `tests/decision-evidence.test.tsx` (11 tes). Seluruh angka dari API; yang tidak ada ditulis "—". Verifikasi: vitest 246/31, tsc 0, lint 0, build 0; di :3011 rute Cianjur → Jakarta, Rp16.206.000, PASS, Supplier A Cianjur 80%, ledger 758 blok, dossier mc1-4hags0k… (ttd saat itu unsigned; lihat S4-16) terbukti sama dengan payload API; 1440 & 375 tanpa overflow. |
+| S4-57 | Backend/Demo | **Pengadaan (`supplier_procurement`) selalu 409 saat eksekusi** — approval sah, lalu tombol Eksekusi menolak `binding batch/supplier berubah`. Akar: `supplier_eligibility.resolve_binding` membandingkan `batch.location_id` dengan `decision.source_location_id`, sedangkan pengadaan memang dibuat `source_location_id=NULL` (`demo_procurement_orchestrator.py:209`: "sisi asal = NULL") dan binding-nya ditulis terhadap `target_location_id` (`supplier_procurement.persist_supplier_binding`). Guard safety pun fail-closed pada `source_location_id is None` (`actions._source_batches_still_safe`, `approval_summary._safety_view`), sehingga `can_execute` bisa True sementara endpoint pasti 409. Perbaikan: satu definisi lokasi acuan `lokasi_batch_acuan(decision)` (pengadaan → `target_location_id`, jenis lain → `source_location_id`) dipakai `resolve_binding`, `batch_sumber_transfer`, guard safety endpoint dan read-model; jenis non-pengadaan dengan lokasi asal NULL TETAP ditolak. TDD: `backend/tests/test_procurement_execute_guard.py` 6 tes RED→GREEN (pengadaan source NULL bisa dieksekusi + PO tercatat; batch lokasi lain/supplier lain 409; batch FAIL diblokir safety; non-pengadaan source NULL tetap fail-closed; paritas `can_execute`), regresi `test_execute_safety_wiring` 10 + `test_approval_summary`/`test_can_execute_parity`/`test_evidence_consistency*`/`test_actions`/`test_action_boundary_e2e`/`test_supplier_procurement_eval` hijau, ruff bersih. Terukur di DB demo: keputusan `943e662c…` (pengadaan Jakarta, source NULL) kini `resolve_binding` OK, `still_safe=True`, satu-satunya penghalang tersisa `decision expired` (TTL). | Backend + QA | Done | Hermes | Catatan operasional: keputusan pengadaan lama yang lahir dari agen sebelum perbaikan tetap perlu `POST /demo/refresh`/jalankan ulang agen bila TTL-nya sudah lewat; pengadaan hasil seed punya `source_location_id` terisi sehingga tidak pernah terkena bug ini — itulah sebabnya bug lolos sampai demo. |
+| S4-58 | Backend + Frontend + QA | **Halaman "Decision & Evidence" diverifikasi penuh (skill fullstack-verification + subagent) sesudah F1 diperbaiki.** Audit 2 subagent (BE kontrak + FE interaksi) menemukan tiga jalur lain yang masih memakai `source_location_id` untuk pengadaan dan tiga cacat UX: (a) `api/demo.py::_ikat_sumber` menyemai binding TRANSFER untuk pengadaan → PO bisa ke pemasok berbeda dari layar, dan sesudah guard diperbaiki jadi 409; (b) `supplier_eligibility.persist_binding` menolak `POST /decisions` pengadaan yang sah (422, terukur di gate write-flow); (c) `actions.repropose_action` membuang `supplier_id` + binding → iterasi baru `409 supplier_unknown`; (d) galat aksi tampil MENTAH tanpa menyebut aksi ("binding batch/supplier berubah"), (e) `governanceView(null)` menulis "Menunggu persetujuan" padahal lencana keputusan "disetujui", (f) `.action-message` tanpa CSS & bocor antar-keputusan, `IntegrityPanel` bisa menampilkan dossier keputusan lain. Perbaikan: `lokasi_batch_acuan` + aturan "pemasok binding = pemasok keputusan" jadi kontrak tunggal di `resolve_binding`/`batch_sumber_transfer`/`persist_binding`/`_ikat_sumber`/guard safety endpoint+read-model; `_salin_binding_induk` di re-propose; FE: `galatAksi()` berlabel + 10 pemetaan `humanizeBlocker`, keadaan "Ringkasan persetujuan sedang dimuat", `key={decision_id}` pada `DecisionActions`+`IntegrityPanel`, fetch rantai/dossier dipisah, CSS `.action-message`. Data demo 4 kota disemai ulang lewat `_seed_demo_cases(force=True)` (binding lama yang menunjuk stok SPPG asal hilang). **Gerbang terukur:** tes baru `test_procurement_execute_guard` (6), `test_persist_binding_acuan` (3, 2 RED→GREEN), `test_repropose_pengadaan` (1), `test_demo_cases_procurement_binding` (3) + regresi (`test_execute_safety_wiring`, `test_approval_summary`, `test_can_execute_parity`, `test_evidence_consistency*`, `test_actions`, `test_action_boundary_e2e`, `test_demo_seed*`, `test_demo_kasus_bukti`, provenance ledger) hijau; suite backend penuh di klon DB `mealchain_full` **1.770 passed / 28 skipped / 0 failed** (629 dtk, termasuk 4 tes baru yang menyusul); vitest **169 berkas / 1.854 tes lulus**, `tsc` 0, ruff 0; gate fullstack read-only `verify/decision-evidence.spec.json` **PASS 100/100 exit 0** (process 18 · be 47 · db 22 · fe 1 · compare 12, plus kontrol negatif 401/403/404 dan bukti merah sengaja di layer db) dan gate write-flow `verify/decision-evidence-write.spec.json` di stack terisolasi **PASS 59/0/1** (pengadaan `source_location_id NULL` kini 200 + PO `MC-…` di DB, tiga kontrol negatif tetap 409, teardown `down -v` tanpa residu). Sisa temuan yang BELUM dikerjakan (bukan bug halaman, sudah dicatat di `_qa/decision-evidence-be-contract-2026-10-27.md`): verifier ctx tidak melihat safety (F8), `audit-facts` melaporkan 0 batch untuk pengadaan (F9), dispatch menandai batch yang sudah di target (F10), keputusan kedaluwarsa masih bisa di-approve (F11, sesuai ruling owner), riwayat PO lama yang pemasoknya beda dari layar (F5, data historis). | Backend + Frontend + QA | Done | Hermes | Skrip `scripts/gerbang-db-terpisah.sh` sendiri masih gagal di langkah semai (`INSERT INTO supply_records` bentrok id setelah template demo) — suite penuh dijalankan pada klon DB langsung; perlu diperbaiki terpisah. |
+
+## Modul "Location Network" + pop-up Pasokan & permintaan (dokumen 03 §6, 28 Okt 2026)
+
+| # | Area | Isi | Status |
+|---|---|---|---|
+| S4-59 | Backend + Frontend + QA | **Dokumen `03-location-network-supply-demand.md` §6.1–6.5 diterapkan.** Backend: `GET /balance/flows` baru di `app/api/balance.py` — agregat baris `decisions` (sumber→tujuan, `quantity_kg`, status per lane, koordinat kedua ujung, `latest_expires_at`), filter `commodity` (404 lewat `_resolve_commodity` bila tak dikenal) dan `live_only` memakai `_batas_waktu` yang sama dengan pembacaan saldo; terukur 6 lane untuk `telur` (Semarang→Surabaya 4.380 kg / 2.580 kg masih berlaku). Frontend: `lib/location-network.ts` (kalimat ringkasan §6.3, kelengkapan §6.5 dari `supply_state`/`demand_state` + `*_recorded_at`, koridor §6.2 dengan penyempitan cakupan peran, urut keparahan, wilayah), `lib/supply-demand.ts` + hook `useSupplyDemand`/`useBalanceFlows`, `components/LocationNetworkBoard.tsx` (peta + koridor + tabel + panel lokasi terpilih + chip kelengkapan), `components/SupplyDemandPanel.tsx`, prop aditif `corridors`/`showSuppliersPins` di `SupplyMap.tsx`, tab "Location Network" di `page.tsx`, pop-up memakai `Popup.tsx` yang sudah ada (fokus/Esc/kunci gulir). `next.config.js`: akar proxy `supply` + `demand` (tanpa keduanya Next menjawab 404 HTML sendiri sehingga pop-up menulis "catatan tidak ada" padahal backend punya angkanya — terukur). Perbaikan ikutan: `hoursLabel` menulis "2 hari 24 jam"; kini jam yang membulat ke 24 dibawa ke satuan hari. **Verifikasi:** `tsc` 0, `next lint` 0, vitest **200 berkas / 2.289 tes lulus** (28 tes baru modul ini + 4 tes pembawa-jam), `next build` `BUILD_ID B4avyq5nyf_GBIMaRKPut` (4 halaman statis). Browser: SPPG Head → 1 lokasi, 2 koridor (lane wilayah lain tersaring), pop-up "Jakarta · telur" = 300 kg pasokan / 1.080 kg kebutuhan / kurang 780 kg / 3 batch, Esc menutup + fokus kembali ke tombol; BGN Monitor → 10 lokasi, 5 koridor, headline "8 lokasi kekurangan 968 kg; kelebihan 2 lokasi (1.177 kg) … sisa 209 kg", tabel 10 baris utuh. Bukti: `docs/verification/location-network-supply-demand.md`. | Selesai 28 Okt 2026 |
+
+| S4-60 | Frontend + QA | **Revisi bentuk modul Location Network (keputusan pemilik, 28 Okt 2026): "satu halaman gabungan … peta dan koridor dibuang".** Yang dihapus: peta `SupplyMap` dari halaman ini, layer koridor (`network-corridors`), prop `corridors`/`showSuppliersPins` di `SupplyMap.tsx` (berkas dikembalikan ke `HEAD`, jadi 0 sisa kode koridor), hook `useBalanceFlows`, fungsi `corridorsFromFlows`/`corridorLegend`/`corridorStatusLabel` di `lib/location-network.ts`, `fetchBalanceFlows` di `lib/api.ts`, dan **endpoint `GET /balance/flows`** (tidak ada konsumen tersisa). Halaman kini satu kolom: kalimat ringkasan §6.3 → baris angka (kekurangan/kelebihan/seimbang/tanpa koordinat) → **pemilih lokasi** (`button aria-pressed`, urut dari yang terparah, otomatis memilih yang paling kekurangan saat tab dibuka) → rincian lokasi terpilih di halaman yang sama → chip kelengkapan §6.5. Pop-up dihapus: `SupplyDemandPanel` kini dirender inline, jadi judul, 4 kartu (pasokan / kebutuhan / selisih / **perkiraan 7 hari** dari `GET /demand/forecast`), dan tabel batch terbaca tanpa membuka jendela. Peran `sppg_nutritionist` yang semula tidak punya jalan masuk (§5 dokumen 03) sekarang melihat tab dan judul **"Pasokan & Kebutuhan"**; peran lain tetap "Location Network". **Verifikasi:** `tsc` 0, `next lint` 0, vitest **201 berkas / 2.300 tes lulus**, `npm run build` `BUILD_ID` baru. Browser: SPPG Head (1 lokasi, kurang 780 kg, perkiraan 7.420 kg, 5 batch), nutritionist (judul "Pasokan & Kebutuhan", 4 kartu, tanpa peta), BGN Monitor (10 tombol lokasi membungkus 2 baris, headline 8 lokasi kurang 968 kg / sisa 209 kg). Bukti: `docs/verification/location-network-supply-demand.md`. | Selesai 28 Okt 2026 |
+
+| S4-61 | QA + Dokumentasi | **Penyanggah S4-59/S4-60 — bentuk modul Location Network yang berlaku sekarang (keputusan pemilik, 28 Okt 2026).** Peta jaringan, layer koridor (`network-corridors`, prop `corridors`/`showSuppliersPins`, `useBalanceFlows`, `corridorsFromFlows`/`corridorLegend`/`corridorStatusLabel`), dan endpoint `GET /balance/flows` di `backend/app/api/balance.py` **DIBATALKAN** — endpoint sekarang 404 dan pencarian `balance/flows`/`balanceFlows` di `backend/` + `frontend/` memberi 0 hasil. Alasannya: agregat baris `decisions` tidak bisa menjamin lane surplus→kekurangan dan tidak punya cakupan peran, jadi garis di peta bukan bukti aliran barang. Rincian satu lokasi **kembali dibuka sebagai pop-up** (`frontend/components/Popup.tsx` dengan `sdTarget` + `returnFocusRef` di `app/page.tsx`, isi `components/SupplyDemandPanel.tsx`) — jadi klaim S4-60 "pop-up dihapus, panel inline" juga tidak berlaku. Yang tetap: satu halaman gabungan (`components/LocationNetworkBoard.tsx`: kalimat ringkasan → baris statistik kekurangan/kelebihan/seimbang/tanpa koordinat → pemilih lokasi `aria-pressed` urut keparahan → pintu masuk rincian → panel Kelengkapan data), tab `sppg_nutritionist` berjudul "Pasokan & Kebutuhan", label tombol per peran ("Buka/Lihat pasokan & permintaan · <lokasi>"), dan **kartu Perkiraan 7 hari aktif** lewat `GET /demand/forecast/{lokasi}/{komoditas}?horizon_days=7` (`buildForecastView()` di `lib/supply-demand.ts`, metode `statistical_fallback`, keyakinan `min(1, catatan/3)`, "dasar tipis" bila < 1). **Gerbang:** `npx tsc --noEmit` 0 galat, `npx vitest run` **203 berkas / 2.341 tes lulus**; angka tangkapan Jakarta·telur: pasokan 299,09 kg, kebutuhan 1.087,22 kg, selisih kurang 780 kg, perkiraan 7 hari 7.550,26 kg. Bukti: `docs/verification/location-network-supply-demand.md`. | Selesai 28 Okt 2026 |
+| S4-62 | Frontend + QA | **Bentuk halaman Location Network diputuskan lewat audit UI/UX + verifikasi fullstack (2 subagent), bukan selera.** **Catatan bentrok:** sesi lain menulis S4-61 yang menyatakan bentuk "popup"; baris ini mencatat bentuk yang BENAR-BENAR berjalan di kode saat verifikasi (tabel + rincian sebaris). Dua baris ini tidak boleh dibiarkan berdampingan — pemilik perlu memilih satu, lalu baris yang kalah ditandai "dibatalkan".  Keputusan: satu kartu ringkasan (kalimat §6.3 + baris angka + kelengkapan §6.5 sebagai kaki) → **tabel lokasi** yang barisnya membuka rincian DI TEMPAT (4 kartu + tabel batch, accordion eksklusif). Yang dicabut: chip lokasi, kartu "Rincian per lokasi", popup `Pasokan & permintaan`, state `sdTarget`/`sdTriggerRef`/`bukaSupplyDemand`. Alasan terukur dari audit: popup 640px memaksa 4 kartu jadi 3+1 (tiga kartu 195px di y=175, kartu keempat sendirian di y=292), badan popup 368px dari isi 670px sehingga tabel batch mulai di y=491 sementara tepi panel y=488 (tidak terlihat saat jendela dibuka), dan `aria-pressed` tetap `true` pada chip setelah jendela ditutup. **Cacat yang diperbaiki:** (a) `TONE_CLASS` menempelkan kelas global ke elemen ber-CSS-module — kelas di-hash sehingga penekanan bahaya tidak pernah tampil → diganti selektor atribut `data-tone`; (b) `ageLabel` memetakan tanggal di depan jam sistem menjadi "baru saja" (baris 4 Nov terbaca sebagai kondisi sekarang) → kini "waktu catatan di depan jam sistem"; (c) total lokasi 0 dibunyikan sebagai "tidak ada kekurangan" → kini "datanya belum masuk" (nada `unknown`); (d) "0 kg" dicetak untuk hitungan 0 → kg hanya dicetak bila hitungan > 0; (e) ringkasan/gagal dimuat bersamaan → saat galat tidak ada kesimpulan + tombol "Coba lagi"; (f) baris tidak bisa DITUTUP karena efek auto-pilih langsung memilih ulang (terukur di browser) → penanda `autoPilihRef` sekali per kunjungan; (g) batch ber-`quarantine_status=quarantined` tampil seperti stok biasa ("Aman") → badge "Ditahan" + dihitung terpisah dari "lolos uji"; (h) "Aman | Aman" diulang di dua kolom batch → kolom masa layak hanya durasi; (i) `mock SAP` (nilai mentah) dan "dibutuhkan 9 hari 7 jam lagi" (format mesin) → "catatan simulasi" dan "dibutuhkan 31 Okt 2026 (3 hari lagi)"; (j) hex di luar palet (`#fff7f6`, `#fef2f2`, `#eff6ff`, `#fca5a5`) dan `.page{gap:14px}` yang menimpa `board-page` → token saja; (k) grid kartu `auto-fit` → eksplisit 4/2/1 kolom; (l) copy aturan internal repo di layar operator dihapus; (m) stempel "Data per 28 Okt 2026" (`snapshotNote`) ditambahkan supaya tanggal catatan terlihat, bukan hanya jam fetch. **Verifikasi:** `tsc` 0 · `next lint` 0 · vitest **202 berkas / 2.362 tes** lulus untuk wilayah kerja ini (satu kegagalan di `tests/decision-drawer.test.tsx` milik sesi lain: status PO mentah "submitted") · `npm run build` `BUILD_ID GP2D05hcnICD2cJ5206ct`, 4 halaman statis. Browser: SPPG Head 1 baris Jakarta terbuka (300 kg / 1.080 kg / kurang 780 kg / perkiraan 7.530,29 kg / 5 batch), tutup-buka baris bekerja, `canvas`=null, `[role=dialog]`=null; BGN Monitor 10 baris + accordion eksklusif (1 terbuka dari 10). Bukti: `docs/verification/location-network-supply-demand.md`. **Belum dikerjakan (bukti dari verifikator, bukan dugaan):** `/supply`, `/demand`, `/demand/forecast` masih membaca baris terakhir tanpa batas waktu sementara `/balance` memotong `recorded_at <= now` → dua snapshot dalam satu panel (Jakarta: 300/1.080 vs 299,09/1.087,22; selisih 780 vs 788,13). Perbaikannya menuntut parameter `as_of` di tiga endpoint itu + hook meneruskan `mapData.as_of`. | Selesai 28 Okt 2026 |
+| S4-63 | Frontend + QA | **Halaman Location Network dirapikan: informasi berulang dihapus, daftar lokasi diganti disclosure (bukan tabel bersarang).** Yang dihapus karena mengulang: baris angka di bawah kalimat ringkasan ("1 kekurangan · 780 kg" setelah "1 lokasi kekurangan 780 kg"); pil "N lokasi" dan "Sinkron HH.MM.SS" (jumlah baris & jam pengambilan, bukan tanggal data — yang ditulis kini hanya "Data per 28 Okt 2026"); kotak kelengkapan yang selalu tampil walau semuanya rapi (kini hanya muncul bila ada catatan kurang/basi); kolom "Catatan" yang berisi "lengkap" di semua baris (kini bernama "Perlu dibaca" dan hanya dipasang bila ada yang perlu ditandai); caption tabel; keterangan tabel batch di panel; dan suku rekap batch yang nol ("0 gagal"). **Cacat tata letak yang diperbaiki:** panel rincian yang berisi tabel batch ditaruh di dalam `<td>`, sehingga tabel bersarang merusak lebar kolom tabel luar — terukur di browser, kolom "Selisih" terdorong ke tepi kanan dan label batch menyatu dengan header tabel luar. Diganti daftar disclosure (`.list`/`.rowButton` grid 3–4 kolom) dengan rincian sebagai blok di bawah baris; `scrollWidth == clientWidth` (tidak ada gulir horizontal). **Ditambah:** komoditas bisa diganti langsung dari halaman (chips `aria-pressed`, pola yang sama dengan SurplusBoard) — sebelumnya pil komoditas statis menyerupai kontrol yang bisa ditekan. **Verifikasi:** `tsc` 0 · `next lint` 0 · vitest **203 berkas / 2.367 tes lulus** (termasuk tes baru: angka jaringan hanya sekali, kelengkapan hanya saat ada isu, kolom tanda kondisional, komoditas bisa diganti) · `npm run build` `BUILD_ID cidkYdagb5FLBY_2ljV0n` (4 halaman statis). Browser BGN Monitor: 10 baris sejajar 3 kolom, 1 baris terbuka, 4 kartu + 3 batch, tanpa gulir horizontal. Bukti: `docs/verification/location-network-supply-demand.md`. | Selesai 28 Okt 2026 |
+| S4-64 | Frontend + QA | **Location Network disamakan dengan bahasa desain konsol; sisa teks berulang dibuang.** Sebelumnya halaman ini punya CSS modul sendiri (grid, radius, warna, chevron) sehingga terbaca sebagai aplikasi lain di dalam aplikasi. Kini memakai primitif yang sama dengan tab lain: `board-page` → `PageHeader` (+ `page-header-pills`) → kartu `card` berjudul (`board-card-head`) → tabel `location-table` di dalam `board-table-wrap` → filter `commodity-filters`/`commodity-pill`, tombol `button button-secondary|quiet`, keterangan `evidence-note`. CSS modul yang tersisa 60 baris (kalimat ringkasan, tombol baris, angka rata kanan) — semuanya hal yang belum punya padanan global. **Duplikasi yang dibuang pada putaran ini:** keterangan "dihitung server dari pasokan dan kebutuhan" (diganti kosong), sumber catatan "catatan simulasi" (umur catatan sudah cukup), embel `≥ 3 catatan permintaan` pada keyakinan, catatan "Perkiraan kebutuhan tidak tersedia" yang mengulang kartu perkiraan "—", dua badge berlawanan pada satu batch ("Aman" + "Ditahan" → satu badge: Ditahan mengalahkan Aman), ember "≤ 7 hari" bersama angka "4 hari 6 jam lagi" di sel yang sama (tinggal angkanya), dan "3 lolos uji" saat semua badge di bawahnya sudah "Aman". **Rincian lokasi dipindah keluar tabel:** panel berisi tabel batch ditaruh di `<td>` membuat tabel bersarang merusak lebar kolom tabel luar; kini rincian ada di kartu sendiri di bawah tabel (`id="rincian-lokasi"`) dengan tombol Tutup, dan baris memakai `aria-pressed` + penanda ▸/▾. **Verifikasi:** `tsc` 0 · `next lint` 0 · vitest **205 berkas / 2.417 tes lulus** (1 gagal di `tests/prd-nav.test.tsx`: mengharapkan `<ProviderPanel` di `app/page.tsx` — berkas sesi lain, bukan halaman ini; halaman ini tidak menambah/menghapus `<ProviderPanel`) · `npm run build` `BUILD_ID WDpMMCWmdO-Z04vCJsV-2` (4 halaman statis). Browser BGN Monitor 1247 px: 3 kartu ("Keadaan jaringan", "Lokasi", "Jakarta · telur"), 10 baris tabel sejajar, `scrollWidth == clientWidth`. | Selesai 29 Okt 2026 |
+| S4-65 | Frontend + QA | **Overview — kalimat penjelas "Jejak kepercayaan" dirapikan dan diperbaiki agar bisa dicocokkan.** Kalimat penjelas tiap sel dipendekkan dan disamakan bentuknya (frasa jumlah + kata benda, tanpa kata ganti yang menggantung): "78 blok tertaut keputusan · checkpoint luar cocok" → "107 tertaut ke keputusan · checkpoint cocok"; "33 masih menunggu tindakan" → "33 menunggu tindakan"; "pasokan/permintaan tanpa catatan" → "2 node tanpa catatan"; "tidak ada yang gagal uji" → "semua batch lolos uji". **Cacat angka yang ikut diperbaiki:** kategori batch dulu tumpang tindih (batch gagal yang ditahan dihitung dua kali) dan status di luar pass/fail/needs_verification tidak disebut sama sekali, sehingga penjelasan tidak pernah menjumlah ke angka /total — `109/132` dijelaskan oleh `3 gagal · 1 ditahan · 18 perlu verifikasi` (22, bukan 23). Kini satu batch masuk tepat satu kategori (ditahan > gagal > belum diuji > lolos > tanpa status) dan kategori sisa disebut: `3 gagal · 17 belum diuji · 1 ditahan · 2 tanpa status` = 23 = 132 − 109. Hal yang sama untuk keputusan: `7/49` kini dijelaskan `33 menunggu tindakan · 9 ditolak` (7+33+9 = 49). **Keterbacaan:** `.trust-label` 12 → 13px (label tidak boleh lebih kecil dari penjelasnya); `.trust-foot` 12px/1,4 + jarak 3px + `text-wrap: pretty` + `tabular-nums` — sempat dinaikkan ke 13px lalu dikembalikan ke 12px atas permintaan pemilik ("bisa diperkecil mungkin fontnya"), dengan catatan keempat baris tetap satu baris rata dan tidak berebut perhatian dengan angka. Terukur di browser 947px: kartu 173px, empat sel 59px sama tinggi, tidak ada teks terpotong (`foot.bottom` di dalam sel). **Verifikasi:** `tsc` 0 · `next lint` 0 · vitest **212 berkas / 2.476 tes lulus** (tes baru: kategori batch saling meniadakan & menjumlah ke /total, sisa keputusan disebut) · `npm run build` `BUILD_ID 5HQf9LYaawBv5pstd_qPk` (4 halaman statis). | Selesai 29 Okt 2026 |
+| S4-66 | Frontend + QA | **Location Network: kerangka halaman disatukan (rencana `docs/plans/location-network-page-plan.md`, Langkah 1).** Satu kepala + satu baris filter untuk seluruh tab; `SurplusBoard` tidak lagi dirender utuh (kartu "Neraca hari ini", filter kedua, tiga FactList, dan dua paragraf >120 karakter hilang). Blok baru: **Rencana alih** (`components/AllocationTable.tsx`, membaca `GET /surplus/allocations`, kolom Dari · Tujuan · Jumlah · Jarak · Biaya, kaki satu baris menyebut ambang server) dan **Limbah · 30 hari** (`GET /waste/summary` lewat `FactList`). **Celah data yang ikut tertutup:** `useWasteSummary`/`useSurplusPlan` hanya hidup untuk `tab === "surplus"` (tab yang sudah tidak ada) sehingga blok hasil peleburan selalu kosong; kini hidup juga untuk `tab === "location-network"`. Blok rencana alih & limbah kini tampil untuk semua peran (keputusan pemilik), bukan hanya `sppg_head`/`sppg_nutritionist`. **Deviasi dari rencana:** panah aliran surplus→kekurangan dibuang karena mengulang angka kalimat ringkasan. **Bukti:** BGN Monitor 1247 px — kartu `Keadaan jaringan`, `Lokasi`, `Jakarta · telur`, `Rencana alih`, `Limbah · 30 hari`; 1 baris filter; rencana `Cianjur → Jakarta · 685 kg · 76 km · 0,8%`; limbah `469,7 kg` tercatat (64 peristiwa, 457,2 kg tanpa mitra), `12,5 kg` dialihkan. **Gerbang:** `tsc` 0 · `next lint` 0 · vitest **213 berkas / 2.489 tes lulus** (7 tes baru: baris rencana dari server, ambang sekali, sebab saat kosong, galat, satu filter, tidak ada "Neraca hari ini", limbah kosong menulis "Belum dicatat") · build `ritoIHqRhgMCfG_oksSgY`. | Selesai 29 Okt 2026 |
+| S4-67 | Frontend + QA | **Location Network (rencana `docs/plans/location-network-page-plan.md`, Langkah 2): dua kolom tambahan di tabel lokasi.** **Batch ≤7h** — `hampirKedaluwarsa(batches, now, 7)` di `lib/location-network.ts`: hanya batch `safety_status=pass` dan tidak ditahan, tanggal tak terbaca tidak dihitung, batch yang sudah lewat masa layak tetap dihitung. **Rekomendasi** — `rekomendasiTerbuka(decisions)`: lima status terbuka dikelompokkan per `target_location_name`, baris tanpa nama dilewati. Keduanya kolom **hanya dipasang bila ada minimal satu baris > 0** (keputusan pemilik), sel tanpa nilai menulis `—` bukan `0`. **Bukti (BGN Monitor, telur, 1247 px):** kepala `Lokasi · Wilayah · Selisih · Batch ≤7h · Rekomendasi`; Jakarta `kurang 780 kg · 1 · 16`, Bandung `kurang 138 kg · 4 · 10`, Surabaya `kurang 12 kg · 4 · 7`, Semarang `kurang 8 kg · 3 · —`; tanpa gulir horizontal. **Gerbang:** `tsc` 0 · `next lint` 0 · vitest **214 berkas / 2.502 tes lulus** (13 tes baru: 9 modul murni + 4 kolom) · build `ubpvBA7URr_Dy82BlkAZE`. | Selesai 29 Okt 2026 |
+| S4-68 | Frontend + QA | **Location Network (rencana `docs/plans/location-network-page-plan.md`, Langkah 3): copy & keadaan diterapkan.** Kalimat kepala jadi satu kalimat dengan istilah yang sama dengan kartu ringkasan ("Siapa kekurangan, siapa kelebihan, apa yang dialihkan, dan apa yang terbuang") dan hanya punya SATU sumber teks — `app/page.tsx` kini hanya mengirim kalimat nutritionist, judul menu disamakan; keadaan §9 diperbaiki: memuat = kepala tabel + tiga baris kerangka (bukan teks "Memuat…") dan pil jumlah disembunyikan, gagal total tanpa angka apa pun (dulu "0 lokasi" tercetak), kosong = satu kalimat saja (kartu tabel tidak dirender, dulu dua kalimat untuk satu keadaan), cakupan satu lokasi dapat baris kaki "Akun ini hanya mencakup satu lokasi.", catatan basi menyebut jumlahnya ("1 catatan lebih dari 24 jam"), kaki Rencana alih tinggal satu kalimat (rumus biaya pindah ke `title` judul kolom "Biaya"), judul "Limbah · 30 hari terakhir". **Gerbang:** tes baru `frontend/tests/location-network-langkah3.test.tsx` **14 tes** (12 di antaranya ditulis MERAH lebih dulu: 8 gagal → 12 lulus; 2 tes layar sempit menyusul dari pengukuran 390 px), `tsc --noEmit` 0, `next lint` 0, vitest **217 berkas / 2.528 tes lulus**, `npm run build` `BUILD_ID YZRmCQjqXtfsWB-9rnFUA` (4 halaman statis). Browser :3010 (1247 px): BGN Monitor 1 baris filter + pil "Data per 29 Okt 2026"/"10 lokasi", 5 kolom tabel, 10 baris, 0 paragraf > 120 karakter, `scrollWidth == clientWidth`; SPPG Head & Nutritionist 1 baris + catatan kaki cakupan (judul nutritionist "Pasokan & Kebutuhan"). Bukti: `docs/verification/location-network-supply-demand.md` §Putaran keempat. **Layar sempit 390 px DIUKUR, bukan disimpulkan** (`_qa/ukur-viewport.cjs`, CDP + Edge headless): halaman tidak bergulir ke samping (390/390), kepala tabel jadi `Lokasi · Selisih · Batch ≤7h · Rekomendasi`, sel sejajar, 0 paragraf > 120 karakter; tabel lokasi masih digeser di dalam kartu (389 vs 316 px) dan kini memberi petunjuk. Dua cacat ditemukan dari pengukuran itu dan diperbaiki: (a) media query ≤640 px hanya menyembunyikan `<td>` Wilayah sehingga SELURUH angka bergeser satu kolom — kini `<th>` memakai kelas yang sama; (b) tabel batch terpotong di tengah tanpa petunjuk — `ScrollHint` menerima `kelasWadah` dan panel memakai pengukur yang sama. Tangkapan layar: `_qa/location-network-390-29okt.png`, `_qa/location-network-sppg-390-29okt.png`. **Sisa:** keputusan pemilik §12 rencana (nama menu, angka kolom Rekomendasi) masih terbuka. | Selesai 29 Okt 2026 |
+| S4-69 | Frontend + QA | **Keamanan Pangan: Ringkasan pengawasan & Bukti suhu diupgrade (permintaan pemilik "semaksimal mungkin namun cocok dengan design lainnya").** Tambahan berupa INFORMASI BARU, bukan pengulangan angka: (a) baris **Paling mendesak** di Ringkasan — batch yang masih boleh dipakai dengan `usable_until` terdekat (`hoursLeft`/`hoursLabel` server); batch gagal/ditahan tidak ikut, dan bila tanggalnya sudah lewat labelnya berganti **Sudah lewat** dengan tinta bahaya; (b) `failedKg` kini dicetak di bawah "Gagal uji" (sebelumnya hanya "Ditahan"), sedangkan berat tak tercatat tetap ditulis apa adanya; (c) label tombol menjadi "Tinjau N batch perlu tindakan" memakai needsVerification+quarantined+unchecked; (d) tiap baris Bukti suhu mencetak **dibaca <waktu>** dari `observed_at`; (e) penanda **wajib dingin** untuk `cold_chain_required`, geometri sama dengan lencana keadaan (87x22 vs 86x22, selisih 0 px); (f) kaki kartu menyebut **N sampel tercatat** (tidak dicetak bila server tidak mengirim jumlah); (g) catatan "menuntut bukti" tidak lagi kotak amber penuh — pola titik + kalimat yang sama dengan putusan Ringkasan. Kelas baru: `.safety-deadline*`, `.safety-count.is-danger .safety-count-note` (`app/theme-ext.css`), `.rowBadges`, `.coldChain` (modul). **Verifikasi:** dua tes baru ditulis MERAH lebih dulu — `safety-ringkasan-mendesak` (6 tes) & `temperature-evidence-recency` (6 tes); satu tes lama yang menghitung catatan secara global (`food-safety-board`) dipertajam per kelompok, bukan dilonggarkan. `tsc` 0 · `next lint` 0 · vitest **223 berkas / 2.560 tes lulus** · build `BUILD_ID xb_mNGteO2N0HbVkfLPZU`. Live 1247 px (Kepala SPPG Bandung): Ringkasan 947x233 dengan baris tenggat 911x20, Bukti suhu 947x447 enam baris 454x76, tanpa gulir mendatar; 390 px `docScrollWidth` = `docClientWidth` = 390. Bukti: `docs/design.md` §"Ringkasan pengawasan & bukti suhu". | Selesai 29 Okt 2026 |
+| S4-70 | Frontend + Backend | **Demo Control — log "Proses pengambilan data" real time.** SSE bertoken: `POST /demo/agent/run` menerima `run_token`, `GET /demo/agent/stream` menyiarkan tiap `_TraceStep`; terminal mono di blok Bukti agent (jam WIB, pil live/selesai/siap/galat, gulir otomatis yang mati saat dibaca balik). Bukti: baris datang bertahap 2→4→7→8 pada 0,4/4,4/8,9/13,4 dtk; 390 px terminal 316 px tanpa gulir mendatar. Uji: 19 tes FE + 9 tes BE. | Selesai 29 Okt 2026 |
+| S4-71 | Frontend | **KPI: klik kartu → satu panel penjelasan di bawah grid.** Nama metrik jadi tombol (`aria-expanded`/`aria-controls`), panel `KpiDetailPanel` berisi enam ubin fakta + asal-usul + sebab `no_data`, X bulat, fokus kembali ke kartu. Bukti: 1247 px panel 947×404; 390 px panel 346×810, tanpa gulir mendatar. Uji: 7 tes baru + 67 tes KPI lama. | Selesai 29 Okt 2026 |
+| S4-72 | Frontend | **KPI revisi: segitiga dihapus, kartu utuh yang diklik, panel informatif.** `details`/`summary` hilang dari halaman KPI; kartu `role=button` + Enter/Spasi; panel = angka → Apa artinya → Cara membaca → Kenapa belum ada angka → chip Periode/Sumber data; label audit (metode, rumus, sampel, cakupan, estimasi) tidak lagi tampil. Uji: 12 tes panel (MERAH dulu) + 101 tes KPI/CSS. | Selesai 29 Okt 2026 |
+| S4-73 | Frontend | **Klik baris tabel = aksi tombolnya.** `lib/baris-klik.ts` (`bolehKlikBaris`/`klikBaris`): klik sel menjalankan aksi baris; klik kontrol di dalam baris tidak menggandakan; teks tersorot tidak dianggap klik. Dipasang di Location Network, Decision & Evidence, Surplus per wilayah. Keamanan Pangan sengaja dilewati (beberapa aksi berbeda per baris). Uji: 6 tes `klik-baris-tabel.test.tsx` (MERAH dulu). | Selesai 29 Okt 2026 |
+| S4-74 | Fullstack | **Agent Activity Log: audit menyeluruh + perbaikan.** Waktu jejak jadi tanggal+WIB; `rapikan_jejak` memperbaiki 81 langkah & 6 keputusan (dipanggil di tiap seed); dossier mengirim `evidence`; panel status model jujur saat 0 langkah model; jawaban status supervisor menghitung semua status + total; label verifikasi & jenis bukti diterjemahkan; opsi "Tanpa komoditas"; label rantai global; CLI demo_template membuka sesi sendiri; conftest membersihkan `batch_receipts.recorded_by`. Uji: 22 tes frontend + 9 tes backend baru. | Selesai 29 Okt 2026 |
+| S4-65 | Keamanan Pangan: enam perbaikan `07-safety-evidence.md` §4.2 pada permukaan yang sudah ada, tanpa endpoint baru | Frontend | SELESAI 2026-10-29 | Hermes | **Audit dulu, kerjakan yang belum; yang sudah ada tidak diduplikasi.** (1) postur → gerbang: sel komoditas tabel status menjadi tautan yang menyaring daftar “Keputusan keamanan lokasi ini” lewat `safetyDecisions(items, commodity)` — memakai `commodity_name` yang SUDAH dikirim `GET /decisions`, jadi data klien saja. (2) lencana putusan safety di kepala kartu “Keamanan & pemasok” (`safetyBadge`) menulis “Gagal · 3 batch diperiksa”, angka hanya bila `safety.batches_checked > 0` (backend mengirim 0 juga saat status tak terdefinisi); angka yang sudah di lencana tidak diulang sebagai baris fakta. (3) `lowestFreshness()` — tiga skor terendah TERBUKA di kartu “Kesegaran terendah”, sisanya di satu lipatan, plus catatan “skor kosong ditulis — dan tidak pernah dibaca 0” dan batas 500 baris; tabel status tetap menampilkan SEMUA baris tanpa lipatan, jadi tidak ada batch yang disembunyikan. (4) penanda mendekati kedaluwarsa SUDAH ADA sejak awal (`expiryState` + `URGENT_HOURS`/`WATCH_HOURS`, kolom “Sisa masa”, kartu “Batch perlu segera dipakai”) — tidak ditambah pembungkus baru. (5) satu baris cakupan di bawah bilah saring: saringan itu hanya menyentuh daftar batch, sedangkan keputusan keamanan punya saringan komoditas sendiri. (6) ekspor baca-saja `lib/safety-export.ts` (CSV memakai `tableToCsv` di `lib/export.ts`, aturan formula-injection sama dengan dossier) dari baris yang sedang tampil, tanpa memanggil backend. **Bukti:** tes ditulis MERAH lebih dulu — `safety-decisions-commodity` 7, `safety-freshness-fold` 5, `safety-export` 7, `safety-badge-count` 8, `safety-board-fixes` 7 (34 tes, semua hijau setelah implementasi); `tsc --noEmit` exit 0; `npm run lint` exit 0; vitest penuh **212 berkas / 2.473 tes lulus, 0 gagal** (run sebelumnya sempat 1 gagal di `tests/agenda.test.ts` karena `lib/agenda.ts` sedang disunting sesi lain; hijau setelah suntingan itu selesai). **Tidak dikerjakan (bukan dikarang):** ekspor PDF dan penyimpanan pilihan saringan antar-sesi. |
+
+## Sprint 5 — Real SAP via AWS for SAP MCP Server (ON-DEMAND — cek Roadmap.md sebelum mulai)
+
+| ID | Task | Kategori | Status | Assignee | Catatan |
+|---|---|---|---|---|---|
+| S5-01 | Provisioning AWS for SAP MCP Server ke tenant SAP trial | SAP Integration | Blocked | | **Gate permintaan Roy: pastikan S/4HANA bisa diakses lebih dulu.** Status 2026-10-11: repo ini TIDAK punya konfigurasi S/4HANA sama sekali (tidak ada host/user/password/destination; yang ada hanya `SAP_*_MODE=mock` + service `mock-sap`), dan kredensial AWS yang tersedia DITOLAK saat memanggil Bedrock (izin sempit). Jadi belum bisa dipastikan S/4HANA terjangkau — butuh dari Roy: kredensial/destination S/4HANA (atau konfirmasi tenant trial panitia) + izin AWS terkait. |
+| S5-02 | AgentCore Identity untuk kredensial SAP (naik dari stretch S4-07) | SAP Integration | Not Started | | |
+| S5-03 | Implementasi `AWSforSAPMCPProvider` (Skill.md §7) | SAP Integration | Not Started | | |
+| S5-04 | Contract test lolos untuk mock + aws_mcp | SAP Integration/Testing | Not Started | | Wajib sebelum switch default |
+| S5-05 | Switch `SAP_MODE=aws_mcp`, re-run Event 1-3 | SAP Integration/Demo | Not Started | | |
+| S5-06 | Siapkan talking point juri (IDEA.md) | Demo | Not Started | | |
+
+## Track rencana 2026-10-14 — cakupan peran, pemasok di peta, rentang data demo
+
+Plan: `.hermes/plans/2026-10-14_scope-pemasok-peta-rentang.md` (disusun 2026-10-14, dijalankan
+2026-10-15). Latar: demo ke juri menampilkan angka lintas daerah ke akun SPPG, tab Pemasok
+memakai sampel dari approval-summary, peta belum punya pin pemasok, dan rentang data demo
+belum bisa diatur dari UI.
+
+| ID | Task | Kategori | Status | Assignee | Catatan |
+|---|---|---|---|---|---|
+| F0 | Ruling cakupan lokasi per peran (tertulis, dikunci) | Governance | Done | Hermes | `docs/ruling-2026-10-14-scope-lokasi.md` |
+| F1 | Backend: cakupan per peran — peran SPPG hanya lokasi sendiri, `403` untuk lokasi lain | Backend | Done | Hermes | Berlaku di `/decisions`, `/balance/*`, `/supply`, `/demand`, `/kpi`, `/admin/*` |
+| F2 | `GET /suppliers` + profil pemasok (migrasi `012_supplier_profile`) | Backend/DB | Done | Hermes | Kolom koordinat/kapasitas/sertifikasi, CHECK koordinat berpasangan |
+| F3 | Frontend: tab Pemasok dari endpoint nyata + layer pin pemasok di peta | Frontend | Done | Hermes | 44 pemasok (14 kanonik + 30 demo) |
+| F4 | `origin`/`generated_at` + kunci upsert deret waktu (migrasi `013_origin_generated_at`) + generator + 5 endpoint `/demo/*` | Backend/DB | Done | Hermes | Baris demo = `origin='demo'`, kanonik `'seed'` (144 baris) |
+| F5 | Panel "Data & rentang waktu" di Demo Control (pratinjau, buat/perbarui, pulihkan, bersihkan, segarkan ke hari ini) | Frontend | Done | Hermes | `components/DemoDataPanel.tsx` + `lib/demo-data.ts` (logika murni, diuji) |
+| F6 | Verifikasi menyeluruh + sinkronisasi dokumen | QA/Docs | Done | Hermes | 2026-10-15: pytest **757 lulus / 3 skip**, `ruff check` bersih, vitest **518 lulus**, `tsc --noEmit` 0, `next lint` 0, `next build` sukses; skrip bukti **`backend/scripts/verifikasi_fase6.py`** (matriks 3 peran × endpoint × angka DB, API vs SQL) lulus penuh; latihan demo nyata: setujui + eksekusi kasus `safety_disruption` → status `executed`, ledger 2.197 → **2.198** blok `valid:true`; bukti layar: peta menampilkan **10 pin pemasok `telur`** untuk SPPG Jakarta (Medan … Malang — dasar Fase 7). Dokumen disinkronkan: `Schema.md` (§ suppliers, § `origin`), `design.md` (§2 cakupan, §3.1 layer pemasok, §3.8 baris Pemasok, §3.9 panel rentang), `PRD.md` §3. **Catatan jujur:** (a) `AGENTS.md` § Batasan kritis belum diperbarui — berkas dilindungi, butuh persetujuan Roy; (b) **pytest menulis ke DB demo** → residu uji (156 keputusan vs 4 kasus skrip + 11 seed; tabel `users` 1.073 baris untuk 3 akun demo) — perlu `TEST_DATABASE_URL` terpisah atau langkah bersih-bersih; (c) filter komoditas peta memuat `beras` yang tidak ada di DB → `404` + galat jujur di UI; (d) `next build` di kontainer frontend saat `next dev` hidup membuat chunk 404 → halaman tanpa hidrasi sampai kontainer di-restart |
+| F7 | Pemasok mock terjangkau SPPG Jakarta (klaster Jabodetabek + penyangga Jawa Barat ≤150 km) | Backend/DB/Frontend | **Done (7a+7b+7c+7d)** | Hermes | Keputusan dikunci 2026-10-15 (plan §7.4). **7a SELESAI 2026-10-15**: `data/seed/suppliers_demo.json` ditulis ulang → **21 baris demo** (12 klaster Jakarta berkoordinat ABSOLUT di Jakarta/Bekasi/Depok/Tangerang/Bogor/Karawang/Cisarua/Serang/Subang/Cianjur, jarak berjenjang 7,7–108,6 km; + 9 hub lain satu per hub), total DB 44 → **35 pemasok** (14 kanonik utuh). `app/seed/suppliers_demo.py`: dukung koordinat absolut, validasi (koordinat separuh/luar Indonesia ditolak, pemasok hub Jakarta wajib absolut dan ≤`REACH_KM_MAX` 150 km, haversine), plus **pembersihan baris demo usang** (menolak keras bila masih direferensikan `batches`/`price_signals`/PO/eksklusi). Tes: `ruff check` bersih, `tests/test_suppliers_data.py` + `test_suppliers_api.py` + `test_sprint1_contract_reconciliation.py` + `test_supplier_city_coverage.py` **41 lulus**; angka tes yang berubah sadar (telur 10→6, Cianjur 7→5, paginasi offset 40→30). **7b SELESAI 2026-10-15**: `GET /suppliers` menerima `max_distance_km` + `commodity` dan mengembalikan `distance_km`, `distance_reference`, `reach` (`excluded_out_of_reach`, `excluded_unknown_distance`); tanpa titik rujukan → **422** (bukan filter yang diabaikan). Titik rujukan = lokasi user (SPPG) → hub `location=` → tidak ada. `lib/supplier-pins.ts`: `SUPPLIER_REACH_KM` 150, `supplierReachKmForRole`, nada pin `far`, `isWithinReach`/`withinReachKm`, `distanceLabel`/`reachLabel`/`distanceReachLabel`, `supplierPinsForMap`, `supplierReachNote`, `supplierReachMeta`; peta Overview memakai penyaring server untuk peran SPPG, halaman Pemasok memakai daftar penuh + kolom **Jarak** + tombol "Hanya dalam jangkauan". Haversine dipindah ke satu tempat: `app/core/geo.py`. **7c SELESAI 2026-10-15**: `docs/verification/fase-7.md` (156 baris) — SPPG Jakarta 4 pin telur dari 6 ("4 dari 6 … 2 di luar jangkauan tidak dipasang di peta") vs monitor 6 pin nasional tanpa ambang; tabel Pemasok SPPG 35 baris/13 label "di luar jangkauan"/penyaring 22↔35 vs monitor 35 baris kolom Jarak "—" tanpa penyaring. Gerbang: pytest **767 lulus/3 skip**, ruff bersih, vitest **532 lulus/58 berkas**, tsc 0, lint 0, build 0. **7d SELESAI 2026-10-15** (jarak pemasok sebagai faktor biaya engine) — lihat baris F7d di bawah |
+| F8 | Tab gabungan **KPI & Kualitas Agen** (dua tab lama jadi satu) + strip Target KPI dihapus | Frontend | Done | Hermes | Permintaan pemilik 2026-10-15: "pada halaman KPI hapus bagian Target KPI. setelah itu ... menggabungkan page kualitas agent dan juga page kpi lalu buat nama baru untuk di sidebar". **Target KPI dihapus**: `components/KpiTargets.tsx` dibuang + pemakaian/import/CSS `.kpi-target*` (1.798 byte) ikut hilang; `tests/prd-nav.test.tsx` dulu memaku keberadaannya, sekarang memaku KETIADAANNYA. **Penggabungan** (nama dipilih pemilik dari 4 usulan; urutan KPI dulu; "Rincian per run" tetap penuh): id tab `"kpi-kualitas"` menggantikan `"kpi"` + `"quality"` (union `Tab`, `navItems`, `NavIcon` — dua ikon gauge identik digabung satu), komposisi di `components/KpiQualityBoard.tsx` (tipis: hanya urutan + pembatas; isi `KPIDashboard`/`AgentQualityBoard` TIDAK diubah sehingga angkanya tidak bisa berbeda), `useQualitySample` gating → `kpi-kualitas || suppliers`, dan gerbang BARU `lib/kpi.ts::shouldLoadKpi` = `today || kpi-kualitas` (sebelumnya `/kpi` diambil di SEMUA tab; tab Hari Ini tetap dapat KPI-nya — terverifikasi live "3/7 metrik" masih terisi). Bukti: vitest **542 lulus / 60 berkas** (+10 tes, 2 berkas baru), tsc 0, lint 0, build 0; DOM di :3010 akun SPPG Head — rail memuat "KPI & Kualitas Agen" (0 tab "KPI"/"Kualitas Agen"), 7 kartu KPI + "Skor agregat" + "Rincian per run" dalam satu halaman dengan urutan benar (kpi-dashboard sebelum board-page), pembatas ada, "Target KPI" 0 kemunculan, rail terlipat 68px tetap punya `title` penuh; akun BGN Monitor — scope KPI global (`bgn_monitor`), tanpa tab Surplus & Limbah (aturan peran lama utuh). Dokumen: `docs/verification/fase-8.md`, `docs/design.md` (dua baris layar → satu), `docs/PRD.md` (catatan penyimpangan §5), `memory/global/decisions.md`. |
+
+| F7d | Jarak pemasok (kaki pertama) masuk biaya SDC | Backend/DB/Frontend | Done | Hermes | Permintaan pemilik 2026-10-15 (plan §7.4 #4 + §7.4b, fase tersendiri setelah 7c). **Modul murni baru** `backend/app/core/supplier_leg.py`: `supplier_leg_km` (haversine bersama `app/core/geo.py`, 3 desimal) + `supplier_leg_map`; koordinat tidak lengkap → `None` (TIDAK ditebak). **Engine**: `app/services/recommendation_service.py` — `fetch_operational_facts` mengembalikan elemen ke-**7** (peta `(supplier_id, lokasi) → km`), 6-tuple kontrak Task 9 tetap sah (`facts[:6]`); `build_recommendations` menghitung `transport = kaki pertama (pemasok→SPPG sumber) + linehaul (SPPG→SPPG)`, tarif tetap 300 Rp/km/ton, komponen SDC tetap 6 (`safe_delivered_cost.py` tidak disentuh); `cost_breakdown` bertambah `transport_linehaul`, `transport_supplier_leg`, `supplier_leg_km`, `supplier_leg_reference`, alias `logistics` = total `transport`; payload kandidat menambah blok `supplier_leg {source_location, supplier_id, km, cost, reference}`. **Frontend**: `lib/evidence.ts::costFacts` memecah baris "Angkut pemasok → SPPG" (hint km atau ALASANnya) + "Angkut antar SPPG", hanya bila backend mengirim pecahannya; `supplierLegHint` murni. **TDD**: 15 tes backend baru (`tests/test_supplier_leg_cost.py`, RED → GREEN; termasuk penjaga regresi kontrak Task 9 dan kejujuran label) + 3 tes frontend baru. **Gerbang**: pytest **782 lulus / 3 skip** (sebelumnya 767; +15), `ruff check .` **bersih**, vitest lulus, `tsc --noEmit` 0, `next lint` 0 (build TIDAK dijalankan — aturan repo: jangan `next build` saat `next dev` hidup). **Bukti dampak angka** (`scripts/verifikasi_fase7d.py`, sebelum = 6-tuple, sesudah = 7-tuple): Cianjur→Jakarta **+282,00** (kaki 1,880 km), Bogor→Jakarta **+6.653,07** (kaki 45,075 km); **0 kandidat berpindah peringkat**; 14/14 kandidat punya kaki terhitung; jangkar kanonik (telur 4.900 kg, 3 surplus : 7 shortage) tetap hijau. **Bukti jalur nyata** (`scripts/verifikasi_fase7d_api.py`): login → `/balance/analyze` (kaki 45,075 km, `transport_supplier_leg=6653.07`, jumlah 6 komponen = `safe_delivered_cost`) → `POST /decisions` 201 → `GET /decisions/{id}` menyimpan pecahan itu di DB. **Ruling**: `docs/ruling-2026-10-15-jarak-pemasok-biaya.md`. **Bukti**: `docs/verification/fase-7d.md`. Dokumen disinkronkan: `Schema.md` (§ cost_breakdown), `design.md` (§3.3 panel biaya), plan §7.4b/7.5. **Catatan jujur**: (a) angka absolut SDC bergeser ratusan rupiah antar run karena residu data suite di DB demo (delta invarian); (b) fixture 4 kasus skrip di `app/api/demo.py` sudah berbeda dari mesin SEBELUM 7d (600 kg/quote 26.200 vs data sekarang) — tidak diperbaiki di sini, menyentuh narasi juri; (c) bukti layar panel biaya belum diambil (login perlu kata sandi demo yang tidak diketik agent) |
+
+## Track 2026-10-16 — data pemasok: profil kanonik & pengirim aktif
+
+Permintaan pemilik 2026-10-16 (verbatim): *"untuk db suplier anda cek laagi apakah sudah benar,
+jika belum perbaiki dan tambahkan juga suplier yang lagi mengirim barang nanti mau saya tampilkan
+di map dimana ada"*. Bukti: `docs/verification/fase-9.md`.
+
+| ID | Task | Kategori | Status | Assignee | Catatan |
+|---|---|---|---|---|---|
+| F9a | Profil pemasok kanonik diisi DARI DATA NYATA (komoditas + sertifikasi dari batch kiriman) | Backend/DB | Done | Hermes | Temuan audit: **14/14** pemasok kanonik (`Supplier A/B/C Cianjur`, `Supplier Medan-1`, …) punya `commodity_id`, `certification_status`, `capacity_kg_per_week` KOSONG → baris tampil kosong di tab Pemasok dan tidak bisa tersaring per komoditas di peta. Modul murni baru `app/seed/supplier_profile.py` (`derive_supplier_profiles`): komoditas = total `quantity_kg` terbesar (seri → batch terbaru; masih seri → `None`), sertifikasi = nilai terbanyak (seri → `None`), **kapasitas tidak diturunkan** (tidak ada sumber). Seeder mengisi **hanya celah kosong** (`suppliers_commodity_filled`/`suppliers_certification_filled`, tidak menimpa nilai yang sudah ada). Dijalankan dengan REF kanonik `2026-10-08T12:00:00+00:00` → **3 pemasok terisi** (A/B/C Cianjur = telur + HACCP); 11 tanpa batch tetap kosong. Diukur sebelum/sesudah: `batches` 6/2450,00 kg, `supply_records` 2220/741663,62, `price_signals` 2318/68649282,95, `decisions` 165, `users` 1141 — **semuanya identik**, jadi tidak ada data operasional yang tersentuh. Tes: 12 baru (`tests/test_supplier_profile.py`, RED dulu). |
+| F9b | "Sedang mengirim" di `/suppliers` + peta + tabel Pemasok | Backend/API/Frontend | Done | Hermes | Definisi dikunci pemilik: **batch kiriman dengan `usable_until >= sekarang`**. Modul murni baru `app/core/supplier_shipping.py` (`shipping_summary`/`shipping_for`): `count`, `total_kg`, `until`, `commodities`, `safety_fail_count`; kiriman kedaluwarsa tidak dihitung, batch tanpa pemasok/tanpa `usable_until` diabaikan. `GET /suppliers` menambah kunci `shipping` per baris (null = tidak sedang mengirim). Frontend: kelas tambahan `map-pin-supplier-shipping` (cincin `--status-safe` — **bukan** nada kelima, warna tetap berarti keandalan/jangkauan), `shippingLabel()`, baris popup + aria-label, legenda "Sedang mengirim", kartu ringkasan "Sedang mengirim barang: 2 dari 35", kolom Status tabel Pemasok berisi kalimat kiriman. Tes: 8 murni (`tests/test_supplier_shipping.py`) + 4 API (`test_suppliers_api.py`) + 7 frontend (`tests/supplier-pins.test.ts`). Bukti jalur nyata `backend/scripts/verifikasi_pemasok_kirim.py`: **A Cianjur 3 kiriman/1.400 kg telur s/d 2 Nov**, **B Cianjur 1 kiriman/600 kg s/d 26 Okt (1 gagal uji — dilaporkan)**, API == SQL, exit 0. Bukti layar :3010 (akun demo SPPG Head): peta 7 pin dengan **2 pin bercincin**, legenda memuat "Sedang mengirim", tabel 35 baris dengan 2 baris Status kiriman. Gerbang: pytest **806 lulus / 3 skip**, ruff bersih, vitest **552 lulus/60 berkas**, tsc 0, lint 0 (build tidak dijalankan — dev hidup). Angka tes yang **sadar berubah**: filter `commodity=telur` 6 → 9. **Catatan jujur**: kapasitas kanonik tetap kosong (tanpa sumber); 11 kanonik tanpa batch tetap kosong; tidak ada kiriman baru dibuat, jadi pengirim aktif hanya 2 pemasok; B Cianjur mengirim batch `safety_status=fail` (dilaporkan, tidak disembunyikan). |
+
+## Track 2026-10-16 — jalur kiriman (pemasok → tujuan) mengikuti JALAN di peta
+
+Permintaan pemilik 2026-10-16 (verbatim): *"dimap ada seperti garis mengikuti jalur dari suplier ke
+tujuan"*. Bukti: `docs/verification/fase-10.md`.
+
+| ID | Task | Kategori | Status | Assignee | Catatan |
+|---|---|---|---|---|---|
+| F10a | Rute JALAN (OSRM) + tabel cache `road_routes` + sinkronisasi saat seeding | Backend/DB | Done | Hermes | Keputusan pemilik: garis **mengikuti jalan** (bukan lurus), rute diambil **saat seeding/sync** lalu disimpan di DB supaya demo tidak butuh internet dan server OSRM demo tidak dibanjiri. Migrasi `014_road_routes` (kunci normalisasi UNIK, CHECK jarak/durasi ≥ 0, kosakata `source`), model `RoadRoute`, modul murni `app/core/road_route.py` (kunci 4 desimal, URL OSRM dengan urutan **lon,lat** dikunci di satu tempat, pengurai ketat yang MENOLAK geometri < 2 titik/jarak bukan angka, rencana sinkronisasi dengan dedup, perakit payload), penyimpan `app/seed/road_routes.py` (hanya kiriman `usable_until >= now`; jaringan mati tidak menggagalkan seeding), CLI `scripts/sync_road_routes.py`, integrasi seeder (`--skip-routes` opsional). **Diambil dari OSRM nyata 5 rute**: Cianjur→Jakarta 110,4 km / 5.060 s / 36 titik, →Bogor 62,8 km, →Bandung 67,9 km, →Cianjur 3,2 km, B→Surabaya 730,8 km. Cianjur→Jakarta = **1,41× jarak lurus** (78,35 km) — beda itulah isi pesannya. Tes: 22 murni + 9 sinkronisasi (fetcher disuntik, tanpa jaringan, memakai fixture respons nyata). |
+| F10b | Kiriman demo baru menuju SPPG Jakarta (angka dari pemilik) | Data | Done | Hermes | Kiriman yang ada tidak ada yang menuju Jakarta, jadi jalur tidak akan terlihat di peta akun SPPG Jakarta. Pemilik memilih: **Supplier A Cianjur → SPPG Jakarta, telur, 800 kg, layak s/d 7 Nov 2026, status `pass`**. Ditambahkan ke `data/seed/sprint1_seed.json` dan dihitung dengan mesin seed yang ada: harvest −36 jam + shelf 35 hari × skor 0,90 = 31,5 hari → **7 Nov 2026 12:00** (bukan angka baru di luar mesin). |
+| F10d | Kolom "Jalur kirim" di tabel Pemasok (lanjutan permintaan yang sama) | Frontend | Done | Hermes | Permintaan pemilik: *"yaudah deh tambahin saja"* — menutup butir 6 di `docs/verification/fase-10.md` §7. Tabel Pemasok kini punya kolom terakhir **Jalur kirim** dari `GET /supplier-routes` (query PENUH, tidak disaring komoditas — tabel menampilkan semua pemasok, jadi menyaring jalur akan membuat baris lain terbaca "tidak punya jalur" padahal jalurnya hanya tidak diminta). Modul murni ditambah: `supplierRouteSummaries` (kelompok per PEMASOK, bukan per batch; baris utama = jalur terpendek yang geometrinya SUDAH ada; jalur tanpa geometri tidak dianggap 0 km), `routeCellLabel`, `routeCellTitle`. Keadaan yang dibedakan: `—` (tanpa kiriman aktif) vs `…` (data belum dimuat) vs `belum disinkronkan` (khusus alasan itu) vs `jalur tidak tersedia` (alasan lain, tidak disamarkan). **Jarak lurus sengaja tidak diulang** di kolom ini (kolom Jarak sudah memuatnya; kalau diulang terbaca seperti hitungan ganda) dan tanpa lencana warna (kolom Status sudah pakai lencana). Baris ringkasan menambah "Jalur kiriman (jalan) N dari M". Tes: 7 murni + 3 kontrak markup. Bukti layar (BGN Monitor, 35 baris): A Cianjur `→ Cianjur · 3,2 km jalan · +3 tujuan` (judul memuat 4 tujuan terurut), B Cianjur `→ Surabaya · 730,8 km jalan`, 33 baris `—`, ringkasan `5 dari 5`. |
+| F10c | `GET /supplier-routes` + layer garis di peta | Backend/API/Frontend | Done | Hermes | Endpoint read-only: cakupan ditegakkan **server** (kepala SPPG hanya kiriman menuju SPPG-nya, `bgn_monitor` nasional; filter `location=` tidak bisa menembus cakupan), hanya kiriman layak, tiap baris membawa `road` (jarak/durasi/rasio/geometri/source/fetched_at) ATAU `road_missing_reason` — tidak pernah keduanya, dan tidak pernah garis karangan. Frontend: modul murni `lib/supplier-routes.ts` (GeoJSON hanya dari geometri nyata, kelas `ship-route`-* karena `route-line` sudah milik signature login, `ROUTE_LINE_COLORS` dikunci tes agar sama dengan token CSS), hook `useSupplierRoutes`, rewrite proxy `/supplier-routes`, layer MapLibre garis putus-putus di `SupplyMap` + popup klik (jarak jalan vs lurus vs rasio) + sakelar "Tampilkan/Sembunyikan jalur kiriman (N)" (aktif bawaan) + legenda + pembukaan tampilan SEKALI saat jalur pertama tiba. Bukti jalur nyata `scripts/verifikasi_rute_jalan.py` (API vs SQL, jarak jalan ≥ lurus) exit 0. **Gerbang**: pytest **851 lulus / 3 skip** (naik dari 806), ruff bersih, vitest **588 lulus / 61 berkas** (naik dari 552/60: +26 peta, +10 kolom tabel), tsc 0, lint 0. **Ekspektasi tes lama yang berubah sadar**: A Cianjur 3→4 kiriman (1.400→2.200 kg); keputusan telur Jakarta kini punya pemasok (ada batch ke Jakarta) → skenario "pemasok tak diketahui" dipindah ke komoditas ayam. **Catatan**: tabel Pemasok belum punya kolom jalur (lingkup baru, belum diminta). |
+
+## Track 2026-10-16 — peta Overview: 2 sakelar diperkecil, rincian lapisan jadi panel lipat
+
+Permintaan pemilik 2026-10-16 (verbatim): *"untuk maps di overview tolong penjelasan infomasi di
+rapihin dibuat kecil saja dan bisa di tampilkan dan di tutup dan untuk 2 tombol di atas di buat
+kecil saja dan animasi ui dan ux di perbaiki"*.
+
+| ID | Task | Kategori | Status | Assignee | Catatan |
+|---|---|---|---|---|---|
+| F11 | Bilah rincian lapisan peta bisa dibuka/ditutup + 2 sakelar lapisan diperkecil + gerak UI | Frontend | Done | Hermes | **Bilah rincian**: `.map-layer-controls` (dua kalimat penuh selalu memakan dua baris) diganti `.map-layer-info` — tag angka SELALU terlihat (`supplierReachTag`: "7/9 pemasok dalam 150 km"; `routeLayerTag`: "1 jalur kiriman · jalur jalan OSRM") + panel lipat berisi kalimat jujur penuhnya. Isinya TIDAK dihapus dari DOM, hanya dilipat (tertutup = tinggi 0fr + `visibility: hidden` → hilang dari pohon aksesibilitas, tetap bisa diperiksa di DOM) sehingga penyaringan jangkauan tidak pernah jadi penyembunyian. Peringatan zoom (`.map-layer-hint`) sengaja DI LUAR panel supaya muncul seketika saat lapisan dinyalakan pada zoom jauh. `aria-expanded` + `aria-controls` di tombol, chevron CSS diputar 90°. **2 tombol**: min-height 34→**26 px**, padding 4x9→2x8, pil 350×42 → **203×32 px** terukur (≈ −42 % lebar, −24 % tinggi); teks yang terlihat jadi "Pemasok (7)" / "Jalur kiriman (1)" — keadaan hidup/mati dibawa `aria-pressed` (pola pil komoditas), kalimat "Tampilkan/Sembunyikan …" pindah ke `title`/tooltip. Ukuran huruf TIDAK ikut turun (12px = lantai teks data) dan target sentuh 44px tetap berlaku di `(pointer: coarse)`/≤720px lewat aturan global. **Gerak**: transisi token `--dur-*` pada sakelar (warna + dorongan tekan), chevron, dan tinggi panel (trik grid `0fr→1fr` supaya bisa dibuka DAN ditutup mulus), legenda masuk (`map-legend-in`), isi popup masuk (`map-popup-in` dipasang di `.map-popup`, BUKAN `.maplibregl-popup` yang `transform`-nya milik MapLibre untuk posisi), pin titik bertransisi + membesar saat hover (rotasi 45° pemasok dipertahankan); semuanya dimatikan di `prefers-reduced-motion: reduce`. **TDD**: 5 tes murni baru (`supplierReachTag`, `routeLayerTag`, `supplierToggleAction`/`routeToggleAction`) + 4 tes kontrak komponen (tertutup bawaan, satu klik buka–tutup, isi panel, tanpa lapisan → bilah tidak dirender). Ekspektasi tes lama yang berubah SADAR: teks sakelar di 3 berkas (bukan pelonggaran aturan — kalimat penuhnya tetap ada di `title`). **Gerbang**: vitest **699 lulus / 67 berkas**, `tsc --noEmit` 0, `next lint` 0; `next build` TIDAK dijalankan (aturan repo: jangan build saat `next dev` hidup). Bukti: pengukuran CDP di :3010 akun SPPG Head + `docs/design.md` §3.1. |
+
+## Track 2026-10-16 — peta Overview: kotak "Info map" + perjalanan kiriman ber-estimasi tiba
+
+Permintaan pemilik 2026-10-16 (verbatim): *"untuk teks legenda map ganti menjadi info map dan isi nya
+gimana caranya informasi nya di susun rapih atau ada modifikasi isi nya, lalu ketika mengaktifkan
+jalur kiriman tampilkan juga waktu estimasi sampai dan perlu di ingat bahwa jalur kiriman itu adalah
+di mana menampilkan perjalan dari barang yang di antar dari suplier ke tujuan, so pastikan sinkron
+dengan database"* — setelah ditanya, pemilik memilih **membuat datanya sekalian di DB** dengan
+perhitungan waktu nyata (bukan ETA bersyarat "jika berangkat sekarang").
+
+| ID | Task | Kategori | Status | Assignee | Catatan |
+|---|---|---|---|---|---|
+| F12 | "Info map" (dulu legenda) + estimasi tiba perjalanan kiriman dari DB | Fullstack | Done | Hermes | **Temuan audit sebelum perubahan (diukur, bukan dugaan):** (a) `GET /supplier-routes` mengirim `batch_id: "None"` untuk SEMUA rute — endpoint tidak memilih `Batch.id`, jadi identitas kiriman hilang dan di klien semua baris ber-`id` sama (`str(None)`); (b) `harvested_at` ada di DB tapi tidak pernah dikirim, padahal itu konteks umur barang vs waktu tempuh; (c) **DB tidak punya jam keberangkatan sama sekali** → "estimasi tiba" apa pun sebelum ini adalah angka karangan. **DB:** migrasi `015_batch_dispatch` — kolom `batches.dispatched_at` (TIMESTAMPTZ NULL = belum berangkat) + CHECK `batches_dispatch_after_harvest` (`dispatched_at IS NULL OR dispatched_at >= harvested_at`); estimasi tiba TIDAK disimpan (dihitung saat baca, supaya tidak ada dua sumber kebenaran). Seed kanonik dapat `dispatch_offset_hours` per batch: Cianjur −15,5 j (sudah tiba), Bogor −16,5 j (sudah tiba), **Bandung NULL (belum berangkat)**, Semarang −90 j, Palembang −670 j, Surabaya −5 j (di jalan, tiba +4,0 j dari REF), Jakarta −1 j (di jalan, tiba +24,3 mnt dari REF) — semuanya dihitung dari waktu tempuh OSRM nyata (3,5 / 49,3 / 52,2 / 541,1 / 84,3 menit), jadi "di jalan" dan "sudah tiba" bukan tempelan. **API:** `/supplier-routes` kini mengirim `batch_id` asli, `harvested_at`, `route_key`, dan blok **`journey`** (`state`: `belum_berangkat`\|`di_jalan`\|`sudah_tiba`\|`tidak_diketahui`, `eta_at`, `travel_min`+`travel_source`, `elapsed_min`, `remaining_min`, `progress`, `arrives_before_usable_until`) + `summary.journey_states`. Aturan jujur di `app/core/journey.py`: tanpa jam berangkat → **tidak ada** estimasi (bukan jam nol); sudah berangkat tapi jalur jalan belum tersinkron → keadaan `tidak_diketahui`, bukan diklaim tiba/di jalan. **UI:** chip kanvas + `aria-label` berganti **"Info map"**; isi kotaknya kini **mengikuti lapisan yang hidup** (status selalu · jalur kiriman saat sakelarnya hidup · pemasok saat sakelarnya hidup) dan entri "Jalur kiriman gagal uji" hanya muncul bila ada kiriman bergaris bergagal-uji; blok **Perjalanan kiriman** (maks 3 baris + "+N kiriman lain") menulis `Jakarta · di jalan · tiba ± 22.54 (24 menit lagi)`; tag bilah rincian jadi `1 jalur kiriman · 1 di jalan · tiba terdekat ± 22.54` sehingga estimasi tiba terlihat **tanpa membuka apa pun**; popup garis menambah jam berangkat, estimasi tiba, sisa menit, dan perbandingan dengan batas layak. Tidak ada jam tiba yang dihitung di peramban. **TDD:** backend 6 tes murni (`tests/test_journey.py`) + 4 tes endpoint (`batch_id` = id DB nyata, konsistensi `eta = berangkat + duration_s`, Bandung tidak diberi ETA, cache kosong → tidak diklaim tiba) + 1 tes CHECK di `test_operational_schema.py`; frontend 11 tes murni baru + 5 tes kontrak komponen + 3 tes `formatClockWib`. **Gerbang:** backend `900 passed / 3 skipped` (2 gagal = `test_kpi_*` karena **residu data**: ada 1 keputusan `status='executed'` 16 Okt 15:42 UTC dari sesi demo sebelumnya, sehingga metrik KPI sah-sah saja `available` dan bukan `no_data` — bukan dari perubahan ini), frontend `736 passed / 67 berkas`, `tsc --noEmit` 0, `next lint` 0. **Catatan penting:** dengan REF kanonik 8 Okt, semua perjalanan hari ini terbaca "sudah tiba" (jujur, memang 8 hari lalu) — supaya juri melihat "di jalan" + ETA hidup, tekan **"Segarkan ke hari ini"** di Demo Control (seeder menaruh ulang offset relatif `now`). Bukti: `docs/verification/fase-12.md`. |
+| F12b | Buang 3 baris popup jalur: jarak lurus, rasio `1,41×`, kalimat "Tiba sebelum batas layak" | Frontend | Done | Hermes | Permintaan pemilik 2026-10-16 (kutipan): *"Jarak lurus: 78,4 km, Tiba sebelum batas layak (25 Okt 2026) dan ini Jalur jalan 1,41× jarak lurus (jalan berkelok, bukan garis lurus) hapus saja."* Dihapus dari `routePopupLines`/`routeEtaLines`: baris `Jarak lurus: …`, baris rasio `1,41× jarak lurus …`, dan kalimat penghibur `Tiba sebelum batas layak (…)`. Yang TETAP: `Jalur jalan (OSRM): 110,4 km · ± 84 menit`, `Berangkat: …`, `Estimasi tiba: ± 22.54 WIB · 24 menit lagi`, `Layak dipakai s/d 7 Nov 2026` (tanggal layak pakai jadi ditulis SEKALI, bukan dua kali), `Mutu kiriman: GAGAL UJI …`. **Sengaja dipertahankan**: peringatan `Estimasi tiba melewati batas layak pakai (dilaporkan apa adanya)` — itu menandai masalah nyata, sedangkan yang dibuang adalah kalimat yang menenangkan. `straightKm`/`ratioVsStraight` tetap dikirim server (dipakai halaman Keamanan Pangan + kartu Kiriman) — hanya tidak lagi dipampang di popup peta. **TDD**: 2 tes murni diubah agar menuntut KETIADAAN ketiga baris (RED dulu: 2 gagal) + tes baru tingkat DOM di `tests/supply-map-layer.test.tsx` yang memicu klik garis palsu lalu memeriksa isi `.map-popup-line` (tiruan `FakePopup` diperluas: `setLngLat`/`addTo` + `popupLog`). **Gerbang**: frontend **773 lulus / 69 berkas**, `tsc --noEmit` 0, `next lint` 0. |
+
+| F12c | Rapikan halaman Pemasok (tabel 9→7 kolom, satu bentuk pil, Ringkasan selebar halaman) | Frontend | Done | Hermes | Permintaan pemilik 2026-10-16 (kutipan): *"pada halaman pemasok anda gunakan skill ui ux dan anda susun supaya tampilan nya rapih dan enak di lihat user dan pastikan shape teks harus enak di lihat juga tidak kebesaran maupun ke kecilan"*. **Diukur dulu (bukan ditebak): akun SPPG Head, lebar viewport 1262 px** (`(max-width: 1280px)` aktif saat pengukuran; semua aturan CSS yang ditambahkan top-level — diperiksa lewat penelusuran kurawal — jadi berlaku di lebar berapa pun): tabel **1025 px di wadah 913 px** (wajib geser), kolom "Hub"+"Koordinat" memakan 178 px, `.shipping-tag` memuat kalimat penuh ("Sedang mengirim · 1 kiriman · 600 kg · s/d 1 Nov 2026 · 1 gagal uji") sehingga **membungkus 3 baris (186×63 px)** — bentuk terbesar di barisnya — sementara `.reach-tag` 13 px/24 px; tinggi baris 74/79 px tak rata; kartu "Ringkasan" di grid 2 kolom tanpa tetangga (**466 px dari 947 px**, 7 baris fakta memanjang). **Tiga perbaikan:** (1) **kolom dilebur** — "Hub"+"Koordinat" pindah jadi baris kedua sel "Pemasok" (`supplierMetaLine`, murni): "Surabaya · -7,2395 / 112,7731" → tabel **7 kolom**, terukur **913 px = 913 px (0 geser)**; (2) **satu standar bentuk label** — `.reach-tag`/`.shipping-tag`/`.shipping-tag-fail` = 12 px, `padding: 2px 8px`, `inline-flex` + `white-space: nowrap` (tidak pernah membungkus) → semua pil **22 px** (setara pil kepala halaman); teks penuh pindah ke `title`, dan pil jangkauan cukup menulis keadaannya ("di luar jangkauan") karena angka km sudah ada di kolom Jarak **persis di sebelahnya** (`directoryReachTagLabel`) → jarak lurus tidak diulang; (3) **Ringkasan selebar halaman** — `.board-grid` + `.supplier-summary`, 7 fakta jadi kotak kecil **296×38 px** di grid `auto-fit minmax(240px,1fr)`. **Hasil ukur:** tinggi baris **54 px (34 dari 35 baris; 1 baris 65 px karena memang punya 2 pil)**, tabel 2386→**1925 px**, halaman 3669→**3046 px**, pil 63 px → **22 px**, kartu Ringkasan 466×392 → **947×226 px**; skala teks halaman 12/13/14/20 px (**tidak ada teks < 12 px**); `text-wrap: pretty` membuang kata menggantung di kalimat penjelas halaman; `routeCellLabel` melepas kata " jalan" (nama kolomnya sudah "Jalur kirim") sehingga kolom Status dapat 35 px dan pil tidak lagi terpaksa turun baris. **TDD**: `shippingTagLabel` + `supplierMetaLine` + `directoryReachTagLabel` + tautan sel ditulis lebih dulu (RED), lalu implementasi; markup dikunci di `tests/supplier-board.test.tsx`. **Gerbang**: frontend **792 lulus / 69 berkas**, `tsc --noEmit` 0, `next lint` 0; live :3010 **0 error baru** selama 9 dtk (40 error lama = AbortError permintaan ubin peta saat peta Overview dilepas). Bukti: `docs/verification/fase-12.md` §6. |
+
+## Track 2026-10-18 — peta Overview: pin menempel di koordinat saat zoom
+
+Permintaan pemilik 2026-10-18 (verbatim): *"untuk bagian Pin pemasok tolong perbaiki dimana ketika
+zoom in atau zoom out tidak tergeser anda buat di stay di posii kordinat"*.
+
+| ID | Task | Kategori | Status | Assignee | Catatan |
+|---|---|---|---|---|---|
+| F13 | Pin peta berhenti bergeser dari koordinat saat zoom | Frontend | Done | Hermes | **Akar masalah (diukur):** `refreshPin`/`refreshSupplierPin` menimpa `el.className` utuh, sehingga kelas `maplibregl-marker` (pembawa `position:absolute`) hilang pada zoomend pertama; penanda jatuh ke alur kanvas dan posisinya menjadi transform + offset alur, yang berubah tiap kali penanda lain ditambah/dibuang (pin muncul di zoom 6, nama di zoom 8, gelembung klaster). Simpangan terukur **192 px** sebelum perbaikan, **≤0,5 px** sesudahnya di 7 tingkat zoom (5,5–10,5) untuk pin pemasok DAN pin SPPG. **Perbaikan:** modul murni `lib/map-pin-class.ts` (`gabungKelasPin` — pertahankan kelas pustaka, ganti hanya kelas `map-pin*`) dipakai kedua fungsi penyegar. **Gerbang:** `tsc --noEmit` 0, `next lint` 0, vitest **1314 lulus / 112 berkas** (pohon kerja saat perbaikan). **Batas:** belum ada tes regresi tingkat DOM (tiruan `FakeMarker` di `supply-map-layer.test.tsx` belum meniru kelas pustaka; berkas itu dipakai sesi lain). Bukti: `docs/verification/pin-peta-koordinat-2026-10-18.md`. |
+| F13c | Peta: chrome gelap (glass) — hapus semua latar putih di sekitar kanvas | Frontend | Done | Hermes | Permintaan pemilik 2026-10-19 lewat skill `ui-ux-pro-max` ("design nya gua kurang suka, saya mau background putih di hapus"): lingkup dipilih = **peta saja** (basemap OSM tetap terang, halaman lain tidak berubah), warna ditentukan saya. Gaya `glassmorphism` + palet Financial Dashboard gelap dari katalog skill. Berkas BARU `frontend/app/map-console.css`, diimpor terakhir di `app/layout.tsx` → nol hunk di `globals.css`/`SupplyMap.tsx` (keduanya sedang disunting sesi lain). Kontras diukur live: 5,50–17,36:1, sisa latar putih di dalam kartu peta 0, teks chrome terendah 12px. **Koreksi warna (permintaan lanjutan pemilik):** palet Financial Dashboard dari katalog (navy #0F1726 + hijau #22C55E) diganti token gelap milik app sendiri (`--trust-*`: #0F172A / rgba(148,163,184,.32) / #E2E8F0 / #7DD3FC) supaya tidak ada bahasa gelap kedua; ikon sakelar nyala = #1E40AF (keluarga `--accent`; #15803D milik globals gagal 3:1 di atas hijau taman OSM). Dua jebakan: atribusi MapLibre butuh selektor dua kelas (CSS-nya diinject setelah layout.css) dan `.map-card` juga dipakai `StatusLocationList` → semua aturan dibatasi `.map-card .map-body`. Rujukan: `docs/verification/peta-chrome-gelap-2026-10-19.md`. Catatan: bergantung nama kelas milik sesi lain — kalau kelas diganti, aturan ini ikut disesuaikan.
+| F13b | Pin pemasok digambar di semua tingkat zoom (bukan mulai zoom 6) | Frontend | Done (diverifikasi 22 Okt) | Hermes | Diminta pemilik 2026-10-18 ("kerjakan semuanya" atas tawaran ini). Rencana: `SUPPLIER_PIN_MIN_ZOOM` 6 → 0 (nama tetap mulai zoom 8), hapus peringatan `.map-layer-hint` yang jadi tidak pernah muncul, dan selaraskan tes komponen `dinyalakan pada zoom jauh: pin belum digambar` di `tests/supply-map-layer.test.tsx`. **DITUNDA** karena berkas komponen + tes itu sedang disunting sesi lain (perubahan ikon sakelar lapisan, `map-toggle-icons.tsx` masih untracked) — mengubahnya sekarang berisiko menabrak pekerjaan mereka. Konsekuensi yang harus diterima saat dikerjakan: pada zoom ±4,5 pin pemasok di Jawa Barat saling bertumpuk (lapisan pemasok belum diklasterkan). **SELESAI — diverifikasi 22 Okt 2026:** intinya sudah ada di pohon kerja sejak 20 Okt (ikut ter-commit di `Feat(frontend)` sesi ini): `lib/supplier-pins.ts` hanya menyisakan `SUPPLIER_LABEL_MIN_ZOOM = 8` untuk NAMA, dengan komentar 20 Okt bahwa pin tidak lagi digerbang zoom; `components/SupplyMap.tsx` menggambar titik pemasok di semua zoom. **Satu butir rencana sengaja TIDAK dijalankan:** `.map-layer-hint` tidak dihapus — kalimatnya kini menerangkan NAMA ("N pemasok tampil sebagai titik; nama pemasok muncul pada zoom 8 ke atas"), bukan lagi "pin belum digambar", jadi menghapusnya justru membuang satu-satunya penjelasan mengapa nama belum tampil. **Bukti tes:** `tests/supply-map-layer.test.tsx` 62 lulus, termasuk "zoom jauh: pin SPPG dan titik pemasok tetap digambar" dan "zoom menengah (6–8): titik tanpa nama, keterangan nama tetap tampil". **Bukti live** (localhost:3010, akun demo SPPG Head, Overview, 6× zoom-out): 9 pin pemasok tetap ter-render sebagai titik `map-pin-supplier-compact` dan hint berbunyi "9 pemasok tampil sebagai titik; nama pemasok muncul pada zoom 8 ke atas" — bukan hanya lulus tiruan. **Konsekuensi yang tetap berlaku:** pada zoom sangat jauh titik-titik di Jawa Barat bertumpuk (belum ada klaster); klaster belum dikerjakan karena mengubah tata letak peta dan tidak diminta. |
+
+| F14 | Warna & desain panel "Integritas Bukti" (Decision & Evidence) + papan "Bukti integrasi per komponen" (Agent Log) ke palet tema terang | Frontend | Done | Hermes | Permintaan pemilik 2026-10-19 (verbatim): *"pada halaman evidence … saya kurang suka terkait desain bagian integrasi bukti, tolong gunakan skill untuk memperbaikinya terutama pada warna gunakan palet warna yang cocok dengan tema light mealchainguardian"*. Lanjutan §15 `docs/design.md` (chrome peta sudah terang): `.integrity-trust` adalah **satu-satunya permukaan gelap** yang tersisa → kini terang. **Cara:** nama token `--trust-*` dipertahankan (seperti §15), nilainya diganti (`#0F172A` → `#FFFFFF`, `--trust-ink` `#E2E8F0` → `#0F172A` 17,85:1, `--trust-ink-muted` → `#475569` 7,58:1, `--trust-accent` `#7DD3FC` → `#1D4ED8` 6,12:1). **Bukan sekadar tukar token:** (1) tiap jenis bukti jadi kotak `.integrity-proof` dengan `data-tone` → `ok/warn/danger/plain` memetakan ke token sistemik `--ok/--warn/--danger/--neutral-{bg,border,ink}` (7,29 / 5,72 / 7,60 / — :1) + garis kiri 3 px; (2) lencana `.integrity-chip` = titik 6 px + kata (keadaan tidak lagi bergantung warna, WCAG 1.4.1), emoji ✅/❌/⚠️ dihapus; (3) `Blok`/`Head`/`Alamat konten` jadi baris label→nilai dengan mono tabular & chip hash, `reason` rantai putus punya baris sendiri — dulu semuanya satu paragraf ber-"·"; (4) papan Agent Log: lencana dari `rgba` ad hoc → pasangan token + titik, baris dapat garis kiri nada `integration-tone-*`. **Tidak berubah:** endpoint, angka, aturan "hijau hanya bila backend menyatakan valid", `data-testid`, teks "Dossier Keputusan", lipatan rincian & ekspor. **Gerbang:** vitest **1359 lulus / 119 berkas**, `tsc --noEmit` 0, `npm run build` 0. Pratinjau visual 3 keadaan (tersegel/unsigned/putus) dirender dari `globals.css` yang sama pada harness statis; **terukur hidup** di :3010 (akun demo SPPG Head): `.integrity-trust` `rgb(255,255,255)`, ledger `data-tone=ok` ("Rantai valid") + dossier "tersegel & terverifikasi", papan Agent Log 7 komponen dengan lencana bertitik (4 netral / 1 amber / 1 rose) dan garis kiri bernada; 375 px tanpa luapan. **Revisi 19 Okt** ("jarak ke po kok spacenya banyak bener"): slack 72 px bar pintasan dipindah dari `.evidence-page` (di tengah halaman) ke anak terakhir `.app-body` + `.po-panel` margin 16→13 px → jarak kartu terakhir → panel PO **88 px → 13 px**. Rujukan: `docs/design.md` §16–§16.1. |
+
+## Track 2026-10-20 — persetujuan penerimaan → stok → Overview
+
+| ID | Task | Kategori | Status | Assignee | Catatan |
+|---|---|---|---|---|---|
+| R26 | Approve penerimaan barang menulis stok, Overview ikut berubah | Backend + Frontend | Done | Hermes | Permintaan pemilik: "demo di mana ketika barang tersebut sampai dan ada approve barang di terima maka nanti akan merubah data yang diperlukan contoh adalah overview". **Migrasi 026**: `batch_receipts.status` (`menunggu`/`disetujui`/`ditolak`), `reviewed_by`, `reviewed_at`, `review_note`, `supply_record_id`, unique index parsial `uq_batch_receipts_satu_disetujui`. **Endpoint**: `POST /receipts/{id}/approve` (hanya `sppg_head`, scope sendiri, idempoten; menulis `supply_records` = stok terakhir + `batch.quantity_kg`, source `manual`) dan `POST /receipts/{id}/reject` (alasan wajib). Gate server: `safety_status='fail'` → 409, lewat `usable_until` → 409, batch lain → 403, peran lain → 403. **UI**: badge status di riwayat + baris keputusan, panel `.safety-approve` ("Setujui & masukkan stok", "Tolak penerimaan"), batch kedaluwarsa diberi peringatan dan tombol setujui disembunyikan; setelah approve `todayQuery`/`mapQuery`/`decisionsQuery` diambil ulang. **Bukti terukur**: ayam Jakarta 200 → 345 → 558 kg, status peta `shortage → surplus`, kartu Overview "+343 kg · lebih 160% · Pasokan 558 kg (260%)". **Tes**: 7 tes backend baru (`test_receipts_approval.py`) + tes frontend `receiptStatusLabel`/`receiptRows`; gerbang frontend 144 berkas / 1591 tes, `tsc` 0, `next lint` 0. Tangkapan: `_qa/sesi-demo/penerimaan/`. |
+
+| R27 | Redesign halaman Keamanan Pangan (mudah dipakai & dipahami) | Frontend | Done | Hermes | Permintaan pemilik: "perlu di redesign supaya ketika user menggunakan dapat mudah digunakan dan dimengerti, konsisten design system". Toolbar chip saringan berjumlah + pencarian + paginasi 8 baris; tombol prioritas "Tinjau N batch gagal" di Ringkasan; tabel jadi kartu berlabel di ≤860 px; perbaikan `.commodity-pill-active` agar terbaca di luar `.filter-card`; radius memakai token. Tinggi halaman 5.400 → 2.775 px (1440); daftar periksa dua kolom di ≥900 px, `docOverflow` 0 di 375/768/1280/1440, gerbang frontend 146/1612, `tsc` 0, `next lint` 0. Tangkapan: `_qa/keamanan-pangan/`. |
+
+| R28 | Penerimaan: pilih komoditas dulu, lalu batch; titik periksa menyesuaikan komoditas | Frontend | Done | Hermes | Permintaan pemilik (20 Okt): "pilihan komoditasnya baru memilih batchnya" + "ceklist disesuaikan dengan komoditasnya". `receivingCommodityGroups()`; **revisi setelah riset**: dua dropdown bertingkat diganti pil komoditas + kartu radio batch (NN/g: interacting menus membingungkan; GOV.UK/DWP: radio, bukan select). Hanya batch **belum disetujui** yang tampil (`receipt_status` baru di `GET /batches`), label belum dicatat/menunggu/ditolak; ganti komoditas/batch mengosongkan centang; setelah disetujui pilihan pindah ke batch berikutnya; `receivingChecks(komoditas)` mempertahankan 5 id tetap dengan kalimat per komoditas (ayam/telur 0–8 °C & ciri amis/retak; beras karung 15–30 °C & apek; wortel layu; bawaan umum). Tanpa migrasi/endpoint baru. Tes: `food-safety.test.ts` +9 (101 lulus di berkas terkait), `tsc` 0. Tangkapan: `_qa/keamanan-pangan/penerimaan-beras-1440.png`. |
+
+| R29 | Navigasi "lompat ke bagian" jadi komponen bersama — dipasang di halaman yang benar-benar butuh | Frontend | Done | Hermes | Permintaan pemilik 20 Okt: suka nav "Bagian" di Decision & Evidence, lalu "jangan di semua halaman — ke halaman yang benar-benar butuh saja". **Komponen bersama**: `components/SectionJump.tsx` (nav + tautan `<a href="#id">`), `lib/hooks/useActiveSection.ts` (listener gulir rAF-throttled, bagian terakhir yang melewati ambang 140 px — bukan IntersectionObserver: bagian lebih tinggi dari viewport tidak pernah "menang"), `lib/section-jump.ts` (daftar tujuan per halaman, dibangun dari kondisi render yang SAMA dengan bagiannya), gaya `.section-jump`/`.jump-target` di `globals.css` (dipindah dari `evidence-dossier.css`; token saja, 44 px di layar sentuh, `prefers-reduced-motion`/`-transparency`/`forced-colors`, disembunyikan saat print). **Halaman yang diberi**: Keamanan Pangan (3–5 tujuan; "Penerimaan" hanya untuk peran ber-SPPG dan setelah batch dimuat, "Keputusan" hanya bila daftar keputusan ada) dan Overview (4–5; "Kiriman" hanya bila kartu kiriman dirender — kartu itu tidak merender apa pun saat daftar kosong). **Tidak diberi, dengan alasan tertulis** (docs/design.md §24): Hari Ini sudah punya lima tile tombol yang menggulir DAN memindahkan fokus; Recommendations sudah dipendekkan cari/filter/urut/paginasi; Pemasok, KPI & Kualitas, Agent Log, Demo Control ≤ 3 bagian/pendek. **Jebakan yang ditutup**: daftar tujuan tidak boleh jadi tautan mati. **Verifikasi**: tes nav 13 (section-jump) + 27 (food-safety-board, termasuk 4 tes nav) + 5 (overview-section-jump) + 18/12 (evidence) + 38 (decision-evidence) = 113 lulus; gerbang penuh **150 berkas / 1.671 tes lulus**; `tsc` 0; `next lint` 0 error (2 warning lama di SupplyMap). **Verifikasi di aplikasi hidup** (:3010, SPPG Head, 20 Okt 00.1x WIB): Overview 5 tujuan → `navTop 72`, tautan mendarat `targetTop 132` (nav bottom 116, tidak tertutup), di dasar halaman aktif = `#ov-telemetri`; Keamanan Pangan 5 tujuan, kelima sasaran ada, `duplicateIds []`; Decision & Evidence tetap 5 tujuan (`#ringkasan` saat di puncak, `#bukti` setelah digulir) dan pintasan "Ke zona keputusan" tidak berubah. Cacat yang ditemukan HANYA lewat verifikasi live — di dasar halaman bagian terakhir tidak pernah menjadi posisi sekarang — sudah diperbaiki + dites (`tests/section-jump.test.tsx`). |
+
+| R30 | Agent Log: panel "Bukti integrasi per komponen" dicabut; label supervisor di Demo Control jadi "Hasil supervisor" | Frontend | Done | Hermes | Permintaan pemilik 21 Okt (verbatim): "di agent log yang di hapus bagian ini 'Bukti integrasi per komponen'" dan "ganti kata ini 'Narasi supervisor (apa adanya dari model)' menjadi 'Hasil supervisor' pada halaman demo control". **Dicabut**: `<IntegrationStatusPanel>` + import + hook `useIntegrationStatus` di `app/page.tsx` → tab Agent Log berhenti di `.agent-console` (ProviderPanel → AgentSwarmPanel → AgentTraceViewer). Komponen, hook, endpoint `/integrations/status`, dan `tests/integration-status.test.tsx` TIDAK dihapus (hanya tidak dimount). **Tidak diubah**: `<pre class="trace-output">` berisi `output_summary` tetap ada — permintaan 20 Okt untuk menghapusnya dibatalkan pemilik 21 Okt ("untuk yang di agent log munculkan saja kaya sebelumnya"); CSS `.trace-output` + `@keyframes trace-shimmer` dipulihkan. **Label**: `<summary>` Demo Control jadi "Hasil supervisor". **Tes**: `tests/prd-nav.test.tsx` memaku "IntegrationStatusPanel/useIntegrationStatus tidak ada di page.tsx" (RED dulu, lalu hijau); `tests/demo-control-panel.test.tsx` memaku "Hasil supervisor" dan menolak "apa adanya dari model". Aturan + alasan: `docs/design.md` §25.. **Tambahan 21 Okt (lanjutan arah pemilik)**: daftar "Langkah pipeline" di Demo Control kini HANYA nama langkah — `stepChips` diganti `stepNames` di `lib/demo-agent.ts` (slug `tool_called` seperti `evaluate_safety`/`supervisor.narration` tidak dicetak), `<span class="dc-step-tool">` + CSS-nya dihapus, kunci baris pakai indeks karena nama langkah bisa berulang. Tes: `demo-agent.test.ts` (kontrak `stepNames`, nama kosong → "—") dan `demo-control-panel.test.tsx` ("hanya nama langkah, tanpa slug alat"). Verifikasi hidup (:3010 Demo Control): lipatan "Langkah pipeline" menampilkan `DETECT`, `PREDICT`, `DECIDE` saja, `0` elemen `.dc-step-tool`, tidak ada slug alat di halaman. Gerbang akhir: **155 berkas / 1.692 tes lulus**, `tsc` 0, `next lint` 0 error. |
+
+## Backlog / belum dijadwalkan
+
+| ID | Task | Kategori | Status | Catatan |
+|---|---|---|---|---|
+| BL-01 | ~~Settings/Admin screen (manage users, lokasi)~~ → **dipindah ke Sprint 4 sebagai S4-11** (arah Roy 2026-10-10) | Dashboard | Moved | Eksekusi di S4-11 |
+| BL-02 | Integrasi SAP nyata | Future | Not Started | Pasca-kompetisi |
+| BL-03 | Hyperledger Fabric evidence ledger | Future | Not Started | Pasca-kompetisi |
+
+| S4-20 | Audit & upgrade UI/UX menyeluruh (11 tab × 3 lebar): kontras, target sentuh, tipografi meta, umpan balik tekan, konsolidasi token | Dashboard | Done | Hermes | Permintaan Roy 2026-10-11 lewat skill `ui-ux-pro-max` (4 tahap: audit → design system → upgrade → verifikasi), scope dipilih Roy = **konservatif** (A–D, identitas visual acuan tetap, TANPA dark mode; app belum punya `prefers-color-scheme` sama sekali dan itu item terbesar). **METODE**: probe CDP ke :3010 akun demo SPPG Head — 11 tab × 375/768/1440 = **33 keadaan**, tiap keadaan diukur (overflow halaman, target <44px, teks <12px, kontras WCAG dari warna terhitung + latar efektif, tombol ikon tanpa label, gambar tanpa alt) + analisis statis `globals.css` (3.522 baris, 536 selektor, 30 token) + hitung rasio kontras sendiri. Skrip: `audit-ui.mjs` / `shot-ui.mjs` di folder scratch Hermes (bisa dijalankan ulang). **TEMUAN (terukur)**: yang sudah baik — 0 overflow di 33 keadaan, 0 tombol ikon tanpa label, 0 gambar tanpa alt, 0 emoji sebagai ikon (NavIcon SVG), fokus terlihat di 7 tempat, `prefers-reduced-motion` dihormati, `tabular-nums` dipakai. Yang rusak — (1) kontras: `.rec-sep` & `.kpi-breadcrumb-sep` memakai **token garis sebagai warna teks** → 1,49:1 (48 pelanggaran di tab Recommendations); `.fact-warn` = `--status-warning #F9A825` sebagai teks → 1,97:1; label nav `.side-tab` rgba(255,255,255,0,6) → **2,84:1** (audit pertama saya MELEWATKAN ini karena tidak mencampur warna ber-alpha dengan latarnya — alat lalu diperbaiki); `.side-user-sub`/`.side-logout`/`.side-collapse` 2,40:1; `.top-bar-sppg`/`.top-bar-clock` 3,62:1; batas input `--line` 1,18:1. (2) target sentuh: `.side-tab` 40px, `.side-collapse` 28px, lonceng 32px, tombol aksi 34px, `select` panel 19-35px. (3) 13 selektor teks 10-11,5px, termasuk DATA NYATA (`.fact-hint` "keandalan 80%", `.today-row-meta`). (4) **0 aturan `:active`** di seluruh berkas → kontrol terasa mati saat diklik. (5) dua sistem lencana + `.badge[data-status="EXPIRED"]` **didefinisikan dua kali** (identik). (6) 61 hex mentah/26 warna di luar `:root`. (7) `aria-busy` hanya di 4 dari 30 komponen. **PERBAIKAN**: (Tahap 2) +28 token — `--ink-subtle` 5,27:1, `--line-input` ≥3:1, `--ok/--warn/--danger/--neutral-{bg,border,ink}`, `--ink-inverse`, `--on-dark-danger`, `--skeleton-base`, `--dur-1/2/3` + `--ease-standard`, `--space-1..6`, `--text-meta/micro`. (A) `.rec-sep`/breadcrumb → `--ink-subtle`; `.fact-warn` → `--warn-ink` (5,93:1); batas kontrol (`.field input`, `.filter-chip`, `.button-secondary`, `.integrity-panel button`, `.page-header-select`, `.commodity-pill`, `.event2-quotes li label`, `.ops-controls select`) → `--line-input`. (B) blok umpan balik tekan (20 selektor, transform 1px + peredupan, 90ms) + cincin fokus seragam untuk pil/chip/select + target sentuh 44px pada `(pointer: coarse)` **atau** `(max-width: 720px)` untuk nav rail, chip, pil, tombol ikon, `.button`, `input/select/textarea` (kontrol MapLibre dibiarkan 29px — masih di atas batas WCAG 2.2 = 24px — supaya tidak menabrak atribusi); semua gerak tekan dimatikan pada `prefers-reduced-motion`. (C) teks meta → ≥12px (13 titik); lencana/peringatan → token status; aturan EXPIRED duplikat dihapus; hex mentah → token (6 warna brand, 21 teks putih → `--ink-inverse`, 8 latar putih, skeleton). (D) komponen baru `LoadingState` (skeleton + `role="status"` + `aria-live` + `aria-busy`) dipakai di 6 tempat yang sebelumnya menulis teks "Memuat…" polos, + `aria-busy` di 4 papan. **VERIFIKASI**: audit ulang 33 keadaan → **kontras<AA 0, teks<12px 0, overflow 0** di SEMUA tab & lebar; sisa 3 target <44px hanya kontrol zoom MapLibre (29px, sengaja, >24px WCAG). vitest **317/324** (7 gagal = `tests/top-bar.test.tsx`, terbukti berasal dari edit Kiro di `components/TopBar.tsx` yang belum di-commit: brand `<strong>MealChain Guardian</strong>` di HEAD dipindah ke sidebar — bukan dari audit ini; dibuktikan dengan `git show HEAD:...`), tsc bersih untuk berkas audit, `next lint` 0. Fungsi & logika bisnis tidak disentuh; 29 berkas tes tampilan praktis tidak mengunci nama kelas (hanya 1 berkas). **CATATAN PENTING**: `components/globals.css`, `app/page.tsx`, `components/TopBar.tsx`, `components/StockChart.tsx` JUGA sedang disunting Kiro tanpa commit — kalau Kiro menyimpan buffer lama `globals.css`, pekerjaan audit ini bisa tertimpa: sudah di-commit agar aman. |
+| S4-21 | Design system: token tunggal, aturan kontras, dan pola keadaan memuat (rujukan `docs/design.md` §4) | Dashboard | Done | Hermes | Bagian kedua permintaan 2026-10-11 (Tahap 2 & 4 skill `ui-ux-pro-max`). `docs/design.md` §4 diperluas: tabel token tambahan + **aturan mengikat** hasil audit — (a) token garis dilarang dipakai sebagai warna teks; (b) `#F9A825` dilarang sebagai warna teks di latar terang (1,97:1), teks peringatan = `--warn-ink`; (c) batas kontrol interaktif = `--line-input` (≥3:1, WCAG 1.4.11), `--line`/`--line-strong` hanya dekoratif; (d) teks di rail biru ≥ `rgba(255,255,255,0.92)` (4,64:1); (e) ukuran teks data ≥12px; (f) target sentuh ≥44px di perangkat sentuh atau ≤720px; (g) setiap kontrol punya `:active` + `:focus-visible` dan menghormati `prefers-reduced-motion`; (h) keadaan memuat satu pola (`LoadingState`). Catatan kejujuran: kueri `--design-system` skill mengembalikan pola "Enterprise Gateway" (landing page marketing) yang MELESET untuk konsol operasi — sudah diulang dengan kueri lebih sempit (`--density 8`) dengan hasil sama, jadi sesuai kontrak skill: tidak ada padanan pola terverifikasi, palet/struktur tetap dari dokumen acuan repo, dan yang dipakai dari skill hanya aturan prioritasnya (kontras, target sentuh, fokus, gerak, tipografi). |
+---
+
+
+## Cara update file ini
+
+1. Ubah `Status` di baris terkait segera setelah berubah — jangan menumpuk perubahan
+2. Isi `Assignee` (Roy/teman) supaya jelas siapa pegang apa — hindari kerja dobel
+3. Isi `Catatan` singkat kalau ada blocker atau keputusan kecil yang perlu diingat
+4. Kalau task baru muncul di tengah jalan (tidak ada di list ini), tambahkan baris baru dengan
+   ID mengikuti pola sprint terkait (misal `S3-12`)
+5. Jangan hapus baris yang sudah `Done` — itu jadi riwayat, biarkan
+| S4-16 | Tanda tangan ECDSA dossier AKTIF (kunci diteruskan ke kontainer) | Infra | Done | Hermes | Permintaan Roy 2026-10-11 ("kerjakan saya mau lihat hasilnya"). Akar masalah: `SIGNING_KEY_HEX` sudah ada di `.env` (64 hex) tetapi `docker-compose.yml` TIDAK meneruskannya ke service `backend` (daftar `environment:` eksplisit) → service signing selalu `unsigned`. Fix: passthrough `SIGNING_KEY_HEX: ${SIGNING_KEY_HEX:-}`. Bukti: `GET /decisions/{id}/dossier` → `signature.state=signed`, `algorithm=ECDSA-secp256k1-sha256 (deterministic RFC6979)`, panjang ttd 128 hex, `verify=true`; uji tamper (`sign_payload(b'mealchain-demo')` lalu verifikasi payload diubah) → false; UI menampilkan "✅ ECDSA-secp256k1-sha256 … · verifikasi BERHASIL". Catatan: `docker compose restart` TIDAK cukup untuk env baru (harus `up -d --no-deps backend`); port host backend mengikuti `BACKEND_PORT` di `.env` (8000) sedangkan UI memakai path relatif lewat proxy Next. Verifikasi: vitest 251/32, tsc 0, lint 0, build 0, pytest backend 595 passed. |
+| S4-17 | 4 halaman sidebar acuan yang belum ada (Keamanan Pangan, Surplus & Limbah, Pemasok, Kualitas Agen) | Dashboard | Done | Hermes | Langkah 5 permintaan Roy 2026-10-11: "ini adalah folder referensi E:\hackathon\HackathonBil\MealchainGuardian dan lu harus meniru fiturnya yang ada di sidebarnya dan pagenya". Recon `frontend/lib/nav.ts` acuan = 9 halaman; repo ini sudah setara 5 → 4 halaman dibangun baru dengan data API NYATA (acuan memakai data contoh/MOCK_AGENT_RUNS). (1) **Keamanan Pangan** (`/compliance`): ringkasan pengawasan (aman/gagal uji/perlu verifikasi/belum diuji + berat batch gagal), peringatan batch gagal menyebut lokasinya, kartu batch perlu segera dipakai (lewat batas atau ≤48 jam), tabel per batch (status, kesegaran, layak sampai, sisa masa dari jam klien) — dari `GET /batches`. (2) **Surplus & Limbah** (`/surplus`, peran SPPG saja seperti acuan): neraca surplus/kekurangan dari `/balance/map` komoditas aktif, rencana alokasi greedy (kebutuhan terbesar diisi surplus terbesar, jarak haversine dari koordinat, tombol "Lihat di peta"), kartu pencatatan limbah diisi "—" + ALASAN (tidak ada tabel disposal — menulis 0 kg akan terbaca "tidak ada limbah"). (3) **Pemasok** (`/suppliers`): daftar pemasok + keandalan disusun dari `approval-summary` sampel 8 keputusan terakhir (backend belum punya endpoint daftar pemasok — dinyatakan di halaman), register eksklusi dari `/supplier-exclusions`, panel usul eksklusi yang sudah ada dipakai ulang. (4) **Kualitas Agen** (`/quality`): skor agregat dari `GET /decisions/{id}/traces` + `verdict` `approval-summary` (run dinilai, langkah/run, kesesuaian verifier agree/(agree+disagree), tingkat fallback, keputusan diubah manusia = iterasi > 1, rata-rata durasi) + tabel per run dengan tautan ke Decision & Evidence; halaman menulis "dinilai 8 dari N". Logika murni: `lib/food-safety.ts`, `lib/surplus.ts`, `lib/suppliers-board.ts`, `lib/agent-quality.ts` (38 tes) + kontrak markup `tests/*-board.test.tsx` (25 tes). Refactor kecil: `FactList` diekstrak dari DecisionEvidence jadi komponen bersama; `FactTone` dapat "plain" (kelas CSS-nya sudah ada). Sidebar diurutkan mengikuti acuan + filter peran. Verifikasi: vitest 318/40, tsc 0, lint 0, build 0; di :3010 dengan akun SPPG Head — sidebar 11 tab, Keamanan Pangan 6 batch (5 aman/1 gagal 600 kg), Surplus 2.292 kg vs 830 kg + 6 baris alokasi, Pemasok 1 pemasok 80% + 0 eksklusi, Kualitas Agen 8 run/17 langkah/kesesuaian 75%; konsol bersih (hanya peringatan recharts lama); 1440 & 375 tanpa overflow HALAMAN — tabel lebar dibungkus `.board-table-wrap` (geser di dalam kartu) + petunjuk "Geser tabel ke samping" di ≤640px, karena di 375px tabel 529px dulu melebarkan seluruh halaman. Acuan TIDAK diubah. Commit `7b4ab32`. |
+| S4-18 | Peta: sinkronisasi 5 detik tidak lagi mengubah zoom/geser | Dashboard | Done | Hermes | Permintaan Roy 2026-10-11: "buat untuk maps ketika sync tidak ngezoom atau bisa di bilang sync tidak menggangu ukuran zoom". Akar masalah: efek pembangunan peta bergantung pada `locations`, sedangkan polling `GET /balance/map` selalu mengembalikan array BARU → cleanup `map.remove()` + `new maplibregl.Map()` + `fitBounds()` tiap 5 detik → zoom pengguna hilang. Perbaikan: peta dibangun SEKALI (efek bergantung hanya pada ada/tidaknya data, data terbaru lewat `locationsRef`); sinkronisasi memakai tanda tangan ISI (`pinSignatures`/`pinDiff`) + `refreshPin` sehingga hanya penanda yang benar-benar berubah yang disentuh; keputusan fokus lewat `nextMapFocus` (murni) = `fit:true` HANYA saat pertama tampil atau saat lokasi aktif BERGANTI. Helper murni di `lib/map-console.ts` + 5 tes baru. Verifikasi: vitest 324/41, tsc 0, lint 0, build 0; bukti empiris CDP di :3010 — kanvas peta ditandai, zoom-out 3 langkah, tunggu 16 detik (3 siklus polling): elemen kanvas SAMA (peta tidak dibangun ulang) dan tangkapan area peta identik byte-per-byte; 10 penanda utuh; ganti komoditas telur→ayam memperbarui label (Bandung +400 kg → +250 kg) tanpa mengubah zoom; konsol bersih. Commit `1841763`. |
+| S4-19 | Dev experience: edit dari Kiro/Hermes langsung terpakai (watcher polling) + port konsol 3010 | Infra | Done | Hermes | Pertanyaan Roy 2026-10-11: "kalau saya edit code dari kiro apakah otomatis tampilan di localhost:3010 berubah?" dan lanjutnya minta rekomendasi realtime. TEMUAN (terukur, bukan dugaan): (a) frontend memang TIDAK ikut berubah — berkas host disunting, ditunggu 75 detik, :3010 tetap kode lama dan 0 baris "Compiled" di log; sebabnya bind mount drive E: (exFAT) tidak meneruskan notifikasi berkas ke kontainer. (b) backend JUSTRU sudah jalan: `command: uvicorn … --reload` sudah ada di compose (bukan Dockerfile), dan uji nyata membuktikan GET /health berubah dalam ~12-15 detik setelah `backend/app/main.py` disunting dari Windows (dugaan awal saya "uvicorn tanpa --reload" SALAH — jangan percaya CMD Dockerfile tanpa memeriksa override compose). PERBAIKAN: `WATCHPACK_POLLING: "true"` + `CHOKIDAR_USEPOLLING: "true"` di service frontend; perintah backend dirapikan jadi `--reload --reload-dir /app/app --reload-exclude "*__pycache__*"` (cakupan lebih sempit, tidak memicu reload saat pytest menulis bytecode) dan TIDAK diberi WATCHFILES_FORCE_POLLING karena tidak perlu. PORT: `.env` FRONTEND_PORT 3000 → 3010 (port 3000 ditempati dev server aplikasi acuan, PID 39472, sengaja dibiarkan hidup sebagai pembanding); ONBOARDING.md ikut diperbarui. BUKTI: rute baru terdeteksi 4,1-4,6 detik; suntingan berkas yang sudah ada 6,3-6,5 detik; penghapusan 0,2 detik (tanpa restart sama sekali). CPU frontend di jendela tenang 90 detik: rata-rata 0,82% / median 0,01% / puncak 2,26% (baseline sebelum polling 0,59%); backend 4,57% vs 3,78% (dalam rentang variasi normal). Satu sampel 137% muncul sekali saat kompilasi dari berkas uji dan tidak berulang. Smoke: :3010 200, /health healthy, frontend vitest 324 passed. |
+| S4-20 | Redesain halaman "Hari Ini": grid bulan besar di kartu dihapus (jadi "Agenda harian"), strip ringkasan 5 tile tombol, urutan status→pengecualian→agenda→rincian, 4 kartu rincian jadi bento 2 kolom | Dashboard | Done | Hermes | Permintaan Roy 17 Okt 2026 |
+| S4-21 | Audit ketat panel Purchase order + copy FE jadi bahasa aplikasi (bukan demo) | Dashboard | Done | Hermes | Permintaan pemilik 19 Okt 2026: "audit secara rinci dan ketat … kata kata di fe tolong di perbaiki supaya seperti aplikasi bukan demo". Temuan (bukti di `docs/qa/audit-purchase-order-2026-10-19.md`): (1) status `draft` tidak pernah ditulis siapa pun — chip "draf 0" dihapus; (2) `confirmed` bukan hasil proses aplikasi (jalur eksekusi selalu `submitted`, `confirmed` hanya dari seed/impor; DB saat audit 2 submitted + 14 confirmed) → UI menjelaskan asalnya, tidak mengarang langkah konfirmasi SAP; (3) label "dari eksekusi" keliru karena seeder menulis PO `MC-*` ber-`decision_id` tanpa lewat `/actions/execute` → jadi "dari keputusan", sedangkan baris impor "impor SAP"; (4) total `Rp 0,00` saat `/summary` gagal → "—" (`formatRupiahOpsional`); (5) `count` = panjang daftar terbatas → penanda "Menampilkan N dari M PO terbaru"; (6) panel di bawah detail keputusan terbaca "PO keputusan ini" → `decisionId` diteruskan, baris bertanda "keputusan ini" + tautan "Buka keputusan"; (7) bahan mentah (`MAT-BERA`, `1000`) → `commodity_name` dari `LEFT JOIN commodities` (endpoint ikut mengirim field itu; baris tanpa keputusan `null`) + format "Bahan 1000"; tidak menebak dari kode karena seeder memakai `MAT-{nama[:4]}`. Copy: judul "Purchase order" + chip "SAP simulasi" (penanda kejujuran tetap), sub tanpa menyebut tabel/DB internal, chip status hanya yang punya baris dengan nada token sistem (aksen biru / hijau aman), satu kalimat arti status. Verifikasi: pytest `test_sap_orders_api.py` 12 passed (tes baru nama komoditas relasional), vitest `purchase-orders` 17 passed, tsc 0, vitest penuh 1365/119; live :3010 SPPG Head (chip "terkonfirmasi 2", total Rp 32.880.000,00, "beras", penanda keputusan ini) dan BGN Monitor (16 baris, "terkirim 2"+"terkonfirmasi 14", "impor SAP", "Bahan 1000", total Rp 179.749.434,00), tanpa overflow. |
+| S4-22 | Redesign pemilih keputusan (`<select>` → DecisionPicker yang bisa dicari) di Decision & Evidence dan Agent Activity Log | Dashboard | Done | Hermes | Permintaan pemilik 19 Okt 2026 ("redesign dropdown dari pilih keputusan") lewat skill `frontend-design` + `design-system` + `ui-ux-pro-max`. Komponen baru `components/DecisionPicker.tsx`: pemicu 2 baris (judul + meta, nomor 8 heksa `--font-data`), panel dengan kotak cari, listbox datar bergrup, keyboard ↑↓/Home/End/Enter/Esc, `aria-activedescendant`, klik luar menutup, fokus otomatis ke kotak cari. Filter murni `saringGrup`/`pecahLabel` di `lib/decision-picker.ts`. Temuan saat verifikasi live: panel 43px dari pemicu (acuan `position` salah) → pembungkus `.dpick-anchor`, 6px; dua instance memakai id sama → `pilih-keputusan-log`; pemicu Agent Log 130px → `min-width: 300px`; jumlah grup dibekukan → dihitung ulang dari hasil saring; tab terbuka kosong saat daftar tiba belakangan → efek jaring kedua di `page.tsx`. Bukti: `docs/design.md` §19. Gerbang: vitest 1.388/123, tsc 0, build 0. |
+| S4-23 | Data demo Jakarta lengkap: seeder `app/seed/jakarta_lengkap.py` (agen 7-kartu, eksklusi pemasok, ledger tertaut, KPI 24 jam, volume) | Backend | Done | Hermes | Permintaan pemilik 19 Okt 2026: "semua indikator ada datanya tidak 0 ataupun tidak ada data dan perbanyak datanya". Sebelum: `agent_traces.agent_name` NULL 100% (panel 7 agen kosong), ledger 0/2350 tertaut, eksklusi 0, deviasi harga 24 jam no_data, batch Jakarta 8, PO 2, rekomendasi 6. Seeder baru (origin='demo', id UUID5, relatif now): 40 batch (6 gagal/5 perlu verifikasi/3 pending), 600 demand, 672 supply, 252 harga, 42 limbah, 22 menu + 8 kiriman, 30 keputusan + 28 approval + 90 bukti + 251 jejak (8 kartu/decision, `agent_name` = kunci worker tanpa `_agent`), 7 PO, 3 eksklusi, ledger dibangun ulang 160 blok 100% tertaut. Jebakan: `agent_name` harus "supply" bukan "supply_agent"; `menu_plans` ber-kunci alami (lokasi, tanggal); pytest menghapus baris demo → seed ulang sebelum demo. Bukti + angka: `docs/qa/data-demo-jakarta-2026-10-19.md`. |
+| S4-24 | Audit seluruh informasi yang tampil (19 Okt 2026): angka kartu vs lonceng (16 vs 24) disatukan lewat peran, 0 palsu saat memuat diganti "—", pemasok lintas komoditas dirapikan, kode bahan `MAT-BERA` dinormalisasi, rute OSRM 37/37. Bukti: `docs/qa/audit-informasi-tampil-2026-10-19.md`; vitest 1392/124, tsc 0. | selesai |
+
+| S4-25 | Dokumen PO sebagai PDF — hanya untuk PO dari keputusan yang sudah disetujui (tab Decision & Evidence) | Frontend + Backend | Done | Hermes | Permintaan pemilik 20 Okt 2026 (verbatim): *"untuk bagian yang sudah disetujui untuk po anda bisa buat pdf po nya yang bisa di download"*, dikerjakan dengan skill `pdf`, `numeric-claim-audit`, `ui-ux-pro-max`, `test-gate-hygiene`. **Backend:** rute baru `GET /sap/purchase-orders/{po_number}/pdf` (`app/api/sap_orders.py`) + pembangun dokumen `app/services/po_document.py` (reportlab, satu halaman A4: kop, pihak & bahan, rincian pesanan, total = harga × jumlah, dasar persetujuan, jejak persetujuan dengan nama & waktu WIB, catatan kaki "SAP simulasi"). **Pagar:** hanya keputusan `approved`/`executed` (409 "tidak lahir dari keputusan" untuk PO impor, 409 "menunggu persetujuan" untuk yang belum), cakupan sama dengan daftar (PO lokasi lain = 404). **Frontend:** `fetchPurchaseOrderPdf` (`lib/api.ts`), `downloadPoPdf`/`poFileName` (`lib/export.ts`), tombol "Unduh PDF" per baris + kalimat sebab untuk baris yang belum berhak, umpan balik `role=status`/`role=alert` dengan `detail` server, CSS `.po-pdf-*` (30 px / 44 px coarse, `align-self: center`). **Dependensi:** `reportlab==5.0.1` + `pypdf==6.21.1` di `backend/requirements.txt`, image backend di-build ulang (dibuktikan: `reportlab 5.0.1 | pypdf 6.21.1` di kontainer). **Gerbang:** `tests/test_po_document_pdf.py` 11 lulus (isi PDF diekstrak ulang & dibandingkan dengan ground truth DB); vitest 1.410/126, `tsc` 0, ruff 4 berkas tersentuh bersih. Suite backend penuh 1.167 lulus/15 gagal — 15 kegagalan di 5 berkas yang nol menyebut identifier perubahan ini; 9 hijau saat dijalankan sendiri, 6 merah karena kondisi data demo sesi sebelumnya (`test_demo_completed_decisions_konsisten`, `test_suppliers_api`). Live :3010 (SPPG Head): 9 PO → 9 tombol, klik → 3.768 byte `%PDF-` `application/pdf`, UI "Dokumen terunduh sebagai PO-MC-661695B2C685.pdf". Rujukan: `docs/design.md` §20. |
+
+| S4-27 | Demo Control menilai PEMASOK → SPPG (bukan surplus SPPG lain) | Backend + Frontend | Done | Hermes | Permintaan pemilik 19 Okt 2026 (verbatim: *"itu menilai dari pemasok ke sppg jadi anda harus gunakan data pemasok yang sudah ada dan memasok sppg tersebut"*). **Definisi "memasok SPPG ini" pakai data yang sudah ada, tanpa tabel baru:** `suppliers.location_id` = lokasi SPPG, stok di `batches.location_id` lokasi itu, `price_signals` (`source='supplier_quote'`, `supplier_id` terisi) untuk lokasi itu, jarak `supplier_leg_km` dari koordinat pemasok ke koordinat SPPG. **Backend:** modul baru `services/supplier_procurement.py` (evaluate_suppliers + persist_supplier_binding) dan `services/demo_procurement_orchestrator.py` (DETECT→VERIFY→TRACE→PREDICT→OPTIMIZE→DECIDE→SUPERVISE, OPTIMIZE alat `supplier.evaluate`); migrasi `023_supplier_procurement` (kolom `decisions.supplier_id` FK + nilai `decision_type='supplier_procurement'`); `POST /demo/agent/run` kini memakai jalur ini, `GET /demo/agent/last-run` menambah `mode`, `supplier{}`, `supply_gap{}` — semua angka dari trace DB, bukan dihitung ulang endpoint. Pemasok tanpa stok/kesegaran gagal/pengecualian aktif tetap DITAMPILKAN dengan alasannya; 409 menyebut sebab per pemasok. **Frontend:** `lib/demo-agent.ts` menampilkan Pemasok, SPPG, Kuantitas, Kekurangan, Stok pemasok, Jarak pemasok → SPPG, Harga penawaran (`rupiahLabel`/`kmLabel`), tanpa kolom "Rute" untuk pengadaan (format rute lama tetap dipakai bila `mode='regional_balance'`). **Gerbang:** `tests/test_supplier_procurement_eval.py` 6 lulus (+1 skip data) & `test_demo_agent_control_api.py` 14 lulus, ruff bersih, 31 tes backend demo/pengadaan lulus; vitest penuh 1.474/132 lulus, `tsc` 0 error baru. **Live :3010 (SPPG Head):** telur → keputusan `8de0d3c0…` `supplier_procurement`, pemasok **Telur Berkah Bekasi** (terdaftar di Jakarta), 779,86 kg (kekurangan 1.070,95 − 291,09), stok 900 kg, jarak 17,671 km, quote Rp 30.864,49/kg, SDC Rp 24.412.872,23, evidence `procurement=true` + batch `76c80aac` konsisten; ayam → 409 dengan alasan per pemasok (kesegaran/antibiotik/stok kosong). **Susulan (laporan pemilik: "Rute Jakarta tidak ada asalnya dari pemasok")**: `GET /decisions/{id}` kini mengirim `source_location`/`target_location`/`commodity` (nama) + `supplier{id,name}`; `approval_summary._supplier_for` membaca `decisions.supplier_id` untuk tipe pengadaan (sebelumnya lewat `resolve_binding` yang selalu 409 karena `source_location_id` NULL, sehingga nama pemasok hilang); `lib/evidence.ts` menampilkan baris **"Pemasok → SPPG"** (bukan "Rute —") dan judul "Adakan dari pemasok …: {pemasok} → {SPPG}" untuk `supplier_procurement`; `ApprovalModal` ikut memakai label itu. 4 tes baru di `tests/evidence-summary.test.ts`; `tsc` bersih; vitest penuh 1.478/132 lulus; backend 62 lulus (approval/decision/pengadaan). Live: keputusan `87fe0acd…` (ayam 15 kg) tampil "Ayam Segar Karawang → Jakarta", tanpa baris rute kosong. **Susulan 2 (laporan pemilik: "bagian \"Perlu diperhatikan (3)\" kembalikan desainnya … redesign supaya layout tidak menghasilkan space kosong", juga halaman **Hari Ini**):** (a) blok triase jadi **tile strip** `grid-template-columns: repeat(auto-fit, minmax(260px,1fr))` — satu temuan selebar penuh, tiga temuan tiga kolom; tinggi blok 216 px → **97 px** pada 3 temuan (909 px lebar terpakai penuh), 909×52 px pada 1 temuan, `.evidence-flag` diberi `min-width:0`, teks turun ke `--fs-1` (lantai 12 px), ≤767 px jadi satu kolom. (b) **Bug angka**: `attentionFlags` dulu dijalankan walau `approvalSummary` masih `null` (poll 5 detik), sehingga blok sempat menulis **"(1) Belum diverifikasi"** untuk keputusan yang aslinya 3 temuan; sekarang blok hanya disusun setelah ringkasan ada. (c) **Hari Ini**: urutan kartu rincian diubah `batches-kpi-shortage-ledger` (dulu `batches-shortage-kpi-ledger`) — kartu tinggi berpasangan, kartu pendek berpasangan; ruang kosong di dalam sel grid 634 px → **58 px**, tinggi halaman 2.102 px → **1.814 px**. Tes baru: `tests/evidence-flags-css.test.ts` (4), `decision-evidence.test.tsx` +2 (termasuk "ringkasan belum tiba → tidak mengarang temuan"), `today-dashboard.test.tsx` +1 (urutan kartu). **Gerbang:** vitest **1.492/133 lulus**, `tsc` 0 error. Live :3010 — `7b1ac150…` menampilkan "Perlu diperhatikan (3)" dengan 3 tile 299×70 sejajar; Hari Ini dua kolom tanpa sel menganga. **Susulan 3 (laporan pemilik: "redesign Decision & Evidence seperti tidak berubah, hapus space kosongnya, tata layoutnya"):** tiga lubang besar diukur dulu, lalu ditutup satu per satu — (a) **kepala keputusan** jadi grid ber-area: label+judul di kiri, "Langkah berikutnya" di kanan, metrik/temuan/akibat/jejak selebar kartu; tinggi 527 → 368 px, tiap baris kini mengisi lebarnya (dulu label 140 px dan judul 167 px di baris 909 px). (b) **kartu bukti** jadi dua kolom koran (`columns: 2` + `break-inside: avoid`) karena tinggi kartu bergantung keputusan (Biaya 615 / Keamanan 355 / Identitas 335 px pada satu keputusan; 110/110/222 pada yang lain) — baris grid menyisakan 260-400 px kosong, kolom menyeimbangkan sendiri (966 → 665 px). (c) **jejak & bukti tersimpan ditumpuk** (riwayat 947×166 + panel 947×265) dan dua bukti di `.integrity-trust` kini berdampingan (`auto-fit minmax(260px,1fr)`) — dulu 5/7 menyisakan 329 px di bawah kartu riwayat. Markup & teks tidak berubah, jadi seluruh tes lama tetap hijau. **Tes baru:** `tests/evidence-layout-css.test.ts` (5) mengunci grid-area kepala, kolom koran bukti, tumpukan jejak, dan dua bukti berdampingan. **Gerbang:** vitest **1.497/134 lulus**, `tsc` 0 error. Live :3010 — dokumen 3.130 → 3.174 px (sedikit lebih panjang karena jejak ditumpuk) tetapi tanpa baris menganga. **Susulan 4 (permintaan lanjutan: "buat sebaik mungkin, tidak banyak space kosong"):** (a) **fakta kartu bukti** — override lama `.evidence-grid .fact-row{grid-template-columns:minmax(0,1fr)}` menumpuk label di atas nilai (tiap fakta 56 px dua baris, separuh kanan kartu kosong); kini ≥721 px 38%/62% + `text-align:right` pada `dd` seperti lembar spesifikasi (baris 32-34 px), ≤720 px tetap menumpuk. (b) **`.gov-status`** — lencana 162 px dan meter 420 px dulu bertumpuk di baris 909 px; kini grid `max-content minmax(0,1fr)`, meter mengisi 731 px, baris peran/penunggu/penghambat `grid-column:1/-1`. **Bukti terkontrol pada SATU keputusan (`1615f00f`), bentuk lama dipulihkan sementara lewat `<style>` probe:** Biaya 504→336 (−33%), Keamanan & pemasok 396→300 (−24%), Identitas & tenggat 335→239 (−29%), grid bukti 747→555 (−26%), blok governance 223→191, dokumen 4.753→4.529 px (−224). **Gerbang:** vitest **1.497/134 lulus**, `tsc` 0 error; `tests/evidence-layout-css.test.ts` naik ke **7 tes** (mengunci baris fakta sebaris + nilai rata kanan + aturan ponsel, dan lencana+meter satu baris). |
+| S4-26 | Panel 7 agen (roster + status Selesai/Berjalan/Tidak dijalankan) dipasang di **Demo Control → Bukti agent** (`agents` + `agents_run_id` dari `/demo/agent/last-run`, kelas `.dc-agent*`); Agent Log dikembalikan ke desain semula. Bukti `docs/design.md` §22; vitest 1485/132, tsc 0, pytest demo-agent 14 lulus. | selesai |
+| S4-28 | Data pemasok seluruh database: 60 nama unik realistis, jangkauan ≤150 km, integritas batch/PO, skill Joule `supplier_directory` | Backend + Data + Joule | Done | Hermes | Permintaan pemilik 20 Okt 2026: "database pemasok/suplier masih terjangkau oleh SPPG tujuan … jarak mereka dalam mensuplai komoditas masuk akal … data sesuai realita … dapat dipakai backend, Joule, frontend … aturan seketat mungkin". **Data:** 60 nama unik (CV/UD/Koperasi/PT) di `sprint1_seed.json` + `suppliers_demo.json` + generator + 86+ referensi tes; `role_hint` 10 lokasi = `sppg`; validator lintas-berkas 8 tes menegakkan kesamaan nama, koordinat Indonesia, jarak ≤150 km, kecocokan komoditas; batch demo dipilih dari pemasok hub+komoditas yang sama. **DB:** volume di-reset (backup `data/export/pre-reset-supplier-rename-20261020.sql`, 16,8 MB) lalu seed ulang → 60 pemasok/60 unik/60 berkoordinat/78 batch kanonik, 0 nama lama, 0 batch lintas-hub. **Backend:** 159 tes pemasok/seed/rute/pengadaan lulus; live `GET /suppliers` 60/60, `GET /supplier-routes` 130 rute semua bergeometri, jarak lurus maksimum 114,16 km (Blitar→Surabaya), 0 rute >150 km. **Frontend:** 1.517 tes/135 berkas lulus. **Joule:** skill ke-5 `supplier_directory` (client+renderer+routing+kartu agen), 75 tes lulus/5 skip, 6 tes integrasi backend-hidup lulus, render live menampilkan 60 pemasok. **Susulan gerbang penuh (20 Okt):** 9 kegagalan suite dilacak — 5 keputusan KPI (`verifier_note="consistent"` + filter ID penyemai), 2 pengadaan + 1 kontrak pemasok tunggal (cleanup `seed_demo_activity` per namespace, rotasi pemasok per komoditas, preferensi pemasok kanonik, fixture conftest module-scoped yang selalu menyemai ulang), 2 time-series flake state (lulus sendiri); gerbang akhir **1210 lulus, 5 skip, 0 gagal** (`_qa/gerbang-backend-penuh-4.txt`), DB disemai ulang 60 pemasok/158 batch/0 lintas-hub. |
+| S4-29 | Kartu "Penerimaan barang" (Keamanan Pangan): audit kalimat & opsi pilihan | Frontend | Done | Hermes | Audit 20 Okt 2026 atas permintaan pemilik ("periksa … terutama bagian kalimatnya dan opsi pilihan"). **Opsi batch:** dulu ikut cakupan tabel, jadi saat cakupan "Semua lokasi (pengawasan)" dropdown menawarkan 50+ batch kota lain — memilih salah satunya berakhir 403 ("lokasi batch di cakupan lokasi di luar SPPG Anda", terukur). Sekarang `receivingBatchOptions(rows, ownLocation)` menyaring ke dapur sendiri, membuang baris tanpa id, dan mendahulukan batch yang masih layak (default tak lagi jatuh ke batch kedaluwarsa). **Kalimat:** kalimat "tandai sisanya sebelum barang dipakai" dihapus (tombol memang aktif di 0/5, server menerima snapshot kosong) → "N dari 5 … M belum diperiksa. Boleh disimpan sebagian."; pesan sesudah simpan memakai bentuk lampau (`receiptSavedSentence`) sehingga tidak menyuruh menandai ulang; pembuka kartu ditulis ulang (pengulangan "hitung ulang … dihitung server" hilang, 46 → 44 kata); contoh "Lainnya" tidak lagi muncul tiga kali (label + placeholder + catatan) melainkan sekali. **Label suhu** menyebut batas mesin (0–8 °C; beras 15–30 °C, sumber `_SAFE_TEMP_BY_COMMODITY`). **Tanggal:** `usableLabel` kini selalu menulis tahun ("19 Mar 2027, 01.00") — batch beras demo layak sampai Maret tahun berikutnya dan label tanpa tahun terbaca seolah bulan depan; di 375 px tanggal tidak dipecah (`span.safety-nobr`). **Aksesibilitas:** lima kotak centang dibungkus `<fieldset><legend>Titik periksa</legend>`, penghitung `aria-live="polite"`. **Keputusan:** "kendaraan berpendingin" TIDAK dijadikan titik periksa ke-6 — rantai dingin dihitung deterministik oleh `/safety/evaluate` dari log suhu, dan titik periksa manual akan salah untuk beras (butuh 15–30 °C). **Snapshot:** komentar lama yang menyebut titik periksa "tidak dipersistensikan" dikoreksi (`batch_receipts.checked` sejak migrasi 016); id `warna` → `bau_warna` (baris lama tetap menyimpan kuncinya sendiri). **Verifikasi:** 1.540 tes/136 berkas lulus, `tsc` 0, `next lint` 0; simpan nyata di :3010 → 201, `checked` berisi `bau_warna`, `checked_count` 5, pesan "Catatan tersimpan: 5 dari 5 titik tercatat, semuanya sesuai"; opsi di 375 px tanpa luapan. Bukti: `_qa/penerimaan-barang/`. |
+| S4-30 | Sesi demo: default kosong, tombol "Siapkan data demo", hitungan mundur, data hidup selama sesi | Backend + Frontend | Done | Hermes | Permintaan pemilik 20 Okt 2026. **Fondasi:** migrasi `024_demo_sessions` + `025_demo_session_columns` (tabel `demo_sessions`, `demo_session_id` di 13 tabel operasional), `app/services/demo_session.py` (mulai / perpanjang / akhiri / kedaluwarsa malas / kosongkan / stempel). **Kosong-secara-default** dijaga siklus data, bukan filter kueri: percobaan `with_loader_criteria` dibuang karena endpoint ber-`select(kolom)`/bulk tidak tersaring konsisten (`/batches` 0 padahal 118 baris). Mulai sesi = kosongkan semua baris operasional lalu semai + stempel massal; sesi habis/akhiri = kosongkan; boot tanpa sesi = kosongkan (restart saat sesi aktif tidak menyentuh data). **Mutasi** dijaga `butuh_sesi_aktif` → 409 (demo/seed, timeseries, refresh, event1, receipts) — no-op bila `DEMO_SESSION_ENFORCE=false`. **UI:** kartu sesi + hitungan mundur (kalimat kartu memakai bahasa pengguna: tanpa pengingat ganda, tanpa rujukan tombol panel DATA, badge `belum ada data` saat tabel 0; dikunci `tests/demo-session.test.ts`) (`remaining_seconds` server, resync 20 dtk), Perpanjang 30 menit, Akhiri sesi, banner `DemoSessionBanner` di semua tab saat kosong. **Verifikasi E2E:** kosong → Siapkan → 1 j 59 m & 13 tabel terisi tanpa baris tanpa stempel → perpanjang 2 j 29 m id sama → akhiri → 13 tabel 0. **Riwayat 30 hari** disemai saat sesi mulai (`DEMO_SESSION_HISTORY_DAYS=30`) agar pemilih periode KPI benar-benar berbeda (loss 1,64/0,42/0,17%; deviasi 2,66/2,92/3,41%; "1 bulan" = bulan berjalan WIB); label periode kini bulan saja ("Oktober 2026", "September – Oktober 2026"). Backend **1.213 lulus / 15 dilewati / 0 gagal** (`pytest -q`, gerbang penuh 20 Okt 2026; satu kegagalan intermiten `test_demo_agent_control_api` tidak berulang di run sunyi dan lulus sendiri), frontend **142 berkas / 1.589 tes**, `tsc` 0, `lint` 0. Salinan ulang data setelah gerbang: `bash scripts/semai-demo.sh` (canonical 8 Okt + deret waktu + kasus). Bukti: `_qa/sesi-demo/`. |
+
+| S4-31 | "Siapkan data demo" atomik: template dibangun DULU, sesi dibuka belakangan (503 jujur, klik ulang memulihkan) | Backend | Done | Hermes | Audit 21 Okt 2026 (dua kali terukur: build 500 lalu 15 tabel kosong + sesi `active`). Akar masalah: `mulai_sesi` membuat sesi, mengosongkan 15 tabel, baru memanggil `build_into`; kegagalan build meninggalkan sesi aktif + tabel kosong, dan klik berikutnya dibalas `created:false` (idempoten) sehingga template tak pernah dibangun ulang. Perbaikan: `demo_session.mulai_dengan_template()` — akhiri sesi lama → `build_into(purge=True, freeze=True)` → `mulai(kosongkan=False)`; router membungkus kegagalan jadi **503** dengan pesan yang menyebut tidak ada sesi aktif. Bukti: `tests/test_demo_session_mulai_atomik.py` 2 lulus (build gagal → tak ada sesi baru, baris lama utuh; build sukses → tepat satu sesi aktif), ruff bersih. |
+| S4-32 | Template demo patuh aturan domainnya sendiri: jejak DETECT/DECIDE/ACT + 2 approval untuk eksklusi `executed` | Backend + Data | Done | Hermes | Audit 21 Okt 2026: dua keputusan `supplier_exclusion` tanpa satu pun `agent_traces` (Agent Log kosong) dan yang `executed` tanpa baris `approvals`, padahal Rules.md §1.2 mewajibkan approval manusia dan alur tulis nyata memaksa dua approval (409 bila satu). Perbaikan: `_pastikan_jejak_putusan()` di `app/seed/demo_template.py` menambal baris lama secara idempoten (DETECT `detection_agent`, DECIDE `supervisor_agent`, ACT `sap_agent` untuk yang dieksekusi; approval kepala + ahli gizi dengan komentar). `_semai_eksklusi` kini mengembalikan `putusan_aktif`/`putusan_menunggu` (id keputusan) selain id baris eksklusi. Bukti: `tests/test_demo_template_invarian.py` 2 lulus (jejak ≥2 + 2 approval; run kedua tidak menggandakan). |
+| S4-33 | Joule: domain penerimaan & karantina punya skill sendiri, domain tanpa endpoint dijawab jujur, nama penyetuju tampil | Joule + Backend | Done | Hermes | Audit 21 Okt 2026: 4 dari 6 pertanyaan wajar dijawab domain salah tanpa galat. Perbaikan: (a) skill `receipts_queue` (`GET /receipts/menunggu`, dipanggil sebelum antrean keputusan agar kata "persetujuan" tidak menang) dan `quarantine_status` (saringan `quarantine_status` dari `/batches`); (b) `unsupported_domain` → `report.unsupported_report()` menyatakan pengiriman/stok material SAP belum punya endpoint, bukan menampilkan tabel pasokan; (c) "siapa yang menyetujui" → skill bukti, dan `/decisions/{id}/approval-summary` menambah `approved_by_name` (aditif) sehingga evidence menulis nama + peran; (d) kontrak lama "penerimaan barang batch <uuid>" tetap jalur per-batch (`/receipts?batch_id=`); kartu agen 1.3.0 = 13 skill. Bukti: `sap-joule` pytest **122 lulus/14 dilewati**, `tests/test_domain_penerimaan_karantina.py` mengunci 9 pemetaan + 4 bentuk laporan; live :8099 — "penerimaan barang menunggu persetujuan" → 2 baris (cocok DB), "batch dikarantina" → 1 baris, "pengiriman hari ini"/"stok material SAP" → jawaban belum tersedia, "siapa yang menyetujui" → bukti keputusan (nama muncul saat keputusan punya approval), "usulan keputusan menunggu" → antrean 5 baris. |
+| S4-34 | Lanjutan audit 21 Okt 2026: paginasi `/decisions`, `GET /batches/{id}`, kalimat sesi yang jujur, cakupan status template, dan penyemai yang tidak salah DB | Backend + Frontend + Data | Done | Hermes | (a) **P6 paginasi** — `GET /decisions` dulu menerima `limit`/`offset` lalu mengabaikannya tanpa galat dan tanpa `total`; kini `limit` (1–500, default tanpa batas = perilaku lama), `offset`, dan balasan `count`/`total`/`offset`/`limit`; `limit=0`, `limit=1000`, `offset=-1`, `limit=abc` → 422. Bukti: `tests/test_decisions_pagination.py` 8 lulus (baca-saja, auth lewat dependency override — login di DB salinan memang 401), live: `/decisions?limit=2&offset=1` → count 2/total 11, `limit=0` → 422. (b) **`GET /batches/{batch_id}`** — rute baru, bentuk kolom identik dengan elemen daftar (helper `_baris`, satu kontrak), 404 untuk id tak dikenal, 422 untuk non-UUID, 401 tanpa token; live: batch `ayam/Cianjur` 200, id acak 404. (c) **P5 kalimat sesi** — banner punya salinan sendiri yang menjanjikan layar kosong padahal template sengaja tidak berstempel; banner kini memakai satu sumber `pesanSesi()` dan kalimat `dikosongkan`/`dibersihkan` diganti "perubahan selama sesi dibuang; data contoh bawaan tetap tampil". Bukti: `tests/demo-session.test.ts` 20 lulus (+2 tes baru), tsc 0, vitest penuh 156 berkas/1706 tes. (d) **P4 cakupan status** — `_semai_status_tambahan()` menambah `approved` (2 approval, tanpa eksekusi) dan `review_only` (temuan harga tanpa jumlah); build di DB bersih kini menghasilkan 6 dari 7 status (approved 1, executed 5, pending_approval 10, rejected 9, review_only 1, verifier_flagged 3), 0 keputusan tanpa jejak, 0 executed tanpa approval, 0 executed non-eksklusi tanpa PO. Tes: `tests/test_demo_template_status_tambahan.py` 2 lulus. (e) **Keselamatan data (ditemukan saat verifikasi)** — `_seed_database_url()` dulu mengabaikan `DATABASE_URL`, jadi `ensure_demo_users()` yang dijalankan dengan `DATABASE_URL=…/salinan` tetap menulis ke DB demo utama; kini urutannya `SEED_DATABASE_URL` → `DATABASE_URL` (asyncpg→psycopg) → DSN compose. Tes: `tests/test_seed_database_url.py` 4 lulus. (f) **Image backend di-rebuild** — sebelumnya 60 path (tanpa `/demo/session/*`), sekarang 77 path dan memuat `/batches/{batch_id}`+sesi; ruff bersih pada semua berkas tersentuh. Sisa: status `proposed` dan tipe `supplier_exclusion_restoration`/`supplier_procurement` belum ada di template; baseline pytest backend penuh masih terblokir gate lock. |
+| S4-35 | Isolasi tes: lokasi kanonik tidak boleh di-rename + cakupan penuh 7 status / 6 tipe keputusan di template | Backend + Data + Tes | Done | Hermes | Permintaan pemilik 21 Okt 2026 ("bereskan dulu baru lanjut"). **Cacat yang dibereskan:** `test_admin_api.py::test_daftar_lokasi_dan_ubah_nama` mengganti nama lokasi kanonik "Bandung" menjadi "Bandung (uji)" dan tidak memulihkannya. Karena id lokasi = `uuid5("location", nama)`, baris hasil rename menyimpan id milik Bandung dengan nama lain → seed berikutnya gagal `duplicate key locations_pkey` dan template tidak bisa dibangun (terbukti di DB salinan: build mati, `Siapkan data demo` akan 500). Perbaikan: rename dipulihkan di blok `finally` (dipulihkan juga saat asersi gagal) + berkas penjaga baru `tests/test_isolasi_data_kanonik.py` (2 tes: tidak ada lokasi berakhiran "(uji)"; `id == stable_uuid("location", nama)` untuk SETIAP lokasi). Baris yang sudah rusak di DB salinan dipulihkan lewat SQL (`update locations set name='Bandung'`), dan build di salinan kembali berhasil (36,9 dtk). **Lanjutan cakupan:** `_semai_status_tambahan()` kini juga membuat `supplier_procurement` berstatus `proposed` (pemasok + jumlah + jejak DETECT/DECIDE) dan `supplier_exclusion_restoration` berstatus `pending_approval` yang menunjuk baris eksklusi nyata. Bukti build di DB bersih: status **7/7** (approved 1, executed 5, pending_approval 11, proposed 1, rejected 9, review_only 1, verifier_flagged 3) dan tipe **6/6** (price_anomaly 4, regional_balance 14, safety_disruption 9, supplier_exclusion 2, supplier_exclusion_restoration 1, supplier_procurement 1), 0 keputusan tanpa jejak, 0 executed tanpa approval, 0 executed non-eksklusi tanpa PO. Bukti jalur API nyata (POST /demo/session/start di backend :8010, 36,5 dtk, `created:true`): 7/7 status + 6/6 tipe, 2 penerimaan menunggu, 2 eksklusi. Tes: `test_demo_template_status_tambahan.py` 3 lulus, `test_isolasi_data_kanonik.py` 2 lulus (di DB salinan dan DB demo), ruff bersih. Catatan: saat kontainer backend ditukar, login sempat membalas 401 dua kali lalu 9/9 berhasil — bukan cacat produk, tetapi layak dicatat sebagai efek samping penggantian kontainer saat build. |
+| S4-36 | Gerbang penuh 21 Okt 2026 (jendela sunyi): backend 1239 lulus/36 gagal/20 dilewati, build produksi frontend berhasil | Infra + Verifikasi | Done | Hermes | Dijalankan setelah `bash scripts/semai-demo.sh` di stack utama dengan `DEMO_SESSION_ENFORCE=false` dan kunci gerbang bebas. **Backend:** `pytest -q` → 1239 lulus, 36 gagal, 20 dilewati, 687 dtk (`_qa/gerbang-backend-2026-10-21.txt`). Klasifikasi kegagalan (bukan dugaan): (a) nol kegagalan menyentuh berkas yang diubah sesi ini — tujuh berkas tes baru (paginasi /decisions, /batches/{id}, sesi atomik, invarian template, status tambahan, DB penyemai, isolasi kanonik) dijalankan ulang di DB demo → 25 lulus; (b) semua gejala berbentuk "baris demo tidak ada" (PO demo beras belum ada, tidak ada baris demo sama sekali, tidak ada kandidat eligible Event 1); (c) tetap gagal saat berkasnya dijalankan sendiri (test_agenda_api+test_demo_harian: 5 gagal/7 lulus) sehingga bukan flake urutan; (d) penyemai aktivitas demo mencetak `keputusan_demo: 0, limbah_demo: 0, dilewati_kota: []` dan `harga_demo: 0` TANPA alasan dilewati padahal baris lama ada tetapi bertanggal lain → kandidat cacat penyemai (nol tanpa alasan), bukan cacat endpoint. **Frontend:** `npm run build` berhasil (4/4 halaman statis, `/` 325 kB, First Load 419 kB); dev server :3010 dihentikan sementara lalu dinyalakan kembali dan diverifikasi 200; tsc 0 error, vitest 156 berkas/1706 tes. Bukti lengkap: `_qa/gerbang-2026-10-21.md`. Tindak lanjut: selidiki penyemai yang mengembalikan 0 tanpa `dilewati`, lalu ulangi gerbang pada DB yang baru dibangun. |
+| S4-37 | Putaran A: bersihkan baris demo + semai ulang hari ini, gerbang kedua, dan temuan PO yatim | Verifikasi + Data | Done (tanpa hapus data) | Hermes | **Cadangan:** `E:\hackathon\_backup\mealchain-pre-reset-2026-10-21.sql.gz` (23 tabel, `gzip -t` OK). **Gerbang kedua (DB tersemai penuh):** 1254 lulus / 21 gagal / 20 dilewati / 658 dtk (`_qa/gerbang-backend-2026-10-21-run2.txt`) — naik dari 1239/36; 15 kegagalan hilang hanya karena DB disemai penuh sebelum suite. **Penyegaran di tengah audit** (`purge_demo_rows` + `seed_demo_activity` + `seed_demo_completed_decisions` + `jakarta_lengkap.seed_batches/seed_prices`) memulihkan 6 dari 21 → sisa 15 di 12 berkas. **Temuan baru:** (1) `sap_mock_purchase_orders` berisi 16 baris `decision_id IS NULL` — FK `ON DELETE SET NULL` membuat setiap tes yang membuang keputusan demo meninggalkan PO yatim, lalu `test_filter_decision_id` gagal `StopIteration`; relink deterministik `po.id == uuid5(decision_id,'po')` berhasil **0 dari 16** karena induknya sudah tidak ada, jadi PO harus dibuat ulang bersama keputusan. (2) `conftest._MODUL_BUTUH_KANDIDAT` hanya menyegarkan 18 modul; modul lain memakai baris yang sudah dibuang tes sebelumnya — penyegaran sekali di awal sesi memulihkan 6 kegagalan. (3) Decay tetap: batch kanonik jangkar 8 Okt, pada 21 Okt kesegaran telur < ambang sehingga Event 1 tanpa kandidat kecuali deret disegarkan. **DB akhir:** supply 5200, menu 660, keputusan demo 7 + seed 11, limbah demo 58, harga demo 24, rute 59/59. **Blocked:** 16 PO yatim BELUM dihapus (menunggu persetujuan, karena tes/UI menghitungnya). **SELESAI 22 Okt 2026 — keputusan pemilik "kerjakan semua" → TIDAK dihapus, dengan bukti:** 16 baris itu bukan artefak. 12 di antaranya baris impor SAP dari `data/seed/sprint1_seed.json` (`mock_sap.purchase_orders`, nomor `4500000001..4500000012`, tanpa keputusan BY DESIGN) yang akan dibuat ulang `load_seed` bila dihapus, dan 4 sisanya PO lahir-dari-keputusan (nomor `MC-...`) milik tes. Artefak `ON DELETE SET NULL` tidak bisa lahir lagi sejak migrasi 027 (CASCADE). Yang diperbaiki di sisi tes (`tests/test_sap_orders_api.py`): fixture `po_ber_keputusan` membuat pasangan keputusan+PO sendiri bila DB tidak punya lalu menghapusnya, sehingga `test_filter_decision_id` dan `test_nama_komoditas_dari_keputusan_bukan_tebakan_kode` tidak lagi bergantung pada sisa baris suite lain (penyebab `StopIteration`); plus penjaga baru `test_tidak_ada_po_artefak_tanpa_keputusan` (nomor `MC-` + `decision_id NULL` = artefak). Bukti: penjaga MERAH saat baris `MC-UJITIRU0001` ditanam, hijau setelah dihapus; fixture terbukti membuat baris saat DB 0 PO ber-keputusan (2 tes lulus) dan tidak meninggalkan sisa (0 baris `MAT-UJI`). Gerbang berkas: 15 lulus, ruff bersih. Laporan: `_qa/gerbang-2026-10-21.md` (130 baris). |
+| S4-38 | A2: PO CASCADE + penyegaran deret di awal sesi, gerbang ketiga 11 gagal | Backend + Tes + Migrasi | Done (dengan 2 efek samping tercatat) | Hermes | **Perubahan:** migrasi `027_po_decision_cascade` (FK `sap_po_decision_fk` SET NULL → CASCADE) + model `SapMockPurchaseOrder.decision_id` diberi `ForeignKey(..., ondelete='CASCADE')`; tes kontrak baru `tests/test_po_ikut_keputusan_demo.py` (2 tes); `tests/conftest.py` dapat `_ada_kiriman_demo_hari_ini()` dan `jaring_deret_demo` menyegarkan kiriman demo di AWAL sesi (bukan hanya 18 modul di `_MODUL_BUTUH_KANDIDAT`). **Gerbang:** 36 gagal (run1) → 21 (run2) → **11 gagal / 1266 lulus / 20 dilewati / 714 dtk** (run3, `_qa/gerbang-backend-2026-10-21-run3.txt`). **11 sisa:** agenda 3 (assert 0>0, NoResultFound, delivery available=false), KPI ACT 3 (trace ACT/decision time), approver lintas lokasi 1 (target Bandung disetujui Jakarta, `5e969ff1-…`), recommendation_as_of 1 (409 binding berubah), review_only 1 (error urllib), dan **2 efek samping A2**: `test_demo_timeseries_api` (harap demo:0 setelah dikembalikan, sesi sudah disegarkan → supply 5160/price 5760) + `test_demo_batch_pemasok_tunggal` (`jakarta_lengkap.seed_batches` menambah pemasok di luar kanonik `275d1be7-…`). **Ruff:** bersih pada conftest, tes baru, model, migrasi. **Tindak lanjut:** sempitkan penyegaran awal (tanpa `jakarta_lengkap` atau larang pemasok baru) + buat tes "kembalikan" sadar-keadaan, lalu gerbang keempat. |
+| S4-39 | A3: approver per lokasi tujuan, penjaga deret demo per modul, harga harian di penyemaian modul — gerbang 36→2..4 gagal | Backend + Tes + Data | Done | Hermes | **Perubahan:** (1) `app/seed/demo_template.py` — `_approver_lokasi(db, lokasi_id)` + `_semai_status_tambahan` memakai approver kota TUJUAN (fallback Jakarta); 2 approval lintas lokasi di DB demo diperbaiki → 0 sisa. (2) `tests/conftest.py` — `_semai_demo_ringkas()` untuk awal sesi (tanpa `jakarta_lengkap` yang menambah pemasok non-kanonik), fixture modul baru `jaga_deret_demo_utuh` (bangun ulang deret demo bila modul sebelumnya menghabiskannya), `seed_demo_daily_prices` masuk `_semai_kiriman_demo`, `test_demo_harian.py` masuk `_MODUL_BUTUH_KANDIDAT`. (3) `tests/test_demo_timeseries_api.py` — rollback sadar-keadaan (bandingkan hanya `seed` bila deret demo memang sudah habis; percobaan purge dihapus karena mengosongkan DB dan menjatuhkan agenda 2 Okt). **Jejak gerbang:** 36 → 21 → 11 → 12 → 5 → **2** → 4 gagal; lulus 1239 → 1274..1276 dari ±1278. **Run 7 (1274 lulus/19 dilewati/866 dtk, `_qa/gerbang-backend-2026-10-21-run7.txt`):** 4 gagal, diperiksa satu per satu — 2 lulus saat dijalankan sendiri (order-dependent), `test_review_only` = `urllib HTTPError 404` ke service di luar container, `test_evidence_live` = butuh service live ("service live wajib menghasilkan kandidat" → StopIteration). **Kesimpulan:** tidak ada kegagalan produk yang bertahan di jalur yang disentuh sesi ini; sisa 2–4 per run = ketergantungan service live + urutan tes pada satu DB bersama (jumlah lulus stabil 1272–1276). Laporan: `_qa/gerbang-2026-10-21.md` (putaran A3). |
+| S4-40 | Putaran C: memperluas penjaga kandidat — diukur, sebagian dibatalkan; batas reproduksibilitas gerbang | Tes + Verifikasi | Done (dengan kesimpulan batas) | Hermes | **Dicoba:** `test_review_only.py`, `test_evidence_live.py`, `test_demo_timeseries_api.py` masuk `_MODUL_BUTUH_KANDIDAT` + `seed_demo_daily_prices` di `_semai_kiriman_demo` + `test_demo_harian.py` ke daftar modul. **Hasil:** run 7 = **1274 lulus/4 gagal** (konfigurasi ini); run 8 gagal total karena pytest yatim masih memegang kunci gerbang (dibunuh manual, PID 37245); run 8b = 1239/38 dengan tiga modul tambahan; run 10b = 1241/35 setelah DB aus. **Keputusan:** penambahan tiga modul DIBATALKAN (penyemaian `jakarta_lengkap` berulang menambah ratusan baris, suite 12→21 menit, tes penghitung baris merah); `conftest.py` kembali ke konfigurasi run 7. **Temuan:** angka gerbang tidak reproducible di DB demo bersama karena tiap suite mem-purge `origin='demo'` dan `semai-demo` menambah generasi kanonik (`supply_records` seed 40→80). Gate reproducible butuh DB terpisah; percobaan `dropdb mealchain` ditolak ("being accessed by other users", 3 sesi) dan DB baru berisi template saja tidak memenuhi asumsi suite → resep didokumentasikan di `_qa/gerbang-2026-10-21.md`, dua skrip percobaan dihapus. **DB demo dipulihkan:** supply demo 5160/seed 80, menu 660, price demo 5850, keputusan demo 7/seed 25, batch 120, limbah demo 58, penerimaan menunggu 2, alembic 027, backend healthy, frontend 200. |
+| S4-41 | Gerbang di DB terpisah: DSN tes mengikuti DATABASE_URL + skrip gate reproducible | Backend + Tes + Infra | Done | Hermes | **Akar:** 56 DSN sinkron + 48 DSN async dipaku di berkas tes → fixture menulis ke DB demo sementara aplikasi membaca DB target → 401 "email atau password salah" dan 234 gagal/194 error. **Perbaikan:** `backend/tests/dsn.py` (`DSN_SYNC`, `DSN_ASYNC` mengikuti `DATABASE_URL`, fallback DB demo) dipakai **93 berkas tes**; `scripts/semai-demo.sh` meneruskan `DATABASE_URL`; skrip baru `scripts/gerbang-db-terpisah.sh` (rebuild `mealchain_gate` → migrasi → **template dulu** → **semai sesudah** → suite; urutan wajib karena template membersihkan 13.384 baris); `test_seed_menu_plan_anak.py` tidak lagi memaku DSN ke DB demo (kebocoran nyata). **Hasil DB gate:** pakai-ulang 1275 lulus/4 gagal/18 dilewati; bangun ulang **1274/5/18** setelah urutan diperbaiki — bandingkan DB demo bersama yang bergeser 2→4→35→38. **Urutan wajib 3a→3b→3c:** canonical+akun demo → template → semai penuh; rebuild pertama menjalankan template tanpa akun sehingga `receipts 0`/`eksklusi 0` dan 6 gagal. **Sisa 5:** `test_review_only` (2, menembak server live :8000 → DB demo), `test_demo_timeseries_api` (2, kunci jumlah baris, sensitif urutan), `test_demo_agent_control_api` (1). `test_seed_menu_plan_anak` kini lulus. **Ruff:** bersih kecuali 7 E501 lama. **DB demo dipulihkan:** supply demo 5160/seed 80, batch 120, decisions 35, backend healthy, frontend 200. |
+| S4-42 | Popup peta SPPG/pemasok/truk: satu kartu berhierarki, truk bisa diklik, satu popup pada satu waktu | Frontend | Done | Hermes | Permintaan pemilik 21 Okt 2026 (verbatim: *"pada maps itu kalo di klik icon nya seperti mobil, suplier dan sppg kan bakal muncul informasi tuh, tolong di design ui ux yang sebagun mungkin gunakan skil buat eye catching"*). **Model murni** `lib/map-popup.ts`: kicker → judul → chip → angka utama → metrik → meter → fakta/callout untuk SPPG (selisih pasokan), pemasok (keandalan, sertifikasi, jangkauan, kiriman/exclusion), truk (progres, muatan, jarak, ETA, masa layak), dan garis jalur. **Perilaku** `SupplyMap.tsx`: `renderPopup` membangun DOM (bukan innerHTML), `jagaPopup` menutup popup lain + menggeser peta pada sumbu X/Y setelah autoPan agar tidak terpotong (inset 82 px di ponsel untuk bar tab; geseran dibatasi; popup di luar viewport tidak memicu pan), popup truk baru, `pointer-events:auto` pada `.map-truck`, guard klik truk agar tidak tembus ke layer garis, dan jaring pengaman klik pada `<path>` SVG. **Desain** `app/map-console.css`: aksen per jenis + tone danger/safe/warning, chip berteks (bukan warna saja), radius/bayangan memakai token, 375 px dipadatkan (fakta duplikat & teks meter supplier/truk disembunyikan; fakta "Layak dipakai s/d" tetap). **Sekalian** `ROUTE_LINE_COLORS.ok` dikembalikan ke `#7C3AED` sesuai `--route-live-strong` (sebelumnya `#8B5CF6`, membuat 2 tes merah). **Verifikasi:** `tsc` 0 error; vitest **160 berkas / 1.746 tes lulus**; `next lint` 0 warning/error (dua warning lama `react-hooks/exhaustive-deps` ikut dibereskan); live :3010 — SPPG 224 px (1440) / 193 px (375), pemasok 267 / 217, truk 272 / 217, semua tepi ≥12 px dan overflow 0; klik SPPG→pemasok menyisakan 1 popup; tombol tutup & Enter marker truk bekerja. Artefak `_qa/map-popup/final-*`. |
+| S4-43 | Audit ulang 24 Okt 2026 (pasca KPI-01, DB-01, DEP-01, pembersihan Docker): semua lapisan berjalan, 2 temuan baru | Verifikasi | Done | Hermes | Lingkup read-only; tes memakai klon `mealchain_audit` (dump DB kerja 16:59 WIB, di-drop setelah run). **Hasil:** backend pytest **1331 lulus / 17 dilewati / 0 gagal**, 1 error koleksi `test_agent_verifier.py` (`ModuleNotFoundError: agent` = DEP-04), 538,88 dtk; frontend **166 berkas / 1792 tes lulus**; `tsc` 0; `next lint` 0; `alembic check` bersih; **39 endpoint GET** (dibangkitkan dari `/openapi.json`) → **0 respons 5xx**, 0 endpoint >3 dtk; login 7/7; cakupan per peran benar (Jakarta/Bandung/Surabaya terisolasi, BGN Monitor melihat ketiganya); UI di :3010 (Hari Ini, KPI 24 jam/7 hari/1 bulan, Decision & Evidence, Agent Log) terender dengan **0 error JavaScript**. **Integritas data:** 0 batch/pemasok kembar, 0 batch tanpa induk, 0 trace/bukti tanpa keputusan, 0 approved tanpa approval, 0 porsi negatif. **Temuan baru:** (N1, P1) 130 kiriman `delivered` bertanggal masa depan; (N2, P3) ruff 46 di `app` (24 di `app/seed/hari_ini.py`) + 14 di `tests`; (N3) `/ledger/verify` `linked_ratio` 6,7% (1437 blok yatim, rantai `valid:true`). Laporan: `AUDIT.md` §22. |
+| S4-44 | N1: kiriman berstatus `delivered` bertanggal masa depan membuat Meal Continuity tampil 100% sebelum barang berangkat | Backend + Data | Done | Hermes | `app/seed/timeseries.py::plan_delivery_rows` membuat kiriman `status='delivered'` untuk **semua** rencana sejak `EVENT_DEMO_START` tanpa memotong tanggal setelah hari ini, `delivered_at` selalu 14:00 UTC (21:00 WIB). Terukur: 130 baris masa depan (10 lokasi × 13 tanggal s/d 2026-11-05); Jakarta hari ini rencana 1.092 porsi, **terkirim sampai sekarang 0**, termasuk masa depan 1.092 → kartu 24 jam menampilkan **100,00%** padahal jam layar 16.56 WIB. Ini kategori angka palsu. Perbaikan (24 Okt 2026): `plan_delivery_rows(menu_rows, now=None)` melewati `plan_date > hari ini (WIB)` dan, untuk hari ini, hanya menulis bila 14:00 UTC (21:00 WIB) sudah lewat; pemanggil meneruskan `now=now`. Tes kontrak baru `tests/test_timeseries_kiriman_masa_depan.py` 6 tes: MERAH dulu (`TypeError` + asersi), lalu HIJAU 6/6; suite deret waktu 32 lulus; ruff bersih. Efek live: kiriman masa depan **130 → 0**; Jakarta hari ini rencana 1.092 porsi, terkirim 0 → Meal Continuity 24 jam **100,00% → 52,40%** (kemarin penuh + hari ini belum berangkat). Catatan: data demo dibangun ulang oleh sesi lain setelah patch, dan hasilnya tidak lagi memuat baris masa depan — bukti tambahan bahwa perbaikan berlaku di jalur nyata. Tindak lanjut: predikat tunggal `kiriman_sudah_terjadi()` dipakai generator dan penghitung `event_plan["deliveries"]` (agar `pastikan_deret_demo` tetap idempoten); tes lama yang mengunci aturan "semua hari rencana punya kiriman" diperbarui ke kontrak baru. Suite penuh: 1337 lulus / 17 dilewati / 0 gagal (+1 error koleksi DEP-04), 519,62 dtk. |
+| S4-45 | N3: 1437 dari 1541 blok ledger yatim setelah reset data demo (cakupan 6,7%) | Backend + Migrasi | Done | Hermes | Sebelum: `GET /ledger/verify` → `valid:true`, 1541 blok, 104 tertaut, **1437 yatim**, `linked_ratio` 0,067. Sebab: ledger append-only, sedangkan reset demo menghapus keputusan/batch/approval. Perbaikan 24 Okt 2026: **generasi ledger**. Migrasi `031_ledger_generation` menambah `ledger_blocks.generation` (default 1, index `(generation,height)`) + tabel penanda `ledger_meta` (satu baris). `ledger_service.current_generation`/`bump_generation`; `append_block` menulis generasi aktif; `bump_generation` dipanggil `demo_session.kosongkan_kecuali`, `demo_session.bersihkan`, dan `timeseries.purge_demo_rows` setiap kali benar-benar menghapus baris. Blok lama **tidak dihapus/tidak ditulis ulang** (append-only + rantai hash utuh); `verify_chain` tetap memeriksa seluruh rantai, cakupan dihitung pada generasi aktif, blok lama dilaporkan sebagai `archived_blocks`. UI: `lib/ledger.ts::coverageNote` menyebut arsip ("N blok generasi lama diarsipkan (rantai tetap terverifikasi)"); tipe `LedgerCoverage`/`LedgerResult` diperluas. **Bukti:** `tests/test_ledger_generasi.py` (4 tes) + `tests/test_ledger.py` → 9 lulus; `alembic check` bersih; `ruff` bersih; jalur nyata `kosongkan_kecuali` menghapus 801 baris → generasi 2→3, `archived_blocks: 72`, generasi aktif `valid:true`/`orphan_blocks:0`/`linked_ratio:1.0`; setelah `python -m app.seed.demo_template` 72 blok, generasi 3, 0 yatim; `test_ledger_linkage.py` diselaraskan ke cakupan per generasi (10 tes lulus bersama `test_ledger_generasi.py` + `test_ledger.py`); suite backend penuh di klon **1340 lulus / 18 dilewati / 0 gagal** (+1 error koleksi DEP-04), 526,39 dtk; frontend 4 tes + `tsc` 0 + `next lint` 0. |
+| S4-46 | `test_demo_timeseries_api.py` flaky saat dijalankan setelah berkas lain (2 tes gagal) | Verifikasi | Done | Hermes | Gejala: `test_membangun_deret_tidak_menggeser_jangkar` + `test_data_status_membaca_db` lulus sendiri, tetapi gagal bila `test_demo_template_reset.py` berjalan lebih dulu (`assert 5200 == 5160`). Sebab: tes memaku angka yang hanya benar pada satu state — `kanonik == 40` di stempel 8 Okt 12:00, `demo == 5160` (40 × 130 − 40), dan `_menu_coverage() == (660, 66, 0)`. Reset template/"Segarkan ke hari ini" memindahkan snapshot kanonik ke REF baru, sehingga stempel lama kosong dan generator menulis baris demo di sana; `added` menjadi `planned`. Perbaikan (24 Okt 2026): semua harapan diturunkan dari DB/kontrak — `_kanonik_pada_stempel()` menghitung baris seed yang menempati stempel 00:00/12:00 UTC di dalam rentang; `planned % pasokan == 0`; `added == planned − kanonik`; `_menu_coverage()` kini juga melaporkan baris ganda dan diuji `kosong == 0`, `kembar == 0`, `hari == jumlah hari rentang`, `baris == hari × lokasi`; `demo == pasokan × jumlah stempel demo`; stempel terakhir/pertama dibaca dari DB; `canonical_ref` dibandingkan dengan konstanta `CANONICAL_REF`. **Bukti:** urutan yang dulu gagal (`test_demo_template_reset` → `test_demo_timeseries_api`) **20 lulus**; subset 9 berkas **59 lulus / 12 dilewati** (sebelumnya 57/2 gagal); suite backend penuh di klon **1340 lulus / 18 dilewati / 0 gagal** (+1 error koleksi DEP-04), 523,02 dtk; `ruff` bersih. |
+| S4-47 | DEP-04: 9 berkas tes `test_agent_*` tak bisa dikoleksi (`ModuleNotFoundError: agent`) sehingga suite backend tidak utuh | Deploy/CI | Done | Hermes | Akar masalah ganda: (1) `agent/` adalah runtime terpisah di akar repo, tidak ada di image backend; (2) `tests/conftest.py` menyembunyikan 8 berkas lewat `HOST_ONLY_MODULES`, tetapi `test_agent_verifier.py` lupa didaftarkan — hanya berkas itu yang meledak, dan seluruh koleksi batal. Perbaikan 24 Okt 2026: dev compose me-mount `./agent:/agent:ro` + `PYTHONPATH=/app:/`; conftest dipecah menjadi `AGENT_MODULES` (diabaikan HANYA bila `import agent` gagal) dan `HOST_ONLY_MODULES` (berkas akar repo: compose/.env.example/struktur); daftar `test_agent_verifier.py` dimasukkan; tiap berkas agen memakai `pytest.importorskip("agent")` sehingga pemanggilan eksplisit menghasilkan `skipped`, bukan error koleksi. **Bukti:** tanpa mount → 1 skipped per berkas; dengan mount → **96 tes agen lulus** (8,2 dtk); koleksi naik 1364 → **1444 tes**; suite backend penuh di klon **1426 lulus / 18 dilewati / 0 gagal / 0 error** (534,81 dtk); `ruff` bersih. Sekalian dibereskan dua tes yang bergantung state seed: `test_agenda_api` (porsi 1200/12000 dipaku, padahal `planned_portions()` bervariasi ±2% → dibaca dari DB; kiriman 2 Okt tidak ada karena deret aktual mulai 8 Okt → hari kiriman dicari dari DB) dan `test_api_domain_tools::test_freshness_evaluate_fail_band` (memilih batch seed ber-skor <0,60 lalu dihitung ulang dari `harvested_at` → kini membuat batch 30 hari sendiri). |
+| S4-48 | SEC-02 + SEC-03: token berumur ~10 tahun dan login tanpa pembatas percobaan | Security | Done | Hermes | **SEC-02**: `.env` `JWT_EXPIRE_MINUTES` 5.256.000 → **720** (12 jam, cukup satu hari demo); `auth._expire_minutes()` menjepit ke 5–1440 menit sehingga nilai raksasa/sampah tidak lagi berlaku apa adanya (fail-safe, bukan gagal login). Terverifikasi live: token baru `exp-iat = 43.200 dtk` (720 menit). **SEC-03**: modul `app/core/rate_limit.py` — jendela geser per (IP, email), 20 percobaan GAGAL per 60 dtk (bisa diatur `LOGIN_RATE_LIMIT`/`LOGIN_RATE_WINDOW`), balasan **429 + `Retry-After`** dengan pesan yang tidak membocorkan keberadaan email; login berhasil menghapus riwayat kunci. Terukur live: 429 muncul tepat pada percobaan ke-21, dan login sah tetap 200. **Tes baru** `tests/test_auth_keamanan.py` (8 tes): umur token mengikuti env, dijepit saat 5.256.000 dan saat 0, env sampah → 30 menit, pembatas menahan percobaan ke-N, email lain tidak terblokir, login berhasil mereset, jendela geser membebaskan kunci. **Suite penuh**: 1434 lulus / 18 dilewati / 0 gagal (527,64 dtk) — pembatas tidak mengganggu tes yang login berkali-kali. Residu terdokumentasi: token masih di `localStorage` (butuh CSP, SEC-05) dan kredensial demo tetap ada di kode karena akun demo bersifat publik. |
+| S4-49 | SEC-01: kunci di `.env` dianggap bocor, rotasi belum dilakukan | Security | To-do (pemilik) | Hermes | Perlu tindakan pemilik akun: rotasi `JWT_SECRET`, `SIGNING_KEY_HEX`, `POSTGRES_PASSWORD`, `INFERHUB_API_KEY`, kunci AWS, `SAP_AI_CORE_CLIENT_SECRET`, `MEALCHAIN_API_TOKEN`; opsional bersihkan riwayat git dengan `git filter-repo`. Langkah rinci + urutan aman + cara verifikasi ada di **`docs/security/rotasi-kunci.md`** (tanpa nilai rahasia). Catatan: mengganti `JWT_SECRET` otomatis menggugurkan semua token lama — termasuk token 10 tahun yang mungkin sudah beredar. |
+| S4-50 | Hardening | **SEC-04**: `/docs`, `/redoc`, `/openapi.json` kini 404 secara default (middleware `_kunci_dokumen` di `app/main.py`); terbuka hanya bila `ENABLE_DOCS=true` atau `DEBUG=true`, `ENABLE_DOCS` didokumentasikan di `.env.example`. 6 tes di `tests/test_security_headers.py`. | Selesai 24 Okt 2026 |
+| S4-51 | Hardening | **SEC-05**: header keamanan dua sisi — backend (middleware `_header_keamanan`: `nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy`, `Permissions-Policy`, `COOP`, CSP `default-src 'none'`, HSTS hanya via HTTPS) dan frontend (`next.config.js::headers()`: CSP per-direktif dengan `tile.openstreetmap.org` di `img-src`/`connect-src`, `worker-src blob:` untuk MapLibre, `unsafe-eval` hanya saat dev). Terverifikasi lewat `curl -I` di `:3010` dan `:8000`, plus login + peta di browser tanpa galat CSP. | Selesai 24 Okt 2026 |
+| S4-52 | Audit | **AUTH-01 + baris audit usang**: keputusan `bgn_monitor` sebagai pengelola pengguna/lokasi diterima (skema tanpa peran `admin`), tetapi kini diminimalkan risikonya — setiap perubahan pengguna/lokasi menulis blok ledger `admin.user.update`/`admin.location.update` (aktor + nilai sebelum/sesudah), `_linkage` menganggap `users`/`locations` entitas sah, dan larangan mengubah peran sendiri dikunci tes. Baris AUDIT yang usang dikoreksi: DB-02 (0 blok yatim, bukan 256/353), DB-03 (0 akun uji), LINT-01 (ruff 0). Bukti: `test_admin_jejak_audit.py` (5 tes) + PATCH live 72→73 blok, `orphan_blocks: 0`, `valid: true`. | Selesai 24 Okt 2026 |
+| S4-53 | Audit | **Residu N3 + KPI-02**: (a) "Siapkan data demo" tidak lagi menghapus tabel ledger — cukup `bump_generation`, sehingga arsip generasi lama tetap ada; dibuktikan dengan menjalankan `python -m app.seed.demo_template` di DB klon: 144 blok, 72 arsip, rantai `valid:true`, `orphan_blocks:0`. (b) Setiap cabang `no_data` KPI menyebut sebabnya (belum ada data vs penyebut nol) dengan `sample_count` terisi; 3 tes di `test_kpi_alasan_no_data.py`, alasan live terverifikasi lewat `/kpi`. | Selesai 24 Okt 2026 |
+| S4-54 | Deploy | **DEP-02 CI**: `.github/workflows/ci.yml` — job backend (ruff → `alembic upgrade head` pada Postgres 16 kosong → `scripts/semai_kanonik.py --skip-routes` → `pytest`) dan job frontend (`npm ci` → `tsc` → `next lint` → `vitest`), dipicu push `master`/`main`/`feature/**` dan PR. Skrip `backend/scripts/semai_kanonik.py` menyatukan jangkar waktu 8 Okt + `generate_timeseries()` supaya urutannya tidak perlu dihafal. Dua tes ledger dibuat tidak bergantung state DB (gagal di DB kosong: `blocks > 0` dan `archived_blocks >= 1`). Validasi: seluruh urutan dijalankan di DB baru — suite penuh lulus. | Selesai 24 Okt 2026 |
+| S4-55 | Data | **DATA-01**: `demo_extra` tidak lagi menambah pemasok ke-61 ber-em dash. Nama Unicode kini dipasang pada pemasok yang sudah ada lewat `pastikan_pemasok_unicode()` (deterministik, idempoten), sehingga direktori demo tetap 60 dan cocok dengan runbook. Dibuktikan di DB klon: `build_demo_extra` dua kali → pemasok 60→60, baris Unicode tetap 1. Akar masalah: tabel `suppliers` tidak punya kolom `origin`, jadi baris tambahan tidak pernah ikut purge dan tidak bisa dipulihkan reset. | Selesai 24 Okt 2026 |
+| S4-56 | Deploy | **Verifikasi stack produksi penuh** (`docker-compose.prod.yml`, project `mcprod`, port 25432/18000/13010): postgres+backend+frontend `healthy`, login via proxy frontend 200, `/kpi` 200, `/docs` & `/openapi.json` 404, CSP prod tanpa `unsafe-eval`, tanpa bind mount kode, CMD `uvicorn` tanpa `--reload` dan `npm run start`. Dua bug ditemukan dan diperbaiki: (a) image `mealchain-backend-prod` berisi `app/main.py` 0 byte sehingga uvicorn gagal `Attribute "app" not found` → image di-rebuild; (b) `scripts/semai_kanonik.py` gagal `ModuleNotFoundError: app` saat dijalankan sebagai berkas tanpa `PYTHONPATH` → `sys.path` disisipi akar backend. Stack diuji lalu `down -v`; stack dev tetap sehat. | Selesai 24 Okt 2026 |
+
+## Fase 12 MG — dokumentasi & geladi dua jalur demo (27 Okt 2026)
+
+Status kerja memakai `OPEN` / `IN PROGRESS` (bukan `BLOCKED`). Bukti mentah ada di
+`_qa/f12/`; narasi bukti ada di `MG/phase-12-docs-rehearsal.md`.
+
+| # | Butir | Status | Bukti |
+|---|---|---|---|
+| 1 | Persiapan geladi (DB terpisah, head migrasi, empat service, bridge) | IN PROGRESS | `_qa/f12/clone-r12.txt`; head `043_least_privilege_app`; stack `mcg-f12`; **`cf push` jembatan belum** (menunggu izin pemilik) |
+| 2 | Demo utama replay (anchor, dua approval, PO, kiriman, ceklis, penerimaan, `on_hold`, KPI) | DONE | `_qa/f12/out/replay.json` — 22/22 langkah |
+| 3 | Demo realtime (anchor sesi, timestamp relatif, refresh tahan) | DONE | `_qa/f12/out/realtime.json` |
+| 4 | Operasional (`DEMO_MODE=false`): `/demo/*` 404, tanpa fallback, data lama ditandai | DONE | `_qa/f12/out/operasional.json` — 6/6 |
+| 5 | Joule lima skill + konteks sesi + approval ditolak + `/health` tanpa `/ready` | DONE | `_qa/f12/out/joule-*.json` (10/10 per mode); jawaban KPI menyebut mode+jangkar+id sesi; tes: `sap-joule/a2a_server/tests/test_session_context.py` |
+| 6 | Gerbang negatif (pending/needs_verification, batch kedaluwarsa, log kosong, penalti PO, reset satu sesi) | DONE | N1–N5 di `_qa/f12/out/replay.json` |
+| 7 | Gate statis & runtime (ruff, pytest penuh, frontend, bridge, alembic, drift, E2E) | OPEN | `_qa/gerbang-db-terpisah-2026-10-27.txt`: **50 gagal / 2077 lulus / 31 skip**; analisis sebab di `MG/phase-12-docs-rehearsal.md` |
+| 8 | Keputusan akhir VERIFIED / NOT VERIFIED / INCONCLUSIVE | DONE | `MG/phase-12-docs-rehearsal.md` §Keputusan akhir |
+
+Butir 7 yang masih `OPEN` bukan soal kode demo: 40 dari 50 kegagalan berasal dari
+`conftest.py` yang hanya memeriksa "ada batch demo", bukan "ada batch segar", sehingga
+modul yang butuh kandidat Event 1 menerima batch berjangkar REF 8 Okt (basi pada jam dinding
+27 Okt). Perbaikan predicate sudah dicoba (`_ada_kiriman_demo_hari_ini`) tetapi belum cukup
+karena `fuse_evidence` menilai satu lokasi secara konservatif (gabungan batch tua + baru =
+`on_hold`). Keputusan produk yang dibutuhkan: pin jam evaluasi suite atau bersihkan batch
+berjangkar REF pada DB gate sebelum suite.
+
+## Fase 13 — Monitoring harga komoditas di Overview (28 Okt 2026)
+
+Permintaan pemilik: hapus "Informasi pengiriman", "Telemetri Node", dan "Status Lokasi" dari
+Overview, ganti dengan monitoring harga komoditas; dikerjakan dengan panduan skill ui-ux.
+
+| # | Butir | Status | Bukti |
+|---|---|---|---|
+| 1 | Penarik data PIHPS (`backend/scripts/tarik_harga_pihps.py`) + snapshot 30 hari | DONE | 168 permintaan, 8.564 baris, 18 wilayah, 21 komoditas, `data/harga_pihps/pihps_latest.json` (2 MB) |
+| 2 | Logika murni + tes (`app/core/harga_monitor.py`, `lib/price-monitor.ts`) | DONE | `pytest tests/test_harga_monitor.py` 17 lulus; `tests/price-monitor.test.ts` 25 lulus |
+| 3 | Endpoint `GET /price/monitor` + `openapi.json` diregenerasi | DONE | `tests/test_openapi_artifact_drift.py` lulus; verifikasi curl (nasional, Kota Bandung, fallback Jawa Barat) |
+| 4 | Panel `PriceMonitor.tsx` + CSS token-only (mode Indeks/Rupiah, chip, tabel angka) | DONE | `tests/price-monitor-component.test.tsx` 6 lulus; live :3010 tanpa galat konsol |
+| 5 | Lepas tiga bagian lama + nav Overview 5 → 4 tujuan | DONE | `tests/overview-section-jump.test.tsx`, `overview-section-order.test.ts`, `section-jump.test.tsx` lulus; DOM hidup: `#ov-kiriman` = 0, `#ov-telemetri` = 0 |
+| 6 | Gerbang: suite frontend penuh, `tsc`, `lint`, `next build`, ruff, drift | DONE | 2.088 tes frontend lulus; `tsc` 0; `next lint` 0; `next build` sukses; `ruff` bersih |
+| 7 | Sisa yang BELUM: hapus/rotasi `.env` di klon publik, snapshot dibekukan per tanggal demo | OPEN | Butir lama REPAIR_PLAN.md; lihat catatan risiko di `docs/PLAN-TEMP-monitoring-harga.md` |
+
+
+## Fase 14 — Overview: grafik kecukupan SETENGAH halaman + panel "Surplus wilayah lain" (28 Okt 2026)
+
+Permintaan pemilik: "upgrade halaman overview bagian kecukupan pasokan dibuat barchart setengah
+halaman dan sebelahnya tambahkan nilai surplus dari daerah atau wilayah lain; desain eye catching
+dan mudah dimengerti".
+
+| # | Butir | Status | Bukti |
+|---|---|---|---|
+| 1 | Endpoint `GET /surplus/regions` — agregat surplus per `Location.region` lintas lokasi; `commodity` boleh berulang (4 komoditas sekali panggil), `exclude` membuang lokasi pengguna, `min_kg` bawaan 150, `reason` bila kosong, `totals.excluded_surplus_kg` + `totals.surplus_unmeasured_locations` supaya tidak ada kg yang hilang diam-diam | DONE | `pytest tests/test_surplus_regions.py` **10 lulus**; `test_surplus_allocations.py` 11 lulus; `test_openapi_artifact_drift.py` lulus (artefak diregenerasi, diff 290/43 baris) |
+| 2 | Logika murni `frontend/lib/surplus-regions.ts` (parse, urut menurun, pemisahan *layak* vs *kecil*, alasan kosong berbahasa aplikasi, warna komoditas) | DONE | `tests/surplus-regions.test.ts` **13 lulus** |
+| 3 | Panel `components/SurplusRegionPanel.tsx` + `app/surplus-regions.css` — kartu `supply-adequacy` yang SAMA dengan grafik (bukan chrome kedua), hero total, batang bertumpuk per komoditas, lencana "terbesar", chip "asal surplus", baris "surplus kecil" untuk wilayah di bawah ambang | DONE | `tests/surplus-region-panel.test.tsx` **15 lulus** |
+| 4 | Baris dua kolom `#ov-kecukupan`: grafik setengah halaman dengan batang selebar kartu (query kontainer ≤680 px: batang pindah ke baris sendiri), panel jadi separuh kanan; BGN nasional berjudul "Surplus per wilayah" tanpa `exclude` | DONE | DOM hidup :3010 — grid **467,5 + 467,5 px**, batang grafik **406 px**, baris grafik 106-129 px (dulu 139-162), tanpa luapan horizontal; Kepala Bandung: 3.571,57 kg · 5 wilayah (1 layak + 4 kecil); BGN Monitor: 1.297,95 kg · "seluruh jaringan · 1 komoditas" |
+| 5 | Gerbang | DONE | vitest **2.132 lulus / 191 berkas**; `tsc --noEmit` **0**; `next lint` **0**; `ruff check` bersih; pytest surplus + drift **22 lulus** |
+| 6 | Catatan jujur | OPEN | (a) `next build` TIDAK dijalankan — aturan repo: jangan build saat `next dev` hidup. (b) Percobaan suite penuh pertama gagal 1 tes (`temperature-evidence`, data-dependen) lalu lulus pada dua percobaan berikutnya → flaky lama, bukan akibat perubahan ini. (c) Responsif 375 px hanya diverifikasi dari aturan media query (≤1180 px satu kolom), bukan tangkapan layar — jendela sesi 1000 px. |
+
+
+## Fase 15 — Kecukupan pasokan: BAR VERTIKAL ringkas + soft UI (28 Okt 2026)
+
+Permintaan pemilik (lanjutan Fase 14): "buat bar chart berdiri dan ukuran tidak terlalu
+besar, redesign lebih soft ui".
+
+| # | Butir | Status | Bukti |
+|---|---|---|---|
+| 1 | Kartu baru `components/AdequacyColumns.tsx` + `app/adequacy-columns.css`: empat kolom berdiri (komoditas) atau N kolom (lokasi untuk BGN), tinggi plot dipatok 128 px, kartu membulat `--radius-dock` + `--shadow-2`, tanpa garis tabel | DONE | `tests/adequacy-columns-render.test.tsx` 19 lulus; DOM hidup 468×542 px (chart lama 779 px) |
+| 2 | Tinggi batang = stok ÷ kebutuhan KOLOM ITU (bukan skala kg bersama) supaya tinggi batang selalu sama dengan angka cakupan; stok tak layak/tak segar ditandai garis putus-putus putih di dalam batang | DONE | `tests/adequacy-columns.test.ts` 15 lulus; live Bandung: batang 65/68/70/100%, garis dalam 80% untuk beras (1.200 kg layak dari 1.300 kg tercatat) |
+| 3 | Logika murni dipisah: `lib/adequacy-columns.ts` (`columnFillPct`, `columnCoveragePct`, `columnHasUnusable`, `columnOverflow`, `segmentPct`) — komponen tidak menghitung aturan baru | DONE | 15 tes modul; tanpa kebutuhan terukur → tinggi 0 + “belum tercatat”, bukan 0% |
+| 4 | Label lokasi dibaca tegak saat kolom > 6 (BGN nasional 10 lokasi) supaya tidak menjadi “Jak…/Band…”; angka cakupan mengecil ke `--fs-3` | DONE | live BGN: `data-dense="true"`, nama 43 px tegak, tanpa tabrakan angka (0 overlap diukur di DOM) |
+| 5 | Dua grafik bentuk lama (`SupplyAdequacyChart`, `SupplyBalanceChart`) DILEPAS dari Overview, tetap ada di repo + tesnya — pemasangan dipindah ke tes kontrak | DONE | `tests/adequacy-columns-render.test.tsx` blok "Pemasangan di Overview" |
+| 6 | Token bayangan peran baru `--shadow-inset-soft` (permukaan terbenam) — tanpa token ini kartu memakai literal `rgba(15,23,42,…)` dan gerbang bayangan merah | DONE | `tests/token-bayangan.test.ts` + `token-warna-komponen` + `radius-scale-css` 46 lulus |
+| 7 | Gerbang | DONE | vitest **2.166 lulus / 193 berkas**; `tsc --noEmit` 0; `next lint` 0 |
+| 8 | Catatan jujur | OPEN | `next build` tidak dijalankan (dev server hidup). Dua temuan desain yang saya buang: (a) skala kg bersama membuat kolom berkebutuhan kecil jadi tonggak 6 px padahal cakupannya 65% — angka dan gambar bertengkar; (b) label horizontal pada 10 kolom terpotong semua menjadi “Jak…”, jadi dipakai label tegak. |
+
+
+## Fase 16 — Kecukupan & surplus: redesign SIMPLE, sedikit teks (28 Okt 2026)
+
+Permintaan pemilik (lanjutan Fase 15): "redesign lagi saya mau yang simple tidak banyak text".
+
+| # | Butir | Status | Bukti |
+|---|---|---|---|
+| 1 | Kartu kecukupan: paragraf kaki (409 karakter) dihapus, label "cakupan/segar" di bawah tiap angka dihapus, catatan "260,55 kg layak" per kolom dihapus, ringkasan jadi satu pasangan "4/4 kurang" (tanpa chip + kalimat) | DONE | teks kartu 209 karakter; tinggi kartu 378 px (sebelum 542 px, sebelum grafik vertikal 779 px) |
+| 2 | Semua rincian pindah ke `title`/aria-label: sub kartu `Bandung · 21.35` (rincian lengkap di tooltip), tiap angka cakupan punya `title` berisi stok/kebutuhan/selisih | DONE | tes "rincian panjang tetap ada untuk pembaca layar & tooltip" |
+| 3 | Panel surplus: kalimat panjang (4 kalimat) jadi satu baris "dihitung server · hanya lokasi dengan permintaan tercatat" + `title` berisi versi lengkap; "warna = komoditas" dihapus; baris "Surplus kecil" jadi "4 wilayah · 16,76 kg" (nama wilayah di tooltip); "1 wilayah layak dialihkan" → "1 wilayah layak"; angka kecil yang mengulang angka besar tidak dicetak | DONE | `tests/surplus-region-panel.test.tsx` 16 lulus; teks panel 324 karakter |
+| 4 | Judul panel tidak lagi terlipat dua baris: kepala panel ditumpuk (judul → angka besar → chip) | DONE | tinggi judul 27 px (satu baris) di DOM hidup |
+| 5 | Gerbang baru: tes "kartu sederhana" membatasi teks tercetak < 320 karakter dan melarang "Tinggi batang =" / "garis dalam batang" muncul lagi | DONE | `tests/adequacy-columns-render.test.tsx` blok "kartu sederhana" |
+| 6 | Gerbang | DONE | vitest **2.194 lulus / 195 berkas**; `next lint` 0 |
+| 7 | Catatan jujur | OPEN | `tsc --noEmit` masih memerahkan 3 galat LAMA di `tests/approval-panel.test.ts` (`Langkah.alasan` bertipe `string | null`, tes memanggil `.toLowerCase()`). Bukan dari perubahan ini; baru kelihatan setelah cache `incremental: true` ter-invalidasi. Perbaikan 1 baris per galat (`?? ""`) bila diizinkan. `next build` tetap tidak dijalankan (dev server hidup). |
+
+
+## Fase 17 — Warna SOLID + panel surplus lebih sederhana (28 Okt 2026)
+
+Permintaan pemilik: "jangan pakai warna gradasi pakai saja solid dan tampilan surplus lebih simple lagi".
+
+| # | Butir | Status | Bukti |
+|---|---|---|---|
+| 1 | Semua gradasi di dua kartu dihapus: latar kartu, kotak batang (termasuk garis kisi 25%), segmen batang, titik legenda "tak layak", kolom skeleton, dan hero panel → satu warna solid dari token | DONE | `getComputedStyle`: `backgroundImage: none` pada kartu, kotak batang, dan segmen; segmen `rgb(46, 125, 50)` solid |
+| 2 | Gerbang baru: `app/adequacy-columns.css` dan `app/surplus-regions.css` tidak boleh memuat kata `gradient` | DONE | `tests/adequacy-columns-render.test.tsx` blok "tanpa gradasi" |
+| 3 | Panel surplus dipangkas lagi: baris legenda komoditas dihapus (chip "Asal" sudah menyebut nama + titik warnanya), chip "N wilayah layak" dihapus, catatan kaki dihapus (`dihitung server` masuk ke baris sub; kalimat lengkapnya jadi `title` kartu) | DONE | `tests/surplus-region-panel.test.tsx` 16 lulus; teks panel 196 karakter (dari 324) |
+| 4 | Hasil ukur di DOM hidup | DONE | kartu 378 px · panel 360 px (dulu 542/460) — dua kartu kini hampir setinggi; kartu 207 karakter, panel 196 karakter |
+| 5 | Gerbang | DONE | vitest **2.206 lulus / 196 berkas**; `next lint` 0; `tsc` hanya 3 galat LAMA di `tests/approval-panel.test.ts` (bukan dari perubahan ini) |
+| 6 | Catatan | OPEN | `next build` tidak dijalankan (dev server hidup). Angka di panel bergerak mengikuti tick demo, jadi tangkapan layar hanya bukti bentuk, bukan nilai tetap. |
+
+
+## Fase 18 — Kepala kartu tanpa lokasi/jam (28 Okt 2026)
+
+Permintaan pemilik: baris "Jakarta · 22.00" di kepala kartu "Kecukupan pasokan" dihapus.
+
+| # | Butir | Status | Bukti |
+|---|---|---|---|
+| 1 | Mode komoditas: baris sub (`lokasi · jam`) tidak lagi dicetak; kepala kartu tinggal judul + "4/4 kurang". Keterangan lengkap (lokasi, 4 komoditas, sumber, jam hitung) dipindah ke `title` judul | DONE | DOM hidup: `adaSub = false`, kepala kartu "Kecukupan pasokan4/4 kurang"; `tests/adequacy-columns-render.test.tsx` blok "kepala kartu komoditas tanpa baris lokasi/jam" |
+| 2 | Mode lokasi (monitor nasional) tetap menampilkan "komoditas · N lokasi" karena itu pembeda utamanya | DONE | tes mode lokasi lulus |
+| 3 | Panel surplus: jam dihapus dari sub (`di luar Bandung · dihitung server`) | DONE | tes melarang pola `\d\d\.\d\d` di teks tercetak panel |
+| 4 | Hasil ukur | DONE | kartu 361 px · panel 360 px — dua kartu kini praktis setinggi |
+| 5 | Gerbang | DONE | vitest **2.219 lulus / 196 berkas**; `next lint` 0; `tsc` hanya 3 galat lama di `tests/approval-panel.test.ts` |
+
+## Fase 19 — "Decision & Evidence": modul persetujuan `02-approval-action.md` + PO dua gerbang (28 Okt 2026)
+
+Permintaan pemilik: "gunakan berbagai skill fullstack, ui ux, testing pada halaman Decision & Evidence ganti dengan 02-approval-action.md", lalu arah koreksi: review PO "di buat sebagai jalur sungguhan".
+
+| # | Butir | Status | Bukti |
+|---|---|---|---|
+| 1 | Satu kepala persetujuan menjawab TIGA hal (apa menahan, siapa dibutuhkan, apa setelah ini), menggantikan lima blok terpisah (chip + progres + daftar fakta + penghalang + tombol) | DONE | `frontend/lib/approval-panel.ts` (`tigaJawaban`) + `components/ApprovalOverview.tsx`; 17 uji `tests/approval-panel.test.ts` |
+| 2 | Keadaan dibedakan, termasuk dua kegagalan yang dulu sama: ditolak (bahaya, bisa diusulkan ulang) vs kedaluwarsa (garis putus-putus, bukan tanda silang, tidak bisa diusulkan ulang); ditambah keadaan kelima yang tidak ada di dokumen: siap menerbitkan PO draft | DONE | `fasePersetujuan()`; DOM hidup: "Kedaluwarsa — waktu habis" (nada expired) vs "Ditolak — bisa diusulkan ulang" (nada danger); "Siap menerbitkan PO draft" pada keputusan ber-`can_execute` |
+| 3 | Ledger penyetuju berjam: tiap peran syarat membawa nama + jam, dan bila server belum mengirim barisnya UI menyebut itu (bukan mengarang "sudah") | DONE | `ledgerPenyetuju()`; DOM hidup "SPPG Head Demo · 28 Okt 2026 21.54 WIB" setelah approval pertama, dan "Backend belum mengirim baris persetujuan..." sebelum itu |
+| 4 | Dua langkah terpisah dengan alasan saat tertutup (Menyetujui, Menerbitkan PO draft, Review PO) plus kalimat penutup "menyetujui tidak menjalankan apa pun" | DONE | `langkahPersetujuan()`; DOM hidup: "Menerbitkan PO draft — tertutup — persetujuan belum lengkap..." |
+| 5 | Review PO jadi jalur sungguhan: `POST /actions/execute` berhenti di PO `draft`; `POST /actions/purchase-orders/{po}/approve` mengirim ke SAP mock + keputusan `executed`; matriks approval dipakai bersama (`_evaluasi_approval`) | DONE | `backend/app/api/actions.py`; `backend/tests/test_po_review_flow.py`; DB sesudah aksi UI: `sap_mock_purchase_orders.status` draft lalu submitted, `decisions.status` approved lalu executed |
+| 6 | Read model jujur soal peran: `can_approve`/`can_reject` = false untuk pembaca di luar `APPROVER_ROLES` (dulu `bgn_monitor` menerima true, ditahan hanya oleh UI) | DONE | `backend/app/services/approval_summary.py`; panel kini "Tampilan hanya-baca" untuk monitor |
+| 7 | Label pemicu per-peran: "Menunggu rekan" hanya bagi yang SUDAH menyetujui; yang belum melihat "Setujui sekarang"; PO draft menjadi "Review PO" | DONE | `components/DecisionActions.tsx` + `peranSudahSetuju()`; `tests/decision-actions-trigger-label.test.tsx` (6 uji) |
+| 8 | Urutan halaman mengikuti §7.1: kepala, keputusan, jalur, bukti, jejak (sebelumnya jalur di atas keputusan) | DONE | `components/DecisionDetail.tsx`; uji urutan region diperbarui; DOM hidup: hero, decide, route, grid |
+| 9 | Temuan F9 ditutup: baris read-only tidak lagi mencetak kode peran mentah, tetap memuat kata "read-only" | DONE | DOM hidup: "Peran Anda memantau, bukan menyetujui — tampilan read-only (Monitor BGN)..." |
+| 10 | Gerbang tes frontend | DONE | `tsc --noEmit` 0; vitest 196 berkas / 2218 tes lulus |
+| 11 | Gerbang tes backend (berkas yang disentuh) | DONE | `test_status_approved` (diperbarui ke dua gerbang), `test_po_review_flow`, `test_actions`, `test_approval_summary`, `test_event1_e2e_acceptance`, `test_procurement_execute_guard`, `test_kpi_act_trace` menghasilkan 56 lulus, 1 skip |
+| 12 | `next build` produksi | DONE | `NEXT_DIST_DIR=.next-verif npm run build` EXIT 0 (distDir terpisah karena `.next` dipakai dev server + pekerjaan paralel); `tsconfig.json` dipulihkan, `.next-verif` dihapus |
+| 13 | Suite backend PENUH pada DB terpisah | OPEN | 59 gagal / 2126 lulus / 31 skip. Galat yang diperiksa berasal dari keadaan lingkungan, bukan perubahan ini: (a) `decision expired` pada `test_dispatch_safety_gate` karena tes memilih keputusan approved TERBARU dari DB bersama dan jendelanya lewat; (b) `token tidak valid`/401 karena sesi demo dibangun ulang proses lain saat suite berjalan; (c) `11 == 10`, `61 == 60` karena lokasi/batch bertambah di DB bersama; (d) satu teardown `ForeignKeyViolation` di `test_approval_summary`. Berkas yang sama hijau saat dijalankan terisolasi. |
+
+Catatan yang mengikat untuk pekerjaan berikutnya: rujukan perilaku ada di `frontend/lib/approval-panel.ts` (bukan di komponen), status PO adalah FAKTA SERVER (`purchase_order` pada `approval-summary`), dan `can_approve`/`can_reject` tidak boleh dihitung ulang di klien.
+
+
+## Fase 20 — Tab Agent Log mengikuti `06-agent-log.md` (28 Okt 2026)
+
+Dokumen acuan: `D:\Downloads\06-agent-log.md` (desain modul Agent Activity).
+
+Yang diterapkan pada tab `agent-log` di `frontend/app/page.tsx`:
+
+1. **Urutan baca dibalik** sesuai §4.3: kepala → pemilih keputusan → banner
+   keadaan trace → strip 9 tahap → rincian tahap → daftar langkah → kartu agent
+   (`AgentSwarmPanel`) → status model (`ProviderPanel`) → trace viewer.
+   Sebelumnya panel dan strip tampil sebelum keputusan dipilih sehingga
+   sepertiga layar berbunyi "belum dimuat".
+2. **Banner tiga keadaan** (`not_loaded` / `missing` / `present`) dengan kalimat
+   kejujuran utuh, bukan lencana. `null` ≠ `[]`: `useDecisionDetail` sekarang
+   mengekspos `loading` dan `ledger`, lalu panel menulis "Trace belum dimuat".
+3. **Strip sembilan chip** (DETECT…LEARN) dengan empat keadaan: tercatat,
+   tercatat di Ledger, belum ada, belum dimuat. Klien kini membaca
+   `GET /decisions/{id}/ledger` (endpoint baru) supaya ACT yang hanya punya blok
+   `execute` tidak ditulis "belum tercatat".
+4. **Penanda waktu & lambat** di chip: 6px dot biru = ada `step_at`, dot amber =
+   jarak/durasi > 45 dtk. Teks penuh ada di `title`, rincian di panel bawah.
+5. **Tautan ke Safety & Evidence** di banner `present` (menutup lingkaran
+   "penilaian ada di modul lain"), hanya bila handler tersedia.
+6. **Teks dipangkas**: ringkasan "n dari 9 tahap punya jejak tercatat" + caveat
+   di `title`; judul panel "Tahapan pipeline" (nama modul sudah di PageHeader);
+   lencana keputusan diganti teks untuk pembaca layar.
+
+Berkas: `frontend/lib/agent-activity.ts`, `frontend/components/AgentActivityPanel.tsx`,
+`frontend/app/agent-activity.css`, `frontend/lib/hooks/useDecisionDetail.ts`,
+`frontend/lib/api.ts`, `frontend/app/page.tsx`, `frontend/app/layout.tsx`,
+`backend/app/api/decisions.py` (+`GET /decisions/{id}/ledger`), `backend/openapi.json`.
+
+Tes: `frontend/tests/agent-activity.test.ts` (21), `agent-activity-panel.test.tsx` (15),
+`backend/tests/test_decision_ledger.py` (4). Suite frontend penuh 203 berkas /
+2.341 tes lulus; `next lint` 0; `tsc` 0 galat.
+
+BELUM ADA (butuh kesepakatan, bukan dikarang): §2.8 health supervisor dan §2.9
+`/agent/supervisor/ask` tidak punya endpoint di backend ini; `IntegrityPanel`
+sudah dicabut dari tab ini atas permintaan pemilik (21 Okt). Tabel keputusan
+penuh (§2.5) digantikan pemilih keputusan yang sudah ada; `ModuleSearch` /
+`PeriodPicker` tidak ada di repo ini sehingga catatan "pencarian menyaring
+keputusan" belum relevan.
+
+## Fase 21 — Agent Log dibangun ulang sesuai dokumen 06 (28 Okt 2026)
+
+Permintaan pemilik: tab "Agent Log" dibangun seperti `06-agent-log.md` utuh —
+termasuk komponen yang sebelumnya belum ada (`ModuleSearch`, `PeriodPicker`,
+`DecisionAuditTable`, `AgentPipelinePanel`, `SupervisorAskPanel`, `AgentRunSummary`,
+`IntegrityPanel`, dua kartu agent, status supervisor).
+
+Yang dikerjakan:
+1. **Urutan baca §4.3** — pencarian → periode → tabel keputusan → banner keadaan
+   trace → strip 9 tahap → langkah rinci → ringkasan model → kartu agent → status
+   supervisor → integritas. Semua yang butuh keputusan terpilih ada SETELAH
+   pemilihnya, jadi layar tidak lagi dibuka dengan "belum dimuat".
+2. **Backend baru** (`app/api/agent.py`): `GET /agent/supervisor/health`
+   (jujur: `configured` bukan "hidup", `live: null`) dan `POST /agent/supervisor/ask`
+   (deterministik, tool GET, `writes: false`). `GET /decisions` kini mengirim
+   `commodity_name` supaya filter komoditas memakai data nyata.
+3. **Modul lib murni**: `pipeline-stages.ts` (metadata 9 tahap + penanda tahap LLM),
+   `decision-table.ts` (kolom, keadaan verifikasi, filter, ringkasan, paginasi),
+   tambahan di `agent-activity.ts` (`AGENTS`, `supervisorView`, `askProvenance`).
+4. **Invarian dokumen dijaga**: tiga keadaan trace tetap terpisah; ACT hanya
+   "belum tercatat" bila tidak ada blok ledger; supervisor tidak hijau tanpa
+   `live`; status model hanya hijau bila payload `ok`; nilai kosong ditulis "—".
+5. **Proxy**: akar `"agent"` ditambahkan ke `next.config.js` — tanpa itu Next
+   menjawab 404 HTML sendiri dan baris status selalu "belum dimuat".
+
+Tes: `frontend/tests/decision-table.test.ts` (18), `agent-activity-panel.test.tsx`
+(27), `agent-activity.test.ts` (21), `backend/tests/test_agent_supervisor.py` (7).
+Suite penuh **206 berkas / 2.420 tes lulus**, `next lint` 0, `tsc` 0 galat,
+openapi **87 path** (drift test lulus), ruff bersih.
+
+BELUM TERVERIFIKASI DI LAYAR: login demo tidak lagi mengisi sandi otomatis
+(`GET /auth/demo-login` aktif, tetapi formulir tidak memanggilnya), jadi
+verifikasi visual setelah login (baris supervisor terisi, panel tanya-jawab untuk
+BGN Monitor) menunggu pemilik login sekali. Yang sudah terlihat sebelum logout:
+`ModuleSearch`, tabel 6 baris + keterangan pemilih, banner "2 langkah tercatat",
+9 chip, 2 kartu agent.
+
+Catatan lingkungan: container `mealchain-backend` sempat hilang dan `.next` rusak
+karena dua `next dev` menulis ke folder yang sama; dev sekarang dijalankan dengan
+`NEXT_DIST_DIR=.next-log` + `BACKEND_INTERNAL_URL=http://127.0.0.1:8000`.
+
+## Fase 22 — Keamanan Pangan, bagian 1: Ringkasan pengawasan (29 Okt 2026)
+
+Permintaan pemilik: "kerjakan dari bagian atas dulu". Peta halaman lebih dulu
+(7 jangkar, nav hanya 5), lalu bagian teratas diperbaiki.
+
+1. **Putusan naik ke atas.** Kalimat "Batch gagal uji di … — alokasi hanya boleh
+   memakai batch berstatus aman" dulu duduk paling bawah kartu (di bawah bar
+   komposisi, penanda, dan dua lipatan). Sekarang tepat di bawah kepala kartu,
+   dengan kelas `.safety-verdict`. Kata per kata tidak berubah.
+2. **Satu penanda per kondisi.** Penanda "Status lain 1 · ditahan walau uji
+   lolos" menghitung batch yang SAMA dengan "Ditahan (karantina) 1" (sisa
+   partisi = batch ditahan yang ujinya lolos). Sekarang satu penanda, dengan
+   keterangan ", termasuk n yang lolos uji".
+3. **Jarak angka–keterangan.** `1· 95 kg` (titik menempel angka karena
+   `tabular-nums`) → `.safety-band .safety-marker-hint { margin-left: 3px }`.
+
+Bukti: tinggi kartu 244 px; putusan di atas strip angka (diukur di DOM);
+jarak angka→keterangan 9 px; satu elemen `.safety-marker` (sebelumnya 2).
+Tes board **33** (2 tes baru: urutan putusan, satu penanda per kondisi);
+suite penuh **207 berkas / 2.431 tes lulus**; `tsc` 0; `next lint` 0.
+
+Catatan: verifikasi visual memakai pratinjau statis (render
+`FoodSafetyBoard` → HTML + CSS di folder scratch) karena login demo tidak
+mengisi sandi otomatis.
+
+### Fase 22b — Ringkasan diredesain ulang, bukan hanya diurutkan (29 Okt 2026)
+
+Pemilik: "kalo desain begitu masih sulit dipahami". Akar masalahnya bukan urutan,
+melainkan **empat angka yang tidak menjumlah ke total**: `safe` tidak menghitung
+batch karantina, tetapi `failed` tetap menghitungnya — jadi 2+1+0+1 = 4 dari 5.
+Selisih itu ditambal dengan bar komposisi, persentase per angka, titik warna, dan
+lipatan "Cara membaca angka ini" (tiga pengkodean untuk satu himpunan data).
+
+Yang dikerjakan:
+1. **`safetyStatusGroups()`** di `lib/food-safety.ts`: lima kelompok EKSKLUSIF
+   (aman → gagal → perlu verifikasi → belum diuji → ditahan), urutan keputusan
+   karantina lebih dulu. Jumlahnya selalu = baris yang diperiksa.
+2. **Kartu Ringkasan ditulis ulang**: putusan (satu kalimat) → lima angka 24 px
+   dengan label → `dari N batch` + satu baris `Karantina · X kg tidak boleh
+   dialokasikan` → `Rincian angka`. Tidak ada bar komposisi, tidak ada
+   persentase, tidak ada titik warna, tidak ada legenda.
+3. **Satu definisi "Aman"**: `matchesSafetyFilter("aman")` sekarang mengecualikan
+   batch karantina, sehingga chip tabel (`Aman 2`) sama dengan ringkasan
+   (`2 Aman · 1 Ditahan`). Sebelumnya chip menulis `Aman 3` untuk data yang sama.
+
+Ukuran: tinggi kartu 244 → 230 px, angka 18 → 24 px, 7 elemen teks/grafik → 3.
+Tes: `food-safety.test.ts` +4 (partisi eksklusif, urutan, tanpa status = belum,
+saring "Aman"), board +2, karantina +1 (jumlah lima angka = 3 batch).
+Suite penuh **207 berkas / 2.437 tes lulus**; `tsc` 0; `next lint` 0.
+
+Sisa utang yang BELUM disentuh: CSS lama `.safety-figures/.safety-ratio/
+.safety-markers` masih ada di `globals.css` (tidak dipakai lagi, sengaja tidak
+dihapus karena berkas bersama); status tabel masih tampil mentah `unchecked`.
+
+### Fase 22c — Ringkasan dipoles secara visual (29 Okt 2026)
+
+Pemilik: "masih bisa di perbaiki lagi ui kurang enak dilihat". Fase 22b
+memperbaiki ARTI angka; fase ini memperbaiki RUPA-nya.
+
+Yang diubah (semua di `#safety-ringkasan`):
+1. **Bidang peringatan penuh dilepas.** Putusan kini satu titik status 8 px +
+   satu kalimat, bukan blok merah selebar kartu. Lencana "Ada batch gagal" di
+   kepala juga dilepas — kalimat putusan sudah menyebut kejadiannya.
+2. **Aksen tepi kartu 3 px** sesuai nada (`data-tone`): status terbaca dari tepi
+   tanpa menambah elemen teks.
+3. **Strip angka**: lima kolom dengan garis rambut vertikal, angka 24 px, label
+   KAPITAL 12 px + jarak huruf. Keterangan berat karantina menempel pada kolom
+   "DITAHAN" (bukan melayang di kaki kartu), alasannya di `title`.
+4. **Robust terhadap lebar wadah**: `repeat(auto-fit, minmax(118px, 1fr))` +
+   `container-type: inline-size`. Media query viewport TIDAK dipakai karena kartu
+   bisa lebih sempit dari viewport; garis pemisah hanya dipasang bila strip
+   benar-benar lima kolom (`@container (min-width: 620px)`), sehingga tidak ada
+   garis menggantung di awal baris saat angka terlipat.
+5. Jarak antar-blok 6 → 8 px.
+
+Ukuran terukur: kartu 221 px (lebar penuh, 5 kolom), 290 px pada wadah 430 px
+(3 kolom), 0 label terpotong di ketiga lebar, tidak ada luapan horizontal.
+Suite penuh 212 berkas / 2.472 tes (1 tes agenda gagal saat paralel, lulus saat
+dijalankan sendiri — bukan berkas yang disentuh). `tsc` 0; `next lint` 0.
+
+Tes baru: "putusan memakai titik status, bukan bidang peringatan penuh".
+
+### Fase 23 — Recommendations: tiga pengulangan di atas daftar dibuang (29 Okt 2026)
+
+Permintaan pemilik: "lanjutkan untuk halaman recommendation". Kelanjutan rangkaian
+29 Okt (commit `166d434` + `e4b2e60`: label komoditas di kartu, nada status dirapikan).
+Kali ini yang dibuang bukan warna, melainkan **teks yang menulis hal yang sama dua kali**
+di atas daftar — terukur di peramban, 1262 px, peran SPPG Head:
+
+1. **Deskripsi halaman 259 → 66 karakter.** Versi lama (3 baris) menjelaskan urutan
+   bawaan (sudah ada di pemilih Urutkan), kata "tinjau" (sudah ada di tombol kartu), dan
+   bahwa Decision & Evidence memuat versi lengkap (sudah ada sebagai tautan di popup).
+   Kini satu baris: "Satu kartu satu keputusan agen; yang bisa ditindaklanjuti ada di atas."
+   Kepala halaman 123 → **51 px**.
+2. **Paragraf petunjuk 164 karakter dilepas** ("Tekan Tinjau pada kartu untuk membuka …").
+   Isinya identik dengan yang dilakukan tombolnya, jadi ia pindah ke `title` tombol Tinjau.
+   `.feed-hint` ikut dihapus dari `globals.css` (kelas mati).
+3. **Pil "N perlu tindakan" di kepala dilepas** — chip saring "Perlu tindakan N" 20 px di
+   bawahnya menulis angka yang sama dan bisa diklik. Sisa hitungan jendela hanya "lewat
+   tenggat" (satu-satunya keadaan tanpa chip).
+4. **Baris "Menampilkan 10 dari 17 rekomendasi" hanya dicetak saat ada saringan/pencarian.**
+   Tanpa saringan ia persis mengulang "1–10 dari 17" di pager; untuk pembaca layar baris itu
+   tetap ada sebagai `sr-only` (`role="status"` tidak hilang). Terukur: chip "Perlu tindakan"
+   ditekan → baris muncul ("… · filter: perlu tindakan") + tombol Kosongkan filter; chip
+   dilepas → kembali `sr-only`.
+5. **Huruf awal label chip dikapitalkan saat render** ("menunggu persetujuan" → "Menunggu
+   persetujuan"). Dilakukan di `page.tsx`, bukan di `lib/decision-feed.ts`: `feedChips`
+   sengaja mengembalikan label apa adanya (dipakai juga sebagai kata kunci pencarian dan
+   diuji huruf kecil).
+
+Hasil terukur: kartu pertama 409 → **311 px** dari atas, tinggi halaman 1579 → **1290 px**
+(10 kartu). Kartu TIDAK dikecilkan: 82 px adalah ukuran yang pemilik minta sendiri
+("sedikit dinaikkan saja" setelah 12 px terasa terlalu rapat) — komentar `.recommendation-card`
+masih menyimpannya.
+
+Gerbang: `tsc --noEmit` **0**; `next lint` **0**; vitest penuh **216 berkas / 2.512 tes lulus**.
+
+Belum dikerjakan (kandidat putaran berikutnya, belum diputuskan pemilik): lencana
+"Menunggu persetujuan" muncul di 9 dari 10 kartu sehingga keadaan yang berbeda (Ditandai
+verifier) nyaris tidak menonjol; petunjuk periode "24 jam terakhir" masih berderet dengan
+chip sehingga terbaca seperti chip keempat; singkatan "SDC" di baris meta belum dijelaskan
+di halaman ini.
+
+### Fase 24 — Recommendations: pencarian cocok dengan yang tercetak, petunjuk periode tidak mengulang (29 Okt 2026)
+
+Lanjutan Fase 23 pada halaman yang sama. Kali ini tiga cacat yang lolos dari mata karena
+tidak mengubah rupa: **pencarian bisa menemukan baris tanpa satu kata pun yang terlihat di
+layar**, dan **satu kata yang terlihat justru tidak bisa dicari**.
+
+1. **`haystack()` di `lib/decision-feed.ts` diselaraskan dengan kartu.** `commodity_name`
+   DITAMBAH (kartu mencetak "Telur · 600 kg" sejak commit `166d434`, tetapi mengetik "telur"
+   tidak menemukan apa pun); `verifier_note` dan `demo_case` DIBUANG (keduanya sudah tidak
+   dirender sejak 28 Okt — pencarian "consistent" atau "janggal" dulu mengembalikan baris
+   yang tidak menampilkan kata itu sama sekali). Kata untuk tenggat diganti dari
+   "kedaluwarsa" (tidak pernah tercetak) menjadi **"lewat tenggat"** (persis lencananya).
+   Placeholder pencarian: "Jenis, status, **komoditas**, atau ID keputusan…".
+2. **`feedWindowHintBilaBerbeda()` di `lib/decisions-window.ts`.** Petunjuk periode hanya
+   dicetak bila menambah arti di luar labelnya: "Hari ini" → "24 jam terakhir" (berbeda),
+   "7 hari" → tidak ada (dulu mencetak "7 hari terakhir", kalimat yang sama dua kali dan
+   terbaca seperti chip keempat), "1 bulan" → "bulan berjalan (WIB)". Dipakai juga oleh
+   kalimat empty state supaya tidak menulis "(7 hari terakhir)".
+3. **Tes ditulis MERAH lebih dulu**, dan tes komoditas sempat "lulus" secara palsu karena
+   id fixture-nya memuat kata "telur" — id diganti `aa11`/`bb22`, lalu dibuktikan merah
+   dengan mencabut `row.commodity_name` selama satu putaran (1 gagal dari 28) sebelum
+   dipasang kembali.
+
+Bukti di peramban (Kepala Bandung, 14 rekomendasi "hari ini"): cari "telur" → **8 kartu**,
+semuanya ber-meta "Telur · …", baris status muncul "Menampilkan 8 dari 14 rekomendasi ·
+pencarian: "telur""; cari "consistent" → **0 kartu** (dulu ada); cari "lewat tenggat" →
+**3 kartu**; chip "7 hari" → petunjuk hilang, "1 bulan" → "bulan berjalan (WIB)",
+"Hari ini" → "24 jam terakhir".
+
+Gerbang: `tsc --noEmit` **0** · `next lint` **0** · vitest penuh **216 berkas / 2.516 tes
+lulus** (+4 tes baru). Kontras kartu diukur ulang di peramban dan tetap lolos AA: meta/baris
+7,58:1 · pemisah "·" 5,43:1 · lencana status 5,92:1 · tombol Tinjau 5,17:1 · pil periode
+5,17:1.
+
+Belum dikerjakan (menunggu keputusan pemilik, bukan dikerjakan sendiri): baris "Hasil
+verifier: Konsisten · oleh agen verifier" di popup Tinjau (bagian PEMERIKSAAN) dan nama
+pemasok yang muncul dua kali di popup (judul + baris "Pemasok"); lencana "Menunggu
+persetujuan" yang muncul di 9 dari 10 kartu; singkatan "SDC" di baris meta.
+
+### Fase 25 — Recommendations: satu status satu istilah, dan enum Inggris terakhir dicabut (29 Okt 2026)
+
+Ketemu saat memeriksa tangkapan layar akun **Kepala Bandung** (14 rekomendasi, 8 chip
+status): satu kartu menampilkan lencana **"REVIEW ONLY"** — enum Inggris utuh di tengah UI
+berbahasa Indonesia — dan chip di bawahnya menulis **"Tinjauan (review-only) 1"** untuk
+keadaan yang sama. Di layar yang sama, chip menulis "Ditandai **verifier**" sementara
+lencana kartu menulis "Ditandai **verifikator**".
+
+1. **`REVIEW_ONLY` masuk `STATUS_ID`** (`lib/bahasa.ts`) → lencana kartu menulis
+   "Temuan tinjauan". Sebelumnya status ini tidak ada di peta sehingga jatuh ke fallback
+   `REVIEW_ONLY` → "REVIEW ONLY".
+2. **Satu kosakata**: `STATUS_WORDS` (`lib/decision-picker.ts`) memakai
+   "ditandai **verifikator**" dan "**temuan tinjauan**" (tanpa tanda kurung berisi enum).
+   `lib/agenda.ts` dan `lib/food-safety.ts` disamakan. Kalimat turunan `humanizeBlocker`
+   ikut berubah ("status ditandai verifikator tidak dapat dieksekusi") — itu konsekuensi
+   yang diinginkan, dan tesnya diperbarui dengan alasan tertulis.
+3. Tes ditulis MERAH lebih dulu: `status-badge` ("temuan tinjauan tidak membocorkan enum
+   Inggris"), `decision-feed` (chip memakai "temuan tinjauan"/"ditandai verifikator", bukan
+   "review-only").
+
+Bukti di peramban (Kepala Bandung): chip = `Perlu tindakan 8 · Menunggu persetujuan 6 ·
+Ditandai verifikator 1 · Diusulkan 1 · Disetujui 1 · Dieksekusi 1 · Ditolak 3 · Temuan
+tinjauan 1`; lencana kartu = `Menunggu persetujuan / Disetujui / Ditandai verifikator /
+Ditolak / Temuan tinjauan`; **0 lencana berupa enum Inggris**.
+
+Gerbang: `tsc --noEmit` **0** · `next lint` **0** · vitest penuh **217 berkas / 2.524 tes
+lulus**.
+
+Catatan keadaan (bukan cacat): dengan 8 chip status, baris chip terlipat dua dan chip
+terakhir berdiri sendiri di baris kedua (terukur: 7 chip di y=253, 1 chip di y=293).
+Dibiarkan apa adanya — memaksa satu baris berarti mengecilkan target sentuh atau
+menyembunyikan status.
+
+## Fase 26 — Decision & Evidence: bukti pemasok & pesan batch ditahan (29 Okt 2026)
+
+Dua cacat yang ketemu saat menelusuri alur nyata halaman Decision & Evidence
+(approve → eksekusi → review PO) di stack lokal :3010.
+
+1. **"Sebagian bukti gagal dibaca: konteks pemasok" — panel Supplier governance
+   hilang.** `frontend/lib/supplier-exclusions.ts` memakai
+   `process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"`. Di stack lokal
+   variabel itu ADA tetapi KOSONG (`docker compose exec frontend printenv` →
+   kosong), jadi `||` jatuh ke URL absolut; CSP `connect-src 'self'`
+   (`next.config`) menolak `fetch` lintas-origin → `TypeError: Failed to fetch`
+   tanpa satu baris pun di log backend (request tidak pernah sampai).
+   `lib/api.ts` memakai `??`, sehingga basis kosong = path relatif lewat
+   rewrites. Fix: `?? ""` — satu baris. Akibat sebelum fix: `supplierContext`
+   selalu `null`, dan `DecisionDetail` TIDAK merender panel sama sekali
+   (bukan tampil kosong). Bukti sesudah fix: `/supplier-exclusions/context/{id}`
+   → 200 di log backend, banner hilang, panel "Supplier governance" muncul
+   (SPPG penerima #275d1be7, pemasok Koperasi Telur Cipanas Bersama).
+2. **Review PO "terkirim ke SAP" tanpa menyebut batch yang ditahan.**
+   `POST /actions/purchase-orders/{po}/approve` mengembalikan `dikirim` dan
+   `ditahan` (komentar backend: "supaya UI tidak mengaku semua barang jalan"),
+   tetapi `DecisionActions.reviewPo()` hanya membaca `po_number`, `po_status`,
+   `decision_status`. Terukur pada keputusan bef077a8: keputusan `executed`,
+   PO `submitted`, sementara batch terikat b772248c DITAHAN ("sudah berangkat
+   2026-10-28T05:15:30Z") dan `max(batches.dispatched_at)` tidak bergerak
+   (tetap 20:41:12Z) — layar seolah menyatakan truk berangkat. Fix: helper
+   murni `ringkasanBatchPo()` di `components/DecisionActions.tsx` (pola sama
+   dengan `visibleActions`), dipakai `reviewPo`; tanpa binding batch ditulis
+   eksplisit "Tidak ada batch terikat pada PO ini, jadi tidak ada barang yang
+   diberangkatkan."
+
+Verifikasi: vitest `tests/po-dispatch-summary.test.ts` 6 tes + 31 tes
+DecisionActions/approval-menu/evidence-actions lulus; `tsc --noEmit` 0; alur
+nyata diulang pada keputusan 375c831b (approve 2 peran → eksekusi → PO
+MC-375C831B78CA draft → "Review PO…" → "Review & kirim"), pesan UI:
+"… keputusan menjadi executed. 1 batch ditahan: sudah berangkat
+2026-10-28T05:15:30.119336+00:00." — cocok dengan DB (`375c831b` executed,
+PO submitted, `max(dispatched_at)` tetap 20:41:12Z).
+
+Catatan keadaan: approval/eksekusi lokal ditolak sampai sesi demo aktif
+("Muat Demo" → `POST /demo/session/start`, mode realtime). Membangun template
+menyegarkan timestamp dan me-reset baris approval (ID deterministik tetap),
+jadi jangan heran kalau keputusan yang tadi 1/2 berubah jadi 0/2.
+
+### Fase 26 — Recommendations: panel persetujuan tidak lagi mengulang keadaan normal (29 Okt 2026)
+
+Tiga sisa temuan dari popup Tinjau, dikerjakan sampai habis:
+
+1. **Baris "Hasil verifier: Konsisten · oleh agen verifier" dibuang** untuk verdict
+   `consistent`. Ia keadaan normal setiap keputusan yang lolos verifier, jadi ia mengulang
+   hal yang sama di setiap panel dan mendorong "Masa berlaku" + tombol Setuju ke bawah.
+   Yang **tetap** dicetak: `flagged` ("Ditandai perlu diperiksa") dan verdict kosong
+   ("Belum tersedia") — itu yang mengubah keputusan penyetuju. Tes ditulis merah lebih
+   dulu; tiga tes lama yang mengharapkan "Konsisten" dibalik jadi menegaskan
+   ketiadaannya, plus satu tes baru bahwa `flagged` tetap tampil.
+2. **"SDC Rp…" di kartu feed → "biaya aman Rp…"**. Singkatan internal (Safe Delivered
+   Cost) berderet dengan kg dan jam tanpa penjelasan di layar; 0 kemunculan "SDC" di
+   halaman Recommendation sekarang. Dipakai bentuk pendek "biaya aman" (bukan "biaya aman
+   terkirim") karena frasa ini terulang di 10 kartu; istilah panjangnya tetap di
+   Decision & Evidence.
+3. **Tipografi panel**: empat kalimat memakai tanda hubung ASCII sebagai pemisah
+   ("Simulasi - PO simulasi…", "Persetujuan belum lengkap - …") → em dash "—" seperti
+   sisa aplikasi; label fakta "Sudah tercatat" → "Tercatat" (nilainya "0 dari 2",
+   sehingga label lama terbaca sebagai kalimat yang menggantung).
+
+**Tidak dikerjakan, dengan alasan**: nama pemasok muncul di judul popup ("… UD Cibinong
+Telur Berkah → Bandung") dan di baris "Pemasok". Baris itu bukan duplikat — ia membawa
+kode material SAP ("· kode MAT-TELUR") yang tidak ada di judul, dan formulir konfirmasi
+memang tempat pembaca memastikan apa yang akan dieksekusi. Dibiarkan.
+
+Bukti di peramban (Kepala Bandung): meta kartu "Telur · 780 kg · biaya aman Rp22.781.183 ·
+29 Okt 2026 03.45 WIB"; panel PEMERIKSAAN tinggal 3 fakta (Status, Keamanan batch sumber,
+Masa berlaku); 0 kemunculan "Konsisten" di seluruh halaman; em dash dan "Tercatat 0 dari 2"
+terpasang.
+
+Gerbang: `tsc --noEmit` **0** · `next lint` **0** · vitest penuh **217 berkas / 2.528 tes
+lulus**.
+
+### Fase 27 — Panel "Governance & persetujuan": X bulat, tanda bahaya, gerak halus (29 Okt 2026)
+
+Arahan pemilik: penutup panel jadi X bulat, tombol lain di bagian itu diperbaiki UI/UX-nya,
+animasinya halus — lalu "Governance & persetujuan dan background blur-nya tidak ikut ketika
+di-scroll".
+
+1. **Penutup = X bulat 32 px** (`.aksi-panel-close`), kelas `.button button-secondary`
+   dilepas. `aria-label` + `title` "Tutup panel", ikon SVG di dalamnya, `border-radius:
+   999px`, hover mengisi `--surface-sunken`, tekan mengecil 6% (bukan geser 1 px — pada
+   tombol ikon lingkaran, dorongan vertikal terbaca sebagai salah posisi). Di layar
+   sentuh naik ke 44 x 44 (sebelumnya `min-height: 44px` global membuatnya 32 x 44 —
+   lonjong).
+2. **Dua tingkat bahaya, disengaja**: `Tolak` memakai `data-tone="danger"` — tinta
+   `--danger-ink` + batas `--danger-border`, tanpa isi, supaya tidak bersaing dengan
+   "Setuju"; `Kirim penolakan` memakai `.button-danger` (merah penuh) yang sudah ada.
+   Salah tangkap yang sempat terjadi: `.button-danger` sudah didefinisikan di blok
+   "tombol destruktif" (merah penuh) — duplikat saya di dekat `.button-secondary` dibuang
+   agar tidak ada dua definisi yang saling menimpa.
+3. **Tombol aksi seragam**: `min-width: 112px`, `min-height: 40px`, isi terpusat
+   (sebelumnya Tolak 68 px vs Verifikasi 92 px — kolom kanan bergerigi). `Setuju` dapat
+   ikon centang (hanya saat tombol benar-benar bisa ditekan) + `aria-busy` jujur
+   (`aria-busy="false"` saat diam). Semua tombol aksi membawa `aria-busy` per aksi.
+4. **Gerak halus**: transisi `.button` diperluas dari `background 0.18s ease` menjadi
+   token `--dur-1/--dur-2` untuk background/border/color/transform/filter; panel masuk
+   dengan `aksi-panel-in` (opacity + 4 px), kotak alasan penolakan dengan
+   `reject-box-in`, `.action-menu-item` ikut mentransisikan latar. Semua dimatikan di
+   `prefers-reduced-motion: reduce`.
+5. **Bingkai ganda dilepas**: saat panel terbuka, `.detail-aksi--utama` tidak lagi
+   menambah bingkai + padding 14 px di sekeliling panel, dan judul bagian "Putuskan
+   sekarang" disembunyikan (`:has(.aksi-panel)`) — sebelumnya dua judul bertumpuk untuk
+   satu kotak. Tanpa dukungan `:has()`, tampilan kembali seperti semula tanpa rusak.
+6. **Kepala panel tidak lagi menempel**: `position: sticky` dicabut. Terukur sebelum:
+   gulir 120 px → panel naik 120 px tetapi kepala tetap di y=136 (melayang di puncak
+   badan popup, menutupi fakta yang lewat). Sesudah: kepala dan panel sama-sama bergerak
+   −150 px untuk gulir 150 px. Kepala kini jadi band di tepi atas kotak panel
+   (`margin` negatif selebar padding panel) supaya latarnya menyentuh tepi, bukan
+   mengambang dengan sisa bingkai.
+
+Gerbang (bagian ini): `tsc --noEmit` **0** · `next lint` **0** · vitest penuh
+**218 berkas / 2.524 tes lulus**.
+
+Catatan: di tengah pengerjaan, `tsc`/vitest sempat merah karena sesi lain memindahkan
+`butuhTindakan`/`zonaShortcut` keluar dari `lib/evidence.ts`
+(`components/DecisionDetail.tsx` + `tests/evidence-rapi.test.tsx` diubah pada menit yang
+sama). Setelah pekerjaan itu selesai, gerbang penuh hijau seperti di atas — tidak ada
+kegagalan yang berasal dari panel Governance.
+
+### Fase 28 — Kotak penahan: judul menyebut akibat, kalimat menyebut siapa (29 Okt 2026)
+
+Laporan pemilik atas kotak di panel persetujuan: **"Tertahan — Persetujuan belum lengkap — masih
+ada peran yang belum menyetujui."** Tiga masalah sekaligus, semuanya diperbaiki:
+
+1. **Judul "Tertahan"** tidak mengatakan apa-apa tentang akibat; diganti **"Belum bisa
+   dieksekusi"** — kalimat yang berlaku untuk semua sebab (persetujuan kurang, kedaluwarsa,
+   safety, ditolak).
+2. **Kalimat dua klausa bertanda pisah** ("lengkap — masih ada peran…") diganti satu
+   kalimat + daftar nama: **"Persetujuan belum lengkap. Yang belum menyetujui: Kepala SPPG
+   dan Ahli Gizi SPPG."** Server sudah mengirim daftar peran yang kurang
+   (`approval_state.missing`) — sekarang dipakai, lewat `roleList` + penggabung gaya
+   Indonesia (`daftarDan`: "A", "A dan B", "A, B, dan C").
+3. **Merah untuk keadaan normal.** Kotak ini selalu `--status-danger`; menunggu rekan
+   menyetujui adalah keadaan yang sedang berjalan, bukan kegagalan — di layar yang sama
+   panel juga menawarkan "Setuju". Sekarang `data-tone="warn"` (kuning) dan merah hanya
+   bila salah satu alasan memang final/kegagalan (`ditolak|kedaluwarsa|gagal|quarantin`).
+   Tanda kurung dibuang sebelum mencocokkan, karena kode server "approval belum memenuhi
+   requirement (missing/rejected)" memuat kata "rejected" padahal artinya belum lengkap.
+
+Ikut dibersihkan di sekitar kotak yang sama:
+- `alasanTertahan` dulu hanya mengenal dua kode lalu mencetak sisanya apa adanya —
+  "decision expired" tampil sebagai **"Decision expired"**. Kini memakai peta bersama
+  `humanizeBlocker` (satu kosakata dengan dialog aksi): "Jendela berlaku keputusan sudah
+  lewat".
+- Catatan setelah menyetujui: "Approval Anda sudah tercatat. Keputusan ini menunggu role
+  lain (sppg_nutritionist) — bukan tombol yang rusak." → **"Persetujuan Anda sudah
+  tercatat. Keputusan ini menunggu Ahli Gizi SPPG."** (Inggris + enum mentah hilang).
+  `title` tombolnya juga: "… menunggu peran lain".
+- Baris "Langkah berikutnya" memakai `color: inherit` supaya tidak merah di dalam kotak
+  kuning.
+
+Tes ditulis merah lebih dulu (4 tes baru di `approval-modal.test.tsx`): nama peran tampil,
+tidak ada `sppg_nutritionist`/frasa lama, `data-tone` warn vs danger, dan alasan server
+dikenal tidak setengah Indonesia. Satu tes lama di `approval-summary.test.tsx` diperbarui
+(ia justru mengunci enum mentah di layar).
+
+Gerbang: `tsc --noEmit` **0** · `next lint` **0** · vitest penuh **218 berkas / 2.528 tes
+lulus**.
+
+### Fase 29 — Kotak "Belum bisa dieksekusi" dirapikan jadi blok berlapis (29 Okt 2026)
+
+Laporan pemilik: isi kotak ini masih "kurang rapih". Yang salah bukan kalimatnya lagi,
+melainkan susunannya:
+
+1. **Tiga penanda menumpuk di satu baris** — poin daftar bawaan `<ul>` (padding 18 px dari
+   `.approval-modal ul`), ikon segitiga, lalu teks. Sekarang grid dua kolom
+   (ikon 14 px + isi), daftar tanpa poin, ikon jadi satu-satunya penanda dan sejajar
+   dengan judul.
+2. **Semua informasi satu bobot** — judul, sebab, peran, dan langkah berikutnya tercetak
+   sebagai satu paragraf. Sekarang berlapis: judul uppercase kecil (700, tracking),
+   sebab sebagai baris pendek, lalu peran.
+3. **Nama peran terselip di kalimat** ("Yang belum menyetujui: A dan B") → sekarang
+   **chip** di barisnya sendiri: "Menunggu  (Kepala SPPG) (Ahli Gizi SPPG)". Chip hanya
+   muncul bila sebabnya memang persetujuan — kalau keputusan tertahan karena safety,
+   daftar peran cuma bising.
+4. **Dua rupa untuk isi yang sama**: `.popup-governance` menimpa kotak ini dengan merah
+   pekat + judul uppercase sendiri, jadi mode panel (kuning) dan mode popup (merah) tidak
+   seragam. Semua warna/bingkai/judul kini satu sumber di `.approval-modal-blockers`
+   memakai `data-tone`; blok popup hanya menyisakan jarak.
+
+Tinggi kotak terukur di peramban: **93 px** (sebelumnya satu paragraf 2 baris tanpa
+pemisahan), isi: `BELUM BISA DIEKSEKUSI · Persetujuan belum lengkap. · Menunggu [Kepala
+SPPG] [Ahli Gizi SPPG]`.
+
+Tes: `approval-modal.test.tsx` disesuaikan (kalimat sebab kini "Persetujuan belum
+lengkap." + chip per peran). 5 berkas tes terkait persetujuan **84/84 lulus**.
+
+Gerbang penuh: `next lint` **0**; `tsc --noEmit` dan 3 tes lain **merah karena pekerjaan
+sesi lain** di halaman Decision & Evidence (`lib/section-jump.ts` kehilangan id `rute`,
+teks "0 dari 2"/"bersifat pengawasan" dipindahkan) — bukan dari kotak ini.
+
+### Fase 30 — PDF PO bisa diunduh setelah eksekusi (29 Okt 2026)
+
+Laporan pemilik: "harusnya setelah eksekusi bisa dapat download PDF PO". Dokumennya
+memang sudah ada — `GET /sap/purchase-orders/{po}/pdf` melayani status `approved` dan
+`executed` (terukur: 200, `application/pdf`, 5.282 byte, `PO-MC-BEF077A8A935.pdf`) —
+tetapi tidak ada satu pun jalan di layar untuk mengambilnya:
+
+1. Kartu **"PO keputusan ini"** di Decision & Evidence dibangun ulang menjadi ringkasan
+   satu PO (rencana decision-evidence-rebuild §3) dan **tombol Unduh PDF ikut hilang** —
+   justru di tempat orang mencari dokumennya.
+2. Satu-satunya tombol lama hidup di daftar PO jaringan yang tidak lagi dipasang di
+   halaman mana pun.
+3. Panel **Governance & persetujuan** — tempat orang menekan "Eksekusi" dan "Review &
+   kirim" — tidak menawarkan dokumen sama sekali; setelah `executed`, feed juga sudah
+   tidak menampilkan kartunya.
+
+Perbaikan (dua titik, satu aturan):
+
+* `DecisionPurchaseOrder` menerima `token` + `decisionStatus` dan mencetak **Unduh PDF**
+  bila `bolehUnduhPdf(status)`; bila belum sah, sebabnya ditulis ("PDF terbit setelah
+  keputusan disetujui"), bukan tombol mati.
+* Panel Governance mendapat baris aksi **"Dokumen PO <nomor>"** (`data-action="unduh-po"`)
+  lewat `ApprovalMenu`; `DecisionActions` memakai `downloadPoPdf` yang sama dengan
+  halaman, jadi nama berkas dan pesan galat tidak bercabang. Baris ini juga dihitung
+  sebagai aksi, sehingga keputusan `executed` ber-PO tidak lagi dicap "tidak ada yang
+  bisa dikerjakan".
+
+Verifikasi peramban (SPPG Head, `?keputusan=bef077a8…`): tombol muncul di kartu PO,
+klik → **"Tersimpan: PO-MC-BEF077A8A935.pdf"**; baris dokumen juga tampil di panel
+Governance. Tes: 11 berkas terkait **111/111 lulus** (`aksi-panel-kontrol` +
+`decision-purchase-order` bertambah 6 tes). `next lint` 0; `tsc` bersih untuk berkas
+yang disentuh.
+
+Catatan gerbang: suite penuh **2.541/2.543**; dua kegagalan ada di
+`tests/evidence-dossier.test.tsx` (stepper) yang **sedang ditulis sesi lain** (berkas
+berubah 24 detik sebelum pemeriksaan).
+
+### Fase 31 — Semua tombol tutup jadi X bulat (29 Okt 2026)
+
+Permintaan pemilik: "untuk semua tombol keluar buat menjadi X bulat". Sebelumnya ada
+**tiga** rupa penutup dan dua tombol teks:
+
+| permukaan | sebelum | sesudah |
+|---|---|---|
+| kepala popup | X 32 px, sudut 4 px, berbingkai putih | X bulat tanpa bingkai |
+| notifikasi top bar | X 32 px, sudut 4 px | X bulat, sama |
+| panel Governance | X bulat (acuan) | tidak berubah, jadi acuan |
+| kaki dialog ApprovalMenu | tombol teks "Tutup" | X bulat berlabel "Tutup jendela persetujuan" |
+| kepala kartu rincian Location Network | tombol teks "Tutup" | X bulat berlabel "Tutup rincian <lokasi>" |
+| kaki popup pemilih tanggal | tombol teks "Tutup" (duplikat X kepala) | **dihapus** — satu penutup per jendela |
+| popup peta (MapLibre) | glyph × bawaan pustaka | lingkaran 32 px senada |
+
+Satu sumber bentuk: komponen `components/TombolTutup.tsx` + kelas `.tombol-x` di
+`globals.css` (32 px, lingkaran penuh, 44 px di layar sentuh, latar transparan sampai
+disentuh, `:active` 6% lebih kecil, `:focus-visible` cincin fokus, dimatikan di
+`prefers-reduced-motion`). Kelas lama (`.popup-close`, `.top-bar-notif-close`,
+`.aksi-panel-close`) tetap dipakai sebagai kait CSS/tes, tetapi **tidak lagi punya
+aturan sendiri** — ketiganya kini satu blok dengan `.tombol-x`.
+
+Yang sengaja TIDAK diubah: "Tutup sidebar" (tombol lipat sidebar, simbol chevron, bukan
+penutup isi) dan "Keluar" (logout, bukan tutup).
+
+Tes: berkas baru `tests/tombol-tutup-x.test.tsx` (6 tes). Dua tes lama disesuaikan dengan
+alasan tertulis: `aksi-panel-kontrol` (kelas kini `tombol-x aksi-panel-close`) dan
+`agenda-date-picker` ("Tutup" di kaki dihapus → tes menekan X kepala popup).
+
+Gerbang: `tsc --noEmit` 0 · `next lint` 0 · vitest **220 berkas / 2.529 tes lulus**
+(dijalankan lokal karena Docker Desktop berhenti di tengah langkah ini).
+
+Verifikasi peramban (Kepala Bandung, popup Tinjau terbuka): `.tombol-x popup-close`
+("Tutup jendela") dan `.tombol-x aksi-panel-close` ("Tutup panel") sama-sama
+**32×32 px, radius 999 px, latar transparan, ikon <svg>**, dan **0 tombol teks "Tutup"**
+di halaman. Notifikasi top bar: `.tombol-x top-bar-notif-close`, 32 px, radius 999 px.
+
+Catatan operasional: mesin Docker sempat mati di tengah langkah (WSL gagal `Create
+process` → `getpwuid(0) failed 5` di distro `docker-desktop`). Pulih dengan
+`wsl --shutdown` + mulai ulang Docker Desktop; engine 29.4.3 kembali dan container
+`mealchain-*` naik lagi.
+
+### Fase 32 — Agent Activity Log: satu judul, satu bilah filter, satu bahasa label (29 Okt 2026)
+
+Permintaan pemilik: *"skill fullstack upgrade atau design lagi halaman Agent Activity Log,
+tambahkan konsep dari `06-agent-log.md`"*.
+
+**Temuan pertama: konsep dokumen 06 SUDAH terpasang** (Fase 20–21), dan itu diverifikasi satu
+per satu di aplikasi hidup sebelum menyunting apa pun — tabel keputusan di bawah kepala, strip
+sembilan tahap sebagai navigasi (chip bisa diklik, `aria-expanded` berubah), penanda waktu
+`aa-mark-time` + penanda lambat `aa-mark-slow`, banner kejujuran tiga keadaan, kalimat
+"pencarian menyaring DAFTAR KEPUTUSAN, bukan langkah trace", tautan "Nilai benar/salah di
+Safety & Evidence" yang hanya muncul pada banner `present`, dan urutan §4.3. Jadi pekerjaan
+ini BUKAN penambahan konsep baru, melainkan pass kerapian: dokumen yang sama dipakai sebagai
+batas — §0 "jangan membangun tampilan baru dari nol" tetap dipegang.
+
+Empat sisa ketidakseragaman yang terukur:
+
+| # | Sebelum | Sesudah |
+|---|---|---|
+| 1 | h1 20 px "Agent Activity Log" lalu **h2 18 px** "Agent Activity" 10 px di bawahnya | h2 jadi label modul **14 px/600** (`.aa-kicker`) — satu judul besar per layar |
+| 2 | "Status Model Agent" 16 px/600 dan "Integritas Bukti" 16 px/700, di antara lima sub-judul 14 px | keduanya **14 px/600**, dibatasi `.agent-log-section …` (ProviderPanel juga dipakai D&E) |
+| 3 | kartu pencarian 158 px **+ baris periode 28 px terpisah** di bawahnya | periode masuk baris field (`aa-search-field-periode`); satu bilah filter |
+| 4 | panel status model: margin 16 + padding 12 + judul sendiri = **92 px** untuk tiga chip 32 px | judul + chip **sebaris**, margin 0 → **50 px** |
+
+Angka dokumen: **2.444 → 2.310 px (−134, −5,5%)**, luapan horizontal **0** di lebar 1262 px.
+`aa-run-summary` 146 → 72, `provider-panel` 92 → 50, `integrity-panel` 425 → 412,
+`agent-activity` 935 → 929. Artefak: `_qa/agent-log-rapi/sebelum.json` + `sesudah.json`.
+
+Perbaikan kecil yang ikut: `PeriodPicker` sekarang memakai `feedWindowHintBilaBerbeda`
+(petunjuk "24 jam terakhir" hanya dicetak bila menambah arti — keputusan Fase 24 yang dulu
+belum dibawa ke komponen ini), dan petunjuk kosong disembunyikan (`:empty`) supaya tidak
+memakan satu baris flex.
+
+Yang sengaja TIDAK diubah: isi/nada banner kejujuran, urutan §4.3, jumlah chip (9), tinggi kartu
+keputusan, dan kalimat catatan tabel keputusan.
+
+Tes: berkas baru `tests/agent-log-rapi.test.tsx` (**11 tes**) mengunci kedudukan judul, posisi
+periode di dalam baris field, `margin: 0` pada `.kpi-period`, `:empty` hint, dan pemakaian
+`feedWindowHintBilaBerbeda`.
+
+Gerbang: `tsc --noEmit` 0 · `next lint` 0 · vitest **225 berkas / 2.583 tes lulus** (di dalam
+kontainer). Verifikasi silang: halaman Decision & Evidence tetap mencetak "INTEGRITAS BUKTI"
+13 px/700 kapital — override-nya benar-benar terbatas ke halaman Agent Log.
+
+---
+
+### Fase 33 — Pemasok: riwayat penerimaan barang per pemasok (29 Okt 2026)
+
+Latar: `D:\Downloads\05-penerimaan-barang.md` §8.5 (riwayat penerimaan per pemasok) dan §9
+(nilai PO vs nilai diterima) belum punya permukaan di aplikasi. §8.1–§8.3 sudah hidup di popup
+penerimaan Decision & Evidence, tetapi halaman **Pemasok** hanya menjawab "siapa pemasoknya" —
+tidak pernah "berapa yang benar-benar diterima dari dia, dan berapa nilainya".
+
+**Backend (baru).**
+- `GET /receipts/riwayat` — satu baris per catatan penerimaan, terbaru dulu. Field per baris:
+  `ordered_kg`, `received_kg` (`null` sampai `disetujui`), `unit_price_idr`, `po_number`,
+  `estimated_value_idr`, `accepted_value_idr`. Cakupan lokasi sama dengan antrean `menunggu`.
+- `ringkasan` dihitung server dari **seluruh** baris cakupan (bukan hanya `limit` yang dikirim):
+  `total`, `menunggu`, `disetujui`, `ditolak`, `kg_dipesan`, `kg_diterima`,
+  `nilai_diterima_idr`, `nilai_menunggu_idr`, `tanpa_harga`, `supplier`.
+- `services/receipt_value.py::peta_po_dan_harga()` — nomor PO + harga satuan untuk **banyak**
+  batch dalam satu kueri (mencegah N+1 saat satu halaman memuat puluhan baris).
+- Barang **ditolak** tidak masuk `nilai_menunggu_idr`: perkiraannya bukan uang yang menunggu
+  keputusan. Dikunci oleh tes backend.
+
+**Seed.** `demo_template._semai_riwayat_penerimaan()` menambah tiga catatan deterministik (satu
+`disetujui` ber-PO dengan `received_kg` + nilai pembukuan, satu `ditolak` beralasan, satu
+`menunggu`), dipanggil **paling akhir** setelah `_rapikan_cakupan_ledger`. Batch yang sudah punya
+catatan dilewati — tanpa itu satu batch bisa punya catatan `disetujui` dan `menunggu` sekaligus.
+
+**Frontend.** `lib/supplier-receipts.ts` (murni, 20 tes), `components/SupplierReceipts.tsx`,
+`lib/hooks/useReceiptHistory.ts`, `app/supplier-receipts.css` (berkas sendiri, bukan tambahan
+`globals.css`). Kartu duduk di antara "Daftar pemasok" dan "Register eksklusi".
+
+| Hal | Aturan |
+|---|---|
+| Tiga angka (§8.2) | kepala kartu: **Dipesan · Diterima · Nilai diterima**, dari `ringkasan` server |
+| kg | dua baris dalam satu sel (dipesan / diterima) — tidak dikurangkan di klien |
+| Nilai | kolom sendiri; `disetujui` → nilai pembukuan, `menunggu` → "… perkiraan", tanpa PO → "tidak tercatat", `ditolak` → "—" |
+| Asal harga (§8.3) | "540 kg × Rp 15.000 per kg dari PO MC-…" di bawah nilai, memakai `valueOrigin()` yang sudah ada |
+
+**Dua cacat yang tertangkap saat verifikasi hidup** (bukan saat menulis kode):
+1. tabel **1.116 px** di dalam bungkus 917 px → kolom Nilai terpotong di tepi kanan.
+   Perbaikan: `table-layout: fixed` + lima lebar kolom 15/24/13/17/31 % + izin membungkus untuk
+   nama pemasok, alasan, dan asal harga; ≤760 px kembali `auto` + `min-width: 600px` (gulir di
+   dalam bungkus, pola tabel konsol lain).
+2. baris **ditolak** sempat mencetak "Rp 5.400.000 perkiraan" — terbaca seperti uang keluar untuk
+   barang yang tidak diterima. Sekarang "—", dan kalimat asal harga tidak dirender.
+
+**Angka.** Kartu 546 px, halaman Pemasok 3.145 px, luapan horizontal **0** di 1262×568; lima baris
+(3 menunggu · 1 disetujui Rp 8.100.000 · 1 ditolak), penyaring 1/1/3/5 baris.
+
+Gerbang: `tsc --noEmit` 0 · vitest **226 berkas / 2.589 tes lulus** · backend
+`tests/test_receipts_riwayat.py` + gate penerimaan + batch pemasok tunggal **21 lulus**.
+
+**Catatan alat.** Menjalankan `pytest` backend di kontainer memakai **DB dev yang sama** dan
+me-reset data penerimaan (fixture). Setelah suite backend, jalankan
+`docker compose exec -T backend python -m app.seed.demo_template` sebelum mengukur atau demo.
+
+### Fase 33 — Agent Log: pemilih keputusan di kepala dihapus, tabel jadi pemilih dengan bentuk tabel halaman lain (29 Okt 2026)
+
+Permintaan pemilik: *"hapus ini `<button id="pilih-keputusan-log" class="dpick-trigger" …>` dan redesign
+bagian 'Agent Activity · Daftar keputusan' buat designnya seperti halaman tabel page lainnya, tampilkan 10."*
+
+**1. Pemilih keputusan di kepala halaman dihapus.** `DecisionPicker` (id `pilih-keputusan-log`) dicabut dari
+`PageHeader` beserta impor `DecisionPicker` dan `decisionGroups`; deskripsi kepala jadi *"Pilih satu
+keputusan di daftar, lalu klik satu tahap…"*. Verifikasi DOM: `document.querySelector('[id="pilih-keputusan-log"]')`
+= **null**. Pemilih sekarang **tabelnya sendiri** — ia sudah punya kolom aksi "Lihat jejak"/"Dipilih".
+
+Agar pilihan tetap terlihat: halaman otomatis **digeser ke halaman tabel yang memuat keputusan terpilih**
+(dipilih otomatis saat tab dibuka, atau lewat `?keputusan=`). Penjaga `pageShownFor` (ref) membuat pergeseran
+hanya terjadi ketika **ID terpilih berubah** — tanpa itu, penyegaran data menarik pengguna kembali dari
+halaman yang sedang ia buka (terjadi sungguhan saat data di-seed ulang di tengah verifikasi).
+
+**2. Tabel memakai bahasa tabel halaman lain.** Sebelumnya tabel ini punya aturan sendiri (`.aa-table th/td`,
+`.aa-pager`, `.aa-row-btn`, dua baris "Halaman 1 dari 3"). Sekarang: `.board-table-wrap` + `.location-table` +
+`<Pager>` — sama dengan **Daftar pemasok**, **Papan kiriman**, **Jaringan lokasi**, **Keamanan pangan**.
+Kepala kolom kapital di atas latar `--bg-page`, garis rambut antar baris, kolom angka `.num` rata kanan +
+huruf data, aksi baris `.board-link`, pager `«1–10 dari 13»` dengan nomor halaman + tombol Sebelumnya/Berikutnya
+(nonaktif di ujung). CSS lama **dibuang** (`.aa-table th/td` padding+latar, `.aa-pager*`, `.aa-row-btn*`,
+`.aa-cell-title/sub`, `.aa-col-num`); yang tersisa hanya hal khas tabel ini: baris terpilih
+(`background --neutral-bg` + `box-shadow: inset 3px 0 0 --accent-strong`), `.aa-col-action`, `.aa-col-waktu`,
+dan `.aa-row-link` (44 px di layar sentuh).
+
+**3. 10 baris per halaman.** `DECISION_PAGE_SIZE` 6 → **10**, dan pemotongan halaman pindah ke
+`paginate()` di `lib/pagination.ts` (satu aturan dengan daftar lain). Helper `pageSlice`/`pageCount` milik
+`lib/decision-table.ts` **dihapus**, bukan diduplikasi; tesnya dipindah ke `paginate`.
+
+**4. Dua enum Inggris yang masih bocor ke kolom Status ikut dicabut** (terlihat di aplikasi hidup saat tabel
+diperiksa: baris `price_anomaly` bercetak `verifier_flagged`, dan sebuah baris bercetak `proposed`):
+
+| status | sebelum | sesudah |
+|---|---|---|
+| `verifier_flagged` | `verifier_flagged` (mentah) | **Ditandai verifikator** |
+| `review_only` | `Temuan tinjauan` (sudah) | tetap, chip warn |
+| `proposed` | `proposed` (mentah) | **Diusulkan** |
+
+`verificationState` untuk ketiganya = `menunggu`. Sebelumnya mereka jatuh ke `lainnya` sehingga
+**tidak terjangkau chip mana pun**: 13 baris, chip 2+6+3 = 11. Sekarang chip **1 + 9 + 3 = 13**.
+
+**Angka terukur (Kepala Bandung, lebar 1262 px):** 10 baris halaman 1, tinggi baris **53–54 px**, tinggi tabel
+**566 px**, pager `1–10 dari 13`, luapan horizontal **0**; baris terpilih: `rgb(241,245,249)` + inset
+`3px rgb(37,99,235)`, `aria-pressed="true"`, teks tombol **"Dipilih"**.
+
+Tes: `tests/agent-log-rapi.test.tsx` menjadi **18 tes** (tabel 10 baris + rentang pager, `location-table`,
+kolom `.num`, tidak ada enum mentah, baris terpilih, pemilih kepala hilang, CSS lama tidak menimpa
+`.location-table`), `tests/decision-table.test.ts` **21 tes** (label & keadaan verifikasi status baru).
+
+Gerbang: `tsc --noEmit` **0** · `next lint` **0** · vitest **2.654 tes**, dengan **4 kegagalan di
+`tests/supplier-board.test.tsx` milik refactor Pemasok sesi lain** (bukan berkas yang disentuh di fase ini;
+`SupplierBoard.tsx` sempat membuat bundle klien gagal hydrate dengan `Cannot find name 'setHanyaJangkauan'`
+selama ±6 menit, lalu pulih setelah sesi itu menyelesaikannya).
+
+Dokumen: `docs/design.md` §3.4 + baris tabel 5 diperbarui — pemilih = tabel 10 baris/halaman, dropdown kepala
+dihapus.
+
+---
+
+### Fase 34 — Demo Control: sembilan kartu berganti menjadi log pengambilan data realtime saat "Jalankan agent" (29 Okt 2026)
+
+Permintaan pemilik: *"bagian ini [Supply Selesai Durasi 5,3 dtk Peringatan 0 peringatan … Supervisor … Verifier]
+ubah ke Log Proses Pengambilan Data realtime ketika menjalankan 'Jalankan agent'"*.
+
+**Sebab masalahnya.** Sembilan kartu dibaca dari baris review yang ditulis **sekaligus di akhir** putaran.
+Selama putaran berjalan isinya hanya "Berjalan" tanpa satu fakta; dan sebelum baris baru ditulis kartu masih
+memuat hasil putaran **sebelumnya** — "Selesai · Durasi 5,3 dtk" milik putaran lama — yang dibaca operator
+sebagai hasil putaran yang sedang ia jalankan.
+
+**Perubahan.**
+1. `DemoProof` menerima `langkahHidup` + `galatAliran`. Saat `running`: yang dicetak **hanya** log
+   (`h3 "Log proses pengambilan data"`, catatan *"Kartu sembilan agen muncul lagi setelah putaran ditutup."*,
+   terminal). Sembilan kartu **tidak dirender sama sekali**.
+2. Putaran ditutup → kartu kembali (dari baris review baru) dan log putaran itu **dilipat** di bawahnya
+   (`<details class="dc-log-fold">`, isi tetap di DOM).
+3. Putaran pertama (belum ada bukti / bukti masih dimuat) → log tetap tampil lewat salinan di blok, syaratnya
+   `(busy || galat) && !adaBukti`, jadi dua tempat itu saling meniadakan.
+4. **Sumber data per langkah**: `tool_called` dipecah pada `+` menjadi chip mono (`supply.get`, `demand.get`,
+   `supplier.get`, `verifier.rest`) lewat `sumberDari()` di `lib/agent-stream.ts`. Nama tidak diterjemahkan —
+   harus sama dengan yang tercatat di Agent Log. Chip duduk di kolom isi (bukan kolom sendiri) supaya tepi kiri
+   ringkasan lurus: `getBoundingClientRect().x` = **460 px** untuk semua baris (sebelum diperbaiki, ringkasan
+   bergerigi karena kolom chip lebarnya mengikuti isi).
+
+**Terukur (Kepala Bandung, 1247 px, putaran beras 07.40 WIB).** Saat tombol ditekan: kartu **9 → 0**,
+terminal **1**, pil `LIVE`, baris **2 → 4 → 6 → 8 → 7** selama ±33 detik. Setelah putaran ditutup:
+kartu **9** kembali, log turun ke `<details>` berisi **7 langkah** (SELESAI). Luapan horizontal 0.
+
+**Tes.** `tests/demo-proof-live.test.tsx` **7 tes baru** (log menggantikan kartu, chip `data-sumber`,
+catatan kartu kembali, keadaan "menunggu langkah pertama", galat kanal, kartu+fold setelah putaran,
+tidak ada log kosong). `tests/agent-stream-parse.test.ts` +4 tes `sumberDari`. Kontrak lama
+`tests/demo-control-panel.test.tsx` ("kesembilan kartu Berjalan") **dibalik** menjadi "kartu tidak dicetak,
+yang tampil log proses" — perilaku lama memang yang diminta diganti.
+
+**Regresi yang tertangkap gerbang sendiri:** chip sempat ditulis `font-size: 11px` → gagal
+`tests/design-tokens-kontrak.test.ts` (lantai tipografi 12 px). Diperbaiki ke `var(--fs-1)`.
+
+Gerbang: `tsc --noEmit` bersih untuk berkas yang disentuh (sisa 3 error di `SupplierSummary.tsx` milik
+refactor Pemasok sesi lain), `next lint` **0**, vitest **2.670 tes** dengan **1 kegagalan**
+`tests/supplier-search-ui.test.tsx` (sesi lain; bukan berkas fase ini).
+
+Dokumen: `docs/design.md` **§37.4** — log menggantikan kartu selama putaran + aturan chip sumber.
+
+
+## 29 Okt 2026 — Lembar PO (PDF) memakai template korporat
+
+**Permintaan pemilik:** pada lembar PO, rincian pesanan harus memuat bahan, transportasi, dan
+penanganan; blok "Safe Delivered Cost (analitis, bukan tagihan)" dan "Dasar persetujuan" dihapus;
+tata letak memakai template PO korporat.
+
+**Yang berubah (`backend/app/services/po_document.py`).**
+- Kepala: merek + "PURCHASE ORDER" + meta kanan (Nomor PO, Tanggal, Status, Mata uang IDR,
+  Ref. keputusan); nomor PO tidak lagi mengambang sebagai baris teks.
+- Blok tiga kolom "KEPADA (VENDOR) / KIRIM KE (TUJUAN) / BAHAN" menggantikan tabel "Pihak & bahan".
+- Rincian pesanan berkolom No–Uraian–Jumlah–Satuan–Harga satuan–Nilai dengan tiga baris komponen
+  (bahan, transportasi, penanganan `1 ls`) lalu satu baris total. Komponen yang tidak tercatat tidak
+  dicetak (bukan Rp 0); bila `invoice_total` berbeda dari harga × jumlah, subtotal + total PO dicetak
+  sebagai dua baris berbeda (tidak ada pembulatan diam-diam).
+- **DIHAPUS 29 Okt 2026 (permintaan pemilik, putaran kedua):** catatan kaki `*` (harga satuan
+  TURUNAN, lumpsum transportasi, kalimat selisih), kalimat arti status di bawah tabel
+  (`catatan_status`), seluruh blok "Syarat & ketentuan", dan kalimat "Sumber angka
+  (mock_sap_table)…" di kaki dokumen. Asal data tetap disebut di footer setiap halaman
+  ("SAP simulasi", Rules.md §4). Angka risiko internal tetap tidak dicetak sama sekali.
+- Pengesahan: blok "DISIAPKAN OLEH / DISETUJUI OLEH" berisi peran, nama, waktu, catatan persetujuan.
+- Dihapus: "Rincian biaya komersial (PO)", "Safe Delivered Cost", "Dasar persetujuan" (beserta tabel
+  identitas keputusan dan jejak persetujuan); jejak keputusan tinggal "Ref. keputusan" di meta.
+
+**Tes.** `tests/test_po_document_pdf.py` (asersi `kg()` mentah → kolom Jumlah+Satuan; status keputusan
+tidak lagi dicetak; "Dasar persetujuan"/"Safe Delivered Cost" wajib absen) dan
+`tests/test_po_invoice_commercial.py` (asersi "SDC tampil" dibalik jadi "SDC wajib absen"; tambah tes
+urutan komponen dan tes selisih pembulatan). Gerbang: `pytest` **37 lulus / 1 skip / 0 gagal (exit 0)**
+untuk empat berkas PO; `ruff check` bersih. Contoh render: `_qa/po-contoh.pdf`.
+| S4-71 | Frontend | **Demo Control — blok "Bukti agent" diganti "Log proses pengambilan data" (terminal).** Sembilan kartu (Selesai/Durasi/Peringatan), kartu Supervisor + narasi, catatan audit Verifier, `dc-facts`, dan lipatan "Langkah pipeline" dihapus dari panel (`.dc-agent`/`.dc-narration`/`.dc-steps-fold` = 0 di DOM). Blok kini: kesiapan kasus + terminal + tiga tombol tautan. Baris log: kanal SSE saat putaran berjalan, jejak `agent_traces` (`langkahTersimpan`) setelah putaran ditutup/muat ulang; selama putaran baris tersimpan sengaja tidak dipakai (hasil putaran lama) dan jam per langkah tidak dikarang. Bukti: 86 tes di 5 berkas lulus, `next lint` bersih, `tsc` tanpa galat baru; `docs/design.md` §37.5. | Selesai 29 Okt 2026 |
+
+## 29 Okt 2026 — Keamanan Pangan: nilai di "Menunggu persetujuan" + bukti suhu di ringkasan
+
+**Permintaan pemilik:** "design lagi halaman keamanan, tambahkan konsep dari `05-penerimaan-barang.md`:
+upgrade ringkasan pengawasan/suhu, Penerimaan barang + popup, dan nilai di Menunggu persetujuan."
+
+**Langkah ini (dua dari tiga butir):**
+
+1. **Nilai di "Menunggu persetujuan" (Dok 05 §8.2–§8.3).**
+   - Backend `app/api/receipts.py`: `GET /receipts/menunggu` mengirim `batch_quantity_kg`,
+     `po_number`, `unit_price_idr`, `estimated_value_idr` per baris, satu kueri peta PO
+     (`receipt_value.peta_po_dan_harga`) untuk seluruh antrean. `accepted_value_idr` tetap `None`.
+   - Frontend: komponen `NilaiAntrean` di `FoodSafetyBoard.tsx` memakai `receiptFigures` +
+     `valueOrigin` (tidak mengalikan rupiah di klien) → label "Nilai bila disetujui", nominal
+     `tabular-nums`, asal harga "180 kg × Rp 11.500 per kg dari PO MC-…"; tanpa ikatan PO →
+     "tidak tercatat" + kalimat sebab.
+   - Bukti hidup (SPPG Head, 3 catatan Jakarta): 1 baris `Rp 2.070.000` + asal harga PO, 2 baris
+     "tidak tercatat"; kartu 443 → 512 px.
+   - Tes: `backend/tests/test_receipt_accepted_value.py` (6 lulus, tes antrean diperluas jadi
+     "membawa kunci nilai DAN perkiraan") + `frontend/tests/receipt-pending-value.test.tsx` (5 tes).
+
+2. **Ringkasan pengawasan + suhu.**
+   - Baris baru `.safety-temp`: "Bukti suhu · 12 dari 17 batch cukup bukti · 5 belum cukup ·
+     Rincian bukti suhu" (tautan ke `#safety-bukti-suhu`, `margin-left: auto`), angka dari
+     `evidenceSummary` server, tidak dicetak bila cakupan kosong.
+   - `safetySummaryOfRows` mendedupe `failedLocations` ("Jakarta, Jakarta" → "Jakarta").
+   - "Bukti suhu kiriman ini" tidak lagi mencetak ISO mentah (pakai `formatMomentWib`).
+   - Bukti hidup: Ringkasan 252 → 284 px (947 lebar), luapan horizontal 0, dokumen 4.820 → 4.938 px.
+   - Tes: `frontend/tests/safety-temp-summary.test.tsx` (3 tes).
+
+**Gerbang:** `next lint` **0**; `tsc` bersih untuk berkas yang disentuh; vitest **2.666 tes / 1 gagal**
+(`tests/radius-scale-css.test.ts`, `border-radius: 8px` di `.kpi-detail-fact` — milik pekerjaan sesi
+lain yang belum di-commit, bukan dari langkah ini); backend 6 tes lulus.
+
+**Belum dikerjakan (butir ketiga):** kartu **Penerimaan barang** (796 px, form inline) dipindah ke
+popup/drawer tiga langkah seperti Dok 05 §2. Ini mengubah kontrak 5 tes di
+`tests/food-safety-board.test.tsx` ("Titik periksa", "1. Komoditas", "Catat hasil terima",
+"Lainnya", batas izin tulis) karena isinya pindah ke komponen sheet — perlu diputuskan lebih dulu.
+
+**Sesudah (Dok 05 §2 — popup):** ceklis pindah ke drawer kanan tiga langkah
+(`ReceiptDrawer.tsx`): periksa kondisi → nilai & putusan → tandai barang. Kartu
+tinggal 404 px (dari 796), halaman 3.910 px (dari 4.938). Gerbang tombol simpan
+dipasang sesuai §2 (mati selama ada titik kosong) dan kalimat "Boleh disimpan
+sebagian" diganti. Dua cacat ditemukan saat verifikasi browser: popup menutup
+sendiri ketika batch terakhir dicatat (dipindah ke luar kartu) dan isi drawer
+lebih tinggi dari layar (mengandalkan `.popup-body`). Detail: `docs/design.md` §39.
+
+**Belum dikerjakan (butuh backend, bukan desain):** Dok 05 §3 (bobot per butir +
+skor), §4 `acceptance_advice`, §8.4 foto bukti & tanda tangan — semuanya butuh
+kolom/skema baru di `batch_receipts`.
+| S4-72 | Backend + Frontend | **Halaman Pemasok: residu lokasi uji dibersihkan + penjaga agar tidak terulang.** Lokasi `F9-tgt-…`, pemasok `F9-sup-…`, 2 akun `f9.*@uji-f9.local` (residu `test_approval_summary_receipt_gate.py`) terhapus; `nama_lokasi_kanonik()` + `pilih_kota_demo()` menyaring kota demo (snapshot ∧ akun), `_sapu_lokasi_asing()` menyapu lokasi di luar snapshot tanpa memutus rantai bukti, conftest mengenal pola `@uji-%.local`, deskripsi halaman tidak lagi menyebut peta. Bukti (29 Okt 03.38 UTC): cakupan 11→10 lokasi, pemasok 61→60, batch 138→126 baris; 79 tes backend (supplier+demo) + 66 tes FE lulus; `docs/design.md` §40. | Selesai 29 Okt 2026 |
+
+## 29 Okt 2026 — Keamanan Pangan: audit menyeluruh, enam hal ditutup
+
+Audit halaman dari DB → API → layar (tiga peran: Kepala Jakarta, Kepala Bandung, BGN Monitor).
+Cakupan waktu itu: 138 batch · 11 lokasi · 8 kedaluwarsa · 24 keputusan · 2 catatan menunggu.
+
+**Yang diperbaiki (semua sudah diverifikasi ulang).**
+
+1. **Lingkaran permintaan.** `loadPendingReceipts` / `loadChecklist` dikirim sebagai fungsi inline
+   dari `app/page.tsx`, jadi identitasnya berubah tiap render → efek memuat ulang terus
+   (terukur 15 panggilan `/receipts/menunggu` per 10 detik). Kini prop disimpan di `useRef` di
+   `FoodSafetyBoard`, pemanggil memakai `useCallback`, dan `setAntrean` tidak menulis bila isinya
+   sama. Terukur sesudahnya: 1 panggilan per 10 detik.
+2. **Residu lokasi uji** (`F9-tgt-…`) sudah bersih lewat `_sapu_lokasi_asing()` (pekerjaan sesi
+   lain, S4-72); build demo kini 10 lokasi, 0 lokasi asing.
+3. **Satu keadaan per batch.** `safetyState()` baru menjadi satu-satunya sumber untuk lencana
+   tabel, chip saringan, dan angka ringkasan: ditahan → gagal → **kedaluwarsa** → perlu verifikasi →
+   belum diuji → aman. Akibatnya: chip "Perlu verifikasi" tidak lagi menghitung batch yang ditahan
+   (dulu 19 vs tile 18), dan batch yang masa layaknya lewat tidak lagi berlabel "Aman".
+4. **Istilah tidak bertabrakan.** Kaki kartu "Batch perlu perhatian" menulis "batch dengan bukti
+   atau kesegaran bermasalah", bukan "perlu tindakan" — frasa itu milik chip saringan (22 baris),
+   sedangkan kartu ini 39 baris.
+5. **Cakupan angka dinyatakan.** Kepala kartu Ringkasan memuat label "Seluruh jaringan" /
+   nama lokasi; sebelumnya Kepala Bandung membaca angka jaringan sebagai angka dapurnya.
+6. **`hoursLabel` di bawah satu jam** memakai menit ("lewat 31 menit"), bukan pembulatan jam.
+7. **`/balance/map` tidak lagi dipanggil dua kali** untuk komoditas yang sama pada saat yang sama
+   (4 komoditas: 8 → 4 panggilan saat halaman dibuka); penggabungan hanya selama permintaan
+   berjalan sehingga tidak ada data basi setelah aksi tulis.
+8. **Ekspor JSON** memakai himpunan eksklusif yang sama dengan tile (`gagal_uji`, `kedaluwarsa`,
+   `berat_gagal_uji`, `berat_kedaluwarsa`, `berat_ditahan`), sehingga jumlah kategori tidak lagi
+   melebihi `batch_diperiksa`.
+
+**Salah lapor yang dikoreksi.** Temuan "kiriman hanya menuju Jakarta" keliru: `GET /supplier-routes`
+dibatasi lokasi user (Kepala Jakarta), bukan data yang hilang. Sebagai BGN Monitor ada 50 rute
+tersebar di 10 kota. Tidak ada kode yang diubah untuk ini.
+
+**Uji.** Frontend: 156 tes di 8 berkas terkait + suite penuh **2.720 lulus / 4 gagal** (keempat
+kegagalan berasal dari berkas sesi lain yang sedang disunting: `theme-ext.css`,
+`ReceiptDrawer.module.css`, `lib/decision-table.ts`, `AgentActivityPanel.tsx`). Backend:
+19 tes (`test_receipts_approval.py`, `test_demo_penerimaan_pilihan.py`, `test_demo_sapu_lokasi_asing.py`)
+lulus. `tsc --noEmit` tidak melaporkan kesalahan di berkas yang disentuh sesi ini (2 kesalahan
+`DecisionRow` berasal dari `lib/decision-table.ts` sesi lain).
+
+**Belum.** Aksi tulis (setujui/tolak penerimaan, uji ulang, tahan) tidak dieksekusi saat audit;
+build produksi belum dijalankan (dev server memegang `.next/trace`).
+
+
+## Fase 35 — UI/UX upgrade lima modul (29 Okt 2026)
+
+| ID | Task | Kategori | Status | Assignee | Catatan |
+|---|---|---|---|---|---|
+| S4-73 | **Fase 1: inspeksi + baseline.** Peta lima modul (Agent Log, KPI, Keamanan Pangan, Pemasokan & Kebutuhan, Decision & Evidence) → komponen + endpoint; celah terhadap kriteria prompt dicatat per modul; baseline gerbang diukur: `tsc` 0 error, `next lint` 0 warning, vitest **244 berkas / 2.728 tes lulus**, build produksi sukses (`/` 479 kB, First Load 574 kB). Rencana UI-1…UI-6 + batasan (status `running/failed` tidak ada di skema; sampel suhu tidak diekspos endpoint baca; riwayat KPI tidak dikirim `/kpi`) di `docs/plans/ui-ux-upgrade-2026-10-29.md`. Belum ada kode produk yang diubah. | Frontend/UI | Done | Hermes | Tanpa commit (working tree dipakai bersama) |
+
+**Berikutnya (belum dikerjakan).** UI-1 Agent Log (ringkasan eksekusi dari data nyata + filter
+agen + drawer) → UI-2 KPI (pengelompokan domain, jumlah metrik tetap 8 sampai AUD-013 diputuskan)
+→ UI-3 Keamanan Pangan (kolom suhu/rentang, sortir, drawer batch; grafik suhu menunggu field
+aditif di `GET /batches/{id}`) → UI-4 Pemasokan & Kebutuhan (strip ringkasan + grafik demand vs
+supply per lokasi) → UI-5 Decision & Evidence (tiga lencana terpisah, pengelompokan bukti) →
+UI-6 verifikasi (sweep 390/768/1280 + axe + build).
+
+### Fase 35a — Agent Log: ringkasan eksekusi + triage (UI-1, 29 Okt 2026)
+
+| ID | Task | Kategori | Status | Assignee | Catatan |
+|---|---|---|---|---|---|
+| S4-74 | **UI-1.** Tab Agent Log mendapat **Ringkasan eksekusi** (6 kotak dari data nyata: perlu perhatian, keputusan, punya jejak agen, menunggu verifikasi, ditolak, lewat tenggat) + **chip triage "Perlu perhatian"** (ditandai verifikator ∪ lewat tenggat) + penanda **"lewat tenggat"** di kolom Kedaluwarsa. Logika murni di `lib/agent-execution.ts` (`isOverdue`, `needsAttention`, `executionOverview`); `Now` dioper dari jam klien supaya "lewat" bisa diuji. Batas skema dinyatakan di kaki ringkasan: status `berjalan`/`gagal` per eksekusi **tidak** disimpan, jadi tidak ditampilkan. Keadaan memuat dibedakan dari kosong ("Memuat ringkasan eksekusi…" vs "Belum ada keputusan…"). Bukti: 5 tes baru (25 kasus) — `agent-execution`, `agent-execution-summary`, `agent-attention-chip`, `agent-log-lewat-tenggat`; suite penuh **249 berkas / 2.756 tes lulus**; `next lint` bersih; `tsc` bersih; diukur di aplikasi hidup (SPPG Head, 17 keputusan): strip tampil, chip menyaring 2 baris, "Kosongkan filter" mengembalikan 17, pencarian tanpa hasil menulis "0 dari 17 … total tetap 17". | Frontend/UI | Done | Hermes | Tanpa commit |
+
+### Fase 36 — Performance & Audit: delapan KPI + panel audit (29 Okt 2026)
+
+| ID | Task | Kategori | Status | Assignee | Catatan |
+|---|---|---|---|---|---|
+| S4-74 | Publikasikan metrik ke-8 `Effective Price per Accepted Kg` di `GET /kpi` | Backend | **Dibatalkan** | Hermes | **Dihapus atas keputusan pemilik 29 Okt 2026** (bukan sekadar dimatikan). Kontrak `GET /kpi` kembali **tujuh metrik**; komputasi, `facts` PO/kg diterima, saklar `KPI_EFFECTIVE_PRICE_*`, kartu UI, dan tes metrik ini ikut dilepas. Rincian PO/kg diterima tetap tersedia di jalur penerimaan (`batch_receipts.accepted_kg`) dan `/sap/purchase-orders`. |
+| S4-75 | Ekspos versi rumus SDC + basis jendela simpan ke panel audit | Backend | Selesai | Hermes | `facts` kartu Safe Delivered Cost kini memuat `formula_version` (`sdc-2026.10.29`), `storage_default_days`, `storage_default_basis`. Tanpa endpoint baru. |
+| S4-76 | Panel audit performa + pengiriman/penyelesaian di tab Performance & Audit | Frontend | Selesai (bagian pengiriman dilepas 29 Okt) | Hermes | `components/PerformanceAuditPanel.tsx`: jejak perhitungan, cakupan per metrik (kalimat dari `facts`), tabel keadaan + alasan `no_data`. Semua dari amplop `/kpi` yang sama; tidak menghitung ulang. **Bagian "Pengiriman & penyelesaian" dilepas** bersama KPI ke-8 (keputusan pemilik): rincian PO/kg diterima hanya hidup di `facts` metrik itu. |
+| S4-77 | Ganti nama tab/judul "KPI & Kualitas Agen" → "Performance & Audit" | Frontend | Selesai | Hermes | ID tab `kpi-kualitas` dipertahankan (routing/state). H1 live: "Performance & Audit". |
+| S4-78 | Uji kontrak delapan metrik + panel audit | Test | Dibatalkan (kontrak kembali 7 metrik) | Hermes | Semula `test_kpi.py` 7→8 + urutan; setelah KPI ke-8 dihapus (29 Okt), `test_kpi.py` kembali mengunci tujuh metrik dan `tests/performance-audit-panel.test.tsx` dipertahankan untuk jejak perhitungan + tabel cakupan. Frontend 252 berkas / 2.774 tes lulus; backend KPI+settlement 47 lulus, cost/receipt/recommendation 34 lulus, SDC murni 30 lulus. `ruff check .` bersih. |
+
+**Keputusan terbuka yang TIDAK saya karang** (lihat laporan):
+- Numerator harga efektif memakai Σ(kg dipesan × harga invoice), bukan `SUM(delivered_amount)`: skema belum punya tabel settlement/`delivered_amount`.
+- Denominator Avoidable Food Loss tidak diubah (belum ada persetujuan).
+- Horizon `storage_days` default = 1 hari (asumsi siklus harian), dilaporkan sebagai basis.
+
+### Fase 36b — Rapikan "Hasil operasional": hanya kartu KPI (29 Okt 2026)
+
+| ID | Task | Kategori | Status | Assignee | Catatan |
+|---|---|---|---|---|---|
+| S4-79 | Hapus judul kelompok domain + baris "N metrik" + kalimat penjelas di atas/di antara kartu KPI | Frontend | Selesai | Hermes | Permintaan pemilik: bagian "Hasil operasional" hanya berisi kartu KPI. `groupKpiMetrics` + `KPI_DOMAIN_*` + tesnya dihapus; CSS `.kpi-domain*` dibuang; grid kembali satu blok 4 kolom. Pil "Dihitung <jam> WIB" dipertahankan. Terverifikasi live: 8 kartu, 0 elemen `.kpi-domain`. |
+
+| S4-80 | Samakan bentuk delapan kartu KPI, tetap 4 per baris | Frontend | Selesai | Hermes | `grid-auto-rows: 1fr` + `.kpi-grid > .kpi-card { height:100% }` + `margin-top:auto` pada baris status. Terukur live: 8 kartu @ 225×333 px, 4 kolom, baris rata. Alasan `no_data` tidak dipotong. Dijaga `tests/kpi-card-uniform.test.ts`. |
+
+### Fase 35b — Kasus pengiriman: penerimaan menggerakkan KPI (29 Okt 2026)
+
+| ID | Task | Kategori | Status | Assignee | Catatan |
+|---|---|---|---|---|---|
+| S4-85 | **Cakupan KPI penerimaan diperbaiki.** Baris `batch_receipts` berstempel `demo_session_id` tetapi batch-nya `origin='seed'` tanpa sesi, sehingga cakupan operasional (`demo_session_id IS NULL`) DAN cakupan demo (penerimaan ∧ batch sesi sama) sama-sama 0 baris: penerimaan yang disetujui tidak pernah masuk proyeksi porsi/susut. Kini `_proyeksi_porsi_penerimaan` + estimasi susut mengikuti baris penerimaan dan memakai `accepted_kg` (Dok 05 §5.1), bukan `batches.quantity_kg`. Uji baru `tests/test_kpi_penerimaan_scope.py` (MERAH dulu, 3 tes), termasuk kasus batch seed tanpa stempel. | Backend | Selesai 29 Okt 2026 | Hermes | Tanpa commit (working tree dipakai bersama) |
+| S4-86 | **Seed demo menimbang barang.** `demo_template.py`: `SUSUT_SORTIR_DEMO` 5% tetap (deterministik), `berat_timbangan()` = pesanan × 0,95 (kuantisasi 0,01 `ROUND_HALF_UP`), `ordered_kg` ikut terisi, batch yang sudah punya catatan penerimaan dilewati, batch `origin='demo'` didahulukan (`urutkan_demo_dulu`) agar baris contoh tidak menumpang batch kanonik. Uji `test_demo_penerimaan_pilihan.py` (MERAH dulu) + `test_kpi_penerimaan_scope.py` = 20 lulus. | Backend | Selesai 29 Okt 2026 | Hermes | Tanpa commit |
+| S4-87 | **Ringkasan Pemasok memakai timbangan, bukan berat pesanan.** `GET /receipts/riwayat` mengisi `ordered_kg`/`received_kg` dari kolom penerimaan (`COALESCE` ke berat batch untuk baris lama tanpa timbangan). Sebelumnya keduanya `batches.quantity_kg`, jadi layar Pemasok menulis "kg diterima 1.320" sementara KPI memakai 1.254 kg — dua layar, dua angka, satu fakta. Uji baru di `test_receipts_riwayat.py` (MERAH dulu) → 9 lulus. | Backend | Selesai 29 Okt 2026 | Hermes | Tanpa commit |
+| S4-88 | **Estimasi penerimaan tampil di panel penjelasan KPI.** `KpiDetailPanel` memakai `estimateLine(metric)`: blok "Estimasi dari penerimaan" (porsi dari kg timbangan, susut dari freshness) + alasan saat belum ada. Kartu KPI SENGAJA tetap bersih (keputusan pemilik 29 Okt: baris estimasi tidak dirender di kartu); `tests/kpi-estimate-card.test.tsx` mengunci keduanya. | Frontend | Selesai 29 Okt 2026 | Hermes | Tanpa commit |
+
+**Bukti terukur (29 Okt 2026, DB demo `mealchain`, sesi `8955e543`).** Sebelum: 3 penerimaan menunggu / 1 disetujui / 1 ditolak, `kg_diterima` 420, estimasi KPI kosong. Setelah menyetujui kiriman telur 900 kg pesanan / 855 kg timbangan: estimasi Meal Continuity **no_data → 14.250 porsi** (855 kg ÷ 60 g), estimasi Avoidable Loss **no_data → 153,90 kg**, Overview telur Jakarta supply **300 → 1.155 kg** (timbangan, bukan 900) shortage **780 → 0** (*shortage → surplus*), ringkasan Pemasok menunggu **3→2**, disetujui **1→2**, `kg_diterima` **420 → 1.254** (= 399 + 855; sebelum S4-87 tertulis 1.320). Headline Meal Continuity tetap `no_data` dengan alasan tertulis — bahan diterima bukan porsi tersaji.
+
+**Gerbang.** Backend (DB seed kanonik, tanpa data demo): **2.330 lulus, 36 dilewati, 13 gagal**. Ketiga belas kegagalan berasal dari luar perubahan ini: 3 tes masih mengunci "7 metrik" padahal `_kpi_ep_aktif()` default menerbitkan 8 (Effective Price per Accepted Kg), 8 tes butuh/menguji jalur kasus `demo_template` yang tidak ada di DB kanonik (binding pengadaan, guard eksekusi, evaluasi pemasok, provenance ledger), 1 tes hari-ini bergantung ketersediaan Effective Price, 1 artefak `openapi.json` belum memuat `/integrations/gateway/tool-check`. Frontend: `vitest` **249 berkas / 2.756 tes lulus**, `tsc` 0 galat, `next lint` bersih. Catatan: working tree dipakai sesi lain (berkas frontend berubah 13.43–13.56), jadi gerbang dijalankan serial dan setiap kegagalan diatribusikan lewat kode + pesan assert.
+
+| S4-81 | Joule: skill `batch_detail` + scenario `detail_batch` (rincian keamanan satu batch) | Backend/Integrasi | Selesai (lokal); push CF menunggu pemilik | Hermes | `MealchainClient.batch_detail` → `GET /batches/{id}`; `report.batch_detail_report` (status tersimpan vs hasil evaluasi terpisah, kebijakan suhu + `policy_kind` simulasi, kecukupan bukti); routing: id+`batch`/`suhu` menang atas `bukti`, tapi kalah dari `penerimaan barang batch` dan `dibuang`; id 8 karakter dipetakan ke id lengkap. Kartu agen 14 skill, capability 1.5.0. Tes jembatan **209 passed / 14 skipped**; `scripts/uji-semua-skill.py` terhadap backend hidup **SEMUA OK** (133 batch, 4.059 blok ledger, 17 PO, 2 eksklusi, 469,7 kg limbah). Jembatan di CF masih kode lama (5 skill) + backend tunnel `lhr.life` (11 keputusan / 50 batch) → langkah push manual di `sap-joule/docs/runbook-cf-joule.md`. |
+
+| S4-82 | Perbaiki endpoint InferHub di rantai model agent (8 slot fallback mati) | Backend | Selesai | Hermes | `INFERHUB_URL=https://api.inferhub.dev/v1` di-POST apa adanya → `404 page not found` untuk SEMUA slot InferHub. `inferhub_caller._chat_endpoint()` menormalkan ke `/chat/completions` (base, trailing slash, dan URL lengkap idempoten). Terukur sesudah perbaikan (probe slot nyata): verifier 10/12, supervisor 9/11, forecast 9/12 slot menjawab; primary AgentCore + `sap-ai-core:llm` OK. Tes `test_inferhub_caller.py` **8 passed** (3 tes normalisasi baru); `ruff` bersih di /app. Alat diagnostik baru: `backend/scripts/probe_rantai_model_agent.py`. |
+| S4-83 | Sisa slot model mati (perlu keputusan pemilik) | Konfigurasi | Terbuka | Hermes | (a) `cb/gpt-6-astra` & `cb/gpt-6-sol` tidak ada di katalog InferHub (404) / tanpa kapasitas (503) → ganti id katalog yang terbukti hidup (`ag/claude-sonnet-4-6`, `cx/gpt-6.1-sol`); (b) `SUPERVISOR_MODEL_FALLBACK_2=us.anthropic.claude-sonnet-4-20250514-v1:0` sudah EOL (`ResourceNotFoundException`); pengganti terbukti hidup: `us.anthropic.claude-sonnet-4-5-20250929-v1:0`. Hanya env, tanpa perubahan kode. |
+
+| S4-83 | Langkah ANALYZE: hipotesis sebab + rekomendasi dari LLM, angka tetap deterministik | Backend+FE | Selesai | Hermes | `app/services/hypothesis_client.py` (baru), `demo_procurement_orchestrator.py` (langkah ANALYZE + `duration_ms`), `trace_persistence._VALID_STEPS`, model `AgentTrace`, migration `045_analyze_step`, `frontend/lib/pipeline-stages.ts` (tahap ke-6 dari 10), tes `test_hypothesis_client.py` (16) + `test_s4_schema_alignment.py` (whitelist gabungan 007+045). Penjaga: angka tak berdasar dicatat `ungrounded_numbers`, UUID karangan diganti `(id tidak ada di fakta)`. Bukti live: 8.337 ms & 7.074 ms, provider `primary:agentcore`, keduanya `ungrounded`. Dokumen: `docs/agent-analyze-step.md`. |
+
+| S4-84 | Samakan nama navbar dan judul halaman (5 tab), satu sumber `lib/navigation.ts` | Frontend | Selesai | Hermes | Nama Inggris pilihan pengguna: Decision & Evidence · Food Safety · Suppliers · Agent Activity Log · Location Network (nutritionist: Supply & Demand). Navbar + `PageHeader` membaca `PAGE_TITLES`/`locationNetworkTitle()`. Drift hilang: "Food Safety"↔"Keamanan Pangan", "Suppliers"↔"Pemasok", "Agent Log"↔"Agent Activity Log", "Supply & Demand"↔"Pasokan & Kebutuhan". Tes baru `tests/navigation-titles.test.ts` (9 tes) memaku konstanta + melarang literal kembali. `tsc` 0 error. |
+
+| S4-85 | Cangkang halaman seragam (`PageShell`) + nav bagian untuk Suppliers, Agent Activity Log, Location Network | Frontend | Selesai | Hermes | `components/PageShell.tsx` (baru): kepala → nav bagian → isi, dipakai kelima tab. `lib/section-jump.ts` + `supplierSections()`, `agentLogSections()`, `networkSections({hasRows,hasTransfer})`. Jangkar dipasang: `supplier-daftar/-register/-usul`, `log-pilih/-langkah/-integritas`, `network-keadaan/-lokasi/-alih/-limbah`. Kelas pembungkus lama dipertahankan (tata letak & tes lama tidak berubah). Tes `tests/navigation-shell.test.ts` (12) memaku PageShell + setiap id nav punya sasaran + ≤5 tujuan. |
+
+| S4-86 | Decision & Evidence: pita jawaban dua kolom (metrik ↔ "Perlu diperhatikan") | Frontend | Selesai | Hermes | `app/globals.css`: `.evidence-hero` → judul selebar kartu, `metrics` (1.85fr) berdampingan `flags` (≥280px) dengan bingkai panel; breakpoint 900→1000px. Area kosong `next/consequence/traces` dilepas dari template. Tes baru `tests/evidence-answer-band.test.ts` (4); kontrak lama `evidence-layout-css`/`evidence-rapi` diperbarui ke aturan baru. tsc 0 error, vitest 257 berkas / 2.799 tes. |
+
+| S4-87 | Batalkan S4-86 (pita jawaban dua kolom Decision & Evidence) | Frontend | Dibatalkan | Hermes | Permintaan pengguna 29 Okt 2026. `globals.css` `.evidence-hero` dikembalikan ke grid semula (1.7fr/250px, `head next`, metrik & flag selebar kartu, breakpoint 900px), `tests/evidence-answer-band.test.ts` dihapus, dan `evidence-layout-css`/`evidence-rapi` dikembalikan ke kontrak lamanya. tsc 0 error; vitest 256 berkas / 2.795 tes. |
+
+| S4-88 | Decision & Evidence: rel dossier (pemilih + nav + status menempel), kepadatan & kedalaman | Frontend | Selesai | Hermes | `PageShell` dapat prop `rail` → `.page-dossier` (300px + isi) mulai 1180px; `page-rail` sticky, nav bagian jadi tegak, panel pemilih + `page-rail-facts` (status & #keputusan) tetap terbaca saat menggulir. Lapisan CSS baru di akhir `app/evidence-dossier.css`: padding kartu 14/16, gap 14, `box-shadow` tipis, judul ≤34ch, metrik min 160px, aturan cetak. Tes baru `tests/evidence-rail.test.tsx` (7). tsc 0 error, lint 0 warning, vitest 257 berkas / 2.802 tes. |
+
+| S4-89 | Batalkan S4-88 (rel dossier Decision & Evidence) | Frontend | Dibatalkan | Hermes | Permintaan pengguna 29 Okt 2026. `PageShell` kembali tanpa prop `rail`; `DecisionEvidence` kembali menaruh pemilih di `meta` kepala halaman + `sections` di PageShell; lapisan CSS "REL DOSSIER + KEPADATAN" dipotong dari `app/evidence-dossier.css` (kini 0 kemunculan `page-dossier`/`page-rail`); `tests/evidence-rail.test.tsx` dihapus. tsc 0 error, lint 0 warning, vitest 256 berkas / 2.795 tes. |
+
+| S4-90 | Decision & Evidence memakai tema Overview (kepala kartu, bilah kendali, kartu metrik) | Frontend | Dibatalkan | Hermes | Diminta "balikin" 29 Okt 2026: `DecisionEvidence.tsx` kembali ke `PageShell`, blok CSS tema Overview dihapus dari `evidence-dossier.css`, tes `evidence-overview-theme` dihapus, dokumen desain §41 dicabut |
+
+| S4-91 | Tahap 1 redesign Decision & Evidence: kepala kartu + bilah kendali + nav bagian | Frontend | Selesai | Hermes | `DecisionEvidence.tsx` kepala pola Overview (`<h1 id="judul-bukti">`, chip data simulasi/status/#id), pemilih ke `.evidence-controls`, `SectionJump` 4 tujuan tetap; tes `evidence-tahap1-kepala` 12 lulus; suite 2.807 lulus; ukur 1360: kepala 1328×125, bilah 1328×116, nav sticky 44 px |
+
+| S4-92 | Kosongkan isi Decision & Evidence, sisakan kerangka (kepala + pemilih), isi dibangun ulang dari nol | Frontend | Selesai | Hermes | Permintaan pemilik 29 Okt 2026 ("hapus semua... bangun ulang dari nol", "balikin design yang tadi"). Isi lama di balik `ISI_DIBANGUN_ULANG` di `DecisionEvidence.tsx`; salinan utuh + cara pulih di `docs/arsip/decision-evidence-20261029/`; 44 tes isi dipause (5 berkas `.pause` + 1 blok `describe.skip`); suite 252 berkas / 2.727 lulus / 2 dilewati; nav bagian dimatikan selama isi kosong |
+
+| S4-93 | Tahap 2 redesign Decision & Evidence: blok Persetujuan (clean dashboard) | Frontend | Selesai | Hermes | `components/DecisionApproval.tsx` baru: kartu + pil status + 1 aksi, tiga jawaban berurutan, tabel penyetuju 3 kolom; kalimat "tidak ada penahan" digerbangi `governanceView().state`; tes `evidence-tahap2-persetujuan` 12 lulus; suite 253/2.739; ukur 1328×347 (1360) dan 343×568 (375, baris bertumpuk) |
+
+| S4-94 | Tahap 1 redesign Decision & Evidence: ringkasan keputusan (pita jawaban + strip KPI + triase) | Frontend | Selesai | Hermes | `components/DecisionSummary.tsx` baru memakai `decisionHeadline`/`decisionMetrics`/`attentionFlags`/`windowUsage`; status tidak diulang di band; `grid-auto-rows: 1fr`; di 375 px nilai turun ke `--fs-4` karena terukur terpotong di 150 px; tes `evidence-tahap1-ringkasan` 16 lulus; suite 255/2.758 |
+
+| S4-95 | Tahap 3 redesign Decision & Evidence: bukti biaya sebagai dua tabel (PO vs SDC) | Frontend | Selesai | Hermes | `components/DecisionCostEvidence.tsx` baru, memakai `buildCostView` tanpa menghitung ulang; `decision-evidence-cost-block.test.tsx` dihidupkan kembali (5 lulus); tes `evidence-tahap3-biaya` 13 lulus; ukur 1360 px dua tabel 639 px sejajar, 375 px satu kolom; 2 cacat CSS/a11y tertangkap saat mengukur dan diperbaiki |
+
+| S4-96 | Tahap 4 redesign Decision & Evidence: keamanan & pemasok (lencana putusan + dua tabel) | Frontend | Selesai | Hermes | `components/DecisionSafetySupplier.tsx` baru memakai `safetyBadge`/`safetyFacts`/`supplierFact`; lencana memakai `board-badge-*` aplikasi; jumlah batch tidak dicetak ganda; nama pemasok menggantikan id; konteks belum dimuat dikatakan; tes `evidence-tahap4-keamanan` 14 lulus; ukur 1360 px dua blok 639 px sejajar, 375 px bertumpuk |
+
+| S4-97 | Tahap 5 redesign Decision & Evidence: identitas keputusan + evaluasi batch | Frontend | Selesai | Hermes | `components/DecisionIdentityBatch.tsx` baru (paket lewat `fetchDecisionPacket`, tabel memakai `BatchEvaluationTable`); 4 cacat tertangkap saat mengukur (kolom Gerbang 132→176 px, halaman melebar 410 px karena butir pita nowrap, KPI tenggat terpotong, caption 560 px terpotong); `BLOCKER_ID` + 4 kunci kode gerbang; tes `evidence-tahap5-identitas` 16 lulus; halaman ini 108 lulus |
+
+| S4-98 | Tahap 6 redesign Decision & Evidence: jejak, PO, dan integritas | Frontend | Selesai | Hermes | `components/DecisionTraceIntegrity.tsx` baru (auditTimeline + DecisionPurchaseOrder + IntegrityPanel apa adanya); "belum termuat" dipisah dari "tidak ada"; tanpa sesi integritas tidak memanggil API; kepala halaman berhenti mengaku jejak belum ada; `data-block` PO dinamai ulang `pesanan` (bentrok dengan blok biaya); harness 375 px dikoreksi (media `min-width` dimatikan) → angka 375 px tahap 2–5 lebih optimistis; tes `evidence-tahap6-jejak` 17 lulus, 10 berkas halaman 124 lulus |
+
+| S4-99 | Pemilih "Keputusan yang diperiksa" digabung ke kartu kepala Decision & Evidence | Frontend | Selesai | Hermes | Permintaan pemilik; kepala jadi grid 2 kolom + baris pemilih selebar kartu di bawah garis rambut; bilah kehilangan bingkai kartu; `max-width: 340px` dilepas di kepala (judul panjang tidak terpotong); aturan layar sempit lama berbasis flex diganti grid; kepala 1328×218 di 1360 px (hemat ±37 px), 343×343 di 375 px; tes tahap 1 diperbarui (13 lulus), 10 berkas halaman 125 lulus |
+
+| S4-100 | Tahap 7 redesign Decision & Evidence: navigasi bagian & keadaan | Frontend | Selesai | Hermes | `evidenceSections()` jadi 5 tujuan berlabel judul bagian (+`EVIDENCE_SECTION_IDS.keamanan`); gerbang `!ISI_DIBANGUN_ULANG` pada nav dicabut; keadaan ketiga "Memuat keputusan…" (dulu menyamar jadi "belum ada keputusan dipilih"); `#keamanan` dipasang juga di DecisionDetail lama; `scroll-margin-top` untuk ringkasan & persetujuan; tiga cacat tertangkap (kaskade terbalik kepala 2 kolom di 375 px, tautan mati potensial, jarak lompat); harness ukur pindah ke iframe viewport nyata — angka 375 px tahap 2–6 terlalu optimistis; tes `evidence-tahap7-navigasi` 9 lulus, 12 berkas halaman 147 lulus |
+| S4-101 | Backend | **Lembar PO (PDF): seluruh keterangan di bawah tabel rincian dihapus.** Permintaan pemilik 29 Okt 2026: catatan kaki `*` (harga satuan TURUNAN, lumpsum transportasi, kalimat selisih), kalimat arti status (`catatan_status`), blok "Syarat & ketentuan", dan kalimat "Sumber angka (mock_sap_table)…" tidak dicetak lagi; footer "SAP simulasi" tetap (Rules.md §4). Berkas: `backend/app/services/po_document.py` (fungsi `catatan_status` + gaya `syarat` ikut dibuang), asesi `backend/tests/test_po_document_pdf.py` & `backend/tests/test_po_invoice_commercial.py` dibalik jadi "wajib absen", `docs/design.md` §20 butir 4–5. Bukti: `bash scripts/f6-gate.sh` dua berkas → **24 passed, exit 0**; `ruff check` tiga berkas → bersih; PDF nyata `GET /sap/purchase-orders/MC-BEF077A8A935/pdf` → 3.534 byte, tujuh frasa HILANG dari teks PDF, "Rincian pesanan"/"Subtotal"/"Total PO"/"Pengesahan"/"SAP simulasi"/"Dokumen ini dibuat otomatis" tetap ADA. | Selesai 29 Okt 2026 |
+| S4-102 | Frontend | **Tahap 3 redesign Performance & Audit: kartu KPI ringkas + rincian yang bisa dijangkau.** Panel rincian hidup di bawah grid dan pada viewport 900 px muncul di 873 px — klik kartu terasa mati; sekarang `scrollIntoView({block:'start'})` + fokus pindah ke judul panel (`tabIndex=-1`, `role="region"`, `.kpi-detail { scroll-margin-top: 132px }`), gerak halus dimatikan pada `prefers-reduced-motion`; kotak fokus persegi bawaan peramban di judul dimatikan khusus elemen itu (bukan kontrol). Fakta di baris keadaan kini dipisah spasi eksplisit (dulu "belum ada dataBukti: …" untuk pembaca layar). Tinggi kartu seragam **sudah** tercapai sebelum tahap ini dan dikunci tes, bukan dikerjakan ulang: 7 kartu 249×239 px di 1360, 343×195 px di 760, 331×195 px di 375, `grid-auto-rows: 1fr`. Mekanisme `<details>` di rencana diganti satu panel — keputusan pemilik 29 Okt 2026. Ukur sesudah: panel 132–517 px di viewport 900 (dulu 873–1258), fokus `H3.kpi-detail-title`; 0 geseran mendatar; 0 teks <12 px. Uji: `perf-audit-redesign-kontrak` tahap 3 + `kpi-detail-panel` 13 lulus; 121 tes KPI/audit lulus; `tsc` 0; `next lint` 0 | Selesai 29 Okt 2026 |
+| S4-103 | Tahap 4 redesign Performance & Audit: strip 6 sel + tabel Metrik·Keadaan·Sampel·Sebab | Frontend | Selesai | Hermes | Enam jejak perhitungan jadi satu strip 6 sel (`repeat(6, minmax(0,1fr))`; dulu `auto-fit minmax(180px)` pecah 5+1 di 1.106 px); tabel kolom "Cakupan / alasan" diganti **Metrik · Keadaan · Sampel · Sebab** (sebab = alasan backend + kalimat cakupan); baris non-`available` ditandai `data-state` + nada + garis tepi 3 px di sel pertama; tabel hanya dilipat (`<details>`) bila SEMUA metrik tersedia; ≤620 px tiap metrik dua baris lewat `data-label` (kartu per metrik ditolak: 191 px/metrik, panel 1.637 px). Cacat tertangkap saat mengukur: memaku lebar kolom menambah tinggi (+85 px, dibatalkan) dan nav lengket menutupi judul bagian + strip (→ `.pa-section { scroll-margin-top: 128px }`, ≤720 px 168 px). Ukur app hidup: 1440 px strip 68 px/6 sel, baris 35 px, panel 446 px, luapan 0; 390 px strip 183 px, panel 786 px, tanpa geseran mendatar, luapan 0. Tes kontrak Tahap 4 (7 butir) + panel lama 4 + 6 berkas 62 lulus/2 todo; tsc 0; lint 0; tangkapan `ui-audit/t4-audit-1440.png`, `-390.png`; `docs/design.md` §51 |
+| S4-104 | Tahap 5 redesign Performance & Audit: mutu agen jadi dua sub-blok | Frontend | Selesai | Hermes | Bagian `#pa-mutu` dipecah dua sub-blok bernama (`data-sub-block="ringkasan"` / `"rincian"`, masing-masing `aria-labelledby`): **Skor agregat** (enam kartu + cakupan + putusan verifikator) dan **Rincian** (per agen lalu per run). Hierarki judul diperbaiki: kepala blok "Kualitas Agen" turun ke `h3` (dukungan baru `PageHeader level={3}`), judul kartu jadi `h4` — tidak ada lagi `h2` di dalam `h2`. Rincian per run: baris **39 → 44 px** di 1440 px (`height: 44px`; tautan keputusan 44 px di `(pointer: coarse)`/≤720 px). Kepala tabel per run **lengket** (`position: sticky; top: 118px`) hanya ≥1280 px dengan `overflow-x: clip`, sebab wadah bergulir mematikan sticky. Ditolak: menambah padding sel (tabel per agen ikut meninggi tanpa tombol) dan sticky di semua lebar (memotong kolom di 390/760 px). Ukur pratinjau: 1440 baris 44 px, tabel 1.363 = wadah 1.363; 1280 baris 65 px, 1.203 = 1.203; 390 baris 151→149 px, tabel 820 di wadah 313 (gulir dalam wadah), luapan dokumen 0; kepala berhenti di y=118 (nav berakhir 116). Tes kontrak Tahap 5 (7 butir) + 8 berkas **84 lulus/1 todo**; `tsc` 0; `next lint` 0; `docs/design.md` §52 |
+| S4-105 | Tahap 6 redesign Performance & Audit: keadaan kosong bersaran + ringkasan metrik bermasalah | Frontend | Selesai | Hermes | `components/EmptyState.tsx` baru (judul · sebab · saran · satu tindakan, `role="status"`, `data-empty-state`): KPI tanpa payload dulu `return null` → kini `kpi` dengan tombol Muat ulang; Mutu agen tanpa run → `mutu`, menggantikan dua kartu kosong. Ringkasan metrik bermasalah di atas tabel audit (`data-testid="audit-ringkasan-bermasalah"`, `role="status"`): "N dari M metrik perlu perhatian — nama (keadaan)", dihitung dari jumlah baris payload (bukan metrik turunan; pagar `Math.`/`.reduce(`/`* 100` tetap lulus). Ukur pratinjau: ringkasan 36 px satu baris di 1440/1280, 79 px dua baris di 390; keadaan kosong 194/270 px; luapan 0. Tes kontrak Tahap 6 (4 butir) + 6 berkas **57 lulus/0 todo**; `tsc` 0; `next lint` 0; `docs/design.md` §53 |
+| S4-106 | Tahap 5 redesign Recommendation Feed: keadaan kosong bersaran + galat ber-alert | Frontend | Selesai | Hermes | `components/FeedEmptyState.tsx` baru (sebab · aksi utama · aksi sekunder, `role="status"`) menggantikan `<div class="empty-state feed-empty">` di `page.tsx`: kotak kuning `--status-warning` → panel netral `--surface-sunken` + `--line`; dengan filter aktif aksi utama "Kosongkan filter" dan menyebut total pada periode, tanpa filter "Lihat 1 bulan terakhir"/"Muat ulang"; galat muat dapat `role="alert"`; tombol 44 px di ≤720 px. Ukur pratinjau: latar `rgb(241,245,249)`, garis solid `rgb(226,232,240)`, panel 220 px (390) / 118 px (1280), tombol 44/39 px, luapan 0. Tes `feed-kosong-galat` 6 lulus. |
+| S4-107 | Tahap 6 redesign Recommendation Feed: kepadatan, responsif, gerak | Frontend | Selesai | Hermes | `gap` kartu 8 → 10 px; `scroll-margin-top: 128px`; ≤720 px pencarian selebar baris (`flex: 1 1 100%`), pemilih urutan satu baris penuh, `.rec-act` selebar kartu, `.rec-act-btn` ≥44 px. Animasi tetap hanya `.feed > div` enam baris pertama (`nth-child(6)` 175 ms, tidak ada ke-7) dan dimatikan `prefers-reduced-motion`. Tes `feed-density` 4 lulus. |
+| S4-108 | Tahap 7 redesign Recommendation Feed: konsolidasi + gerbang CSS | Frontend | Selesai | Hermes | Dua aturan `.feed` (gap 12 lalu gap 8) → satu (`display: grid` + `gap: 10px`); aturan mati dibuang: `.feed-row`, `.feed-row:hover`, `.feed-row dt::after`, `.feed-row-meta` (+`b`, + sisa di grup `dl dd`), `.rec-expired`, `.rec-value`, `.rec-meta` (+`dt`); kelas `.feed-section` tanpa aturan dilepas dari halaman; kelas hias tanpa aturan (`feed-empty-utama`/`-sekunder`) dilepas. Gerbang baru `tests/feed-css-gate.test.ts`: satu `.feed`, tidak ada kelas `feed-*`/`rec-*` tanpa pemakai atau tanpa aturan, selektor tidak ganda, `.feed-empty` netral. Suite feed **73 lulus**; `tsc` 0; `next lint` 0. |
+| S4-109 | L5 redesign Location Network: Rencana alih kartu berlabel + penanda teks | Frontend | Selesai | Hermes | Tabel alih dapat `data-label` pada 5 sel × 2 baris dan kelas `.allocation-table`/`.allocation-table-wrap`; mode kartu ≤760 px di blok media SENDIRI (blok papan lokasi dijaga tes L3 tetap ber-scope `.network-table*`). Baris tujuan yang dibuka menampilkan teks "sedang dibuka", bukan hanya latar. Tes `location-network-alih-kartu` 4 lulus; dua asersi lama diperbarui karena markup sel berubah (`<td>Bogor</td>` → `data-label="Dari">Bogor<`). |
+| S4-110 | L6 redesign Location Network: target 44 px, cincin fokus, reduced-motion | Frontend | Selesai | Hermes | Empat kontrol dipatok 44 px di `(pointer: coarse), (max-width: 760px)`: pil komoditas, tombol papan, tombol dossier, "Coba lagi" (kelas baru `.location-retry`). Cincin fokus `outline: 2px solid var(--ink)` + offset 2 px untuk keempatnya (tanpa `outline: none`). `prefers-reduced-motion` mematikan transisi baris/sel/dossier. Diukur dari DOM hidup: 360 px `scrollWidth−clientWidth = 0`, target <44 px **0**, teks <12 px **0**; 760/1247/1440 juga 0 luapan (yang <44 px hanya tautan nav 30 px + pil desktop, di luar daftar L6). Tes `location-network-akses` 4 lulus. |
+| S4-111 | L7 verifikasi penutup Location Network | Frontend | Selesai | Hermes | `tsc` 0 · vitest lingkup **146 lulus/146** (13 berkas) · `next lint` bersih · `next build` sukses BUILD_ID `PGF50HyQ9W827Ltkhij2B` · pratinjau `_qa/preview/location-network.html` (360/760/1247/1440) · laporan `_qa/verifikasi-location-network-2026-10-29.md`. |
+| S4-114 | Backend | **Mesin biaya: angkut per trip, laju susut per komoditas, penalti kesegaran linear (`sdc-2026.10.29b`).** Permintaan pemilik 29 Okt 2026 ("sesuaikan dengan dua hitungan itu", "pakai rentang itu"). `core/trip_cost.py` baru: `jumlah_trip × (250.000 + 4.000 × jarak total)`, `jumlah_trip = ceil(kg/1.000)`, dua kaki dijumlah karena satu truk (tarif berangkat dibayar sekali; rupiah per kaki jadi alokasi proporsional km). `core/shrinkage.py` baru: beras 0,8% · telur 4% · wortel 15% · ayam 12% per umur simpan; cadangan 20% dilabeli `laju_default_0.2`. Penalti kesegaran jadi `purchase × 0,50 × (0,60−f)/0,60` (puncak 50% dipertahankan, cliff hilang). Empat titik pakai diganti (recommendation_service, supplier_procurement, demo_cost, surplus). Data: 41 dari 45 keputusan dihitung ulang lewat `backend/scripts/hitung_ulang_biaya.py --terapkan` (cadangan `_qa/hitung-ulang-biaya-20261029T152715Z.json` + `_qa/cadangan-decisions-traces-20261029.sql`), 19 baris jejak DECIDE disinkronkan; Δ SDC +0,75 jt s.d. +1,96 jt, searah. Bukti: `f6-gate` tiga berkas 48 lulus lalu 82 lulus; suite penuh DB gate **2.381 lulus / 19 gagal** (14 sudah gagal di baseline sebelum perubahan; 6 tambahan semuanya di jalur lain: endpoint PDF/`pdf_url`, langkah `SUPERVISE`, artefak OpenAPI, proyeksi porsi — bukan jalur biaya); `ruff` bersih untuk berkas yang disentuh; pratinjau ulang semua Δ 0,00 (idempoten); spot-check `b54d0f11`: 23.850.162 + 305.460 (13,865 km, 1 trip) + 150.000 + 572.403,89 + 2.385.016,20 = 27.263.042,09. Ruling `docs/ruling-2026-10-29b-tarif-trip-laju-susut.md`; `docs/design.md` §57; `docs/laporan/buat_laporan.py` (rumus & tarif untuk laporan juri) diperbarui. | Selesai 29 Okt 2026 |

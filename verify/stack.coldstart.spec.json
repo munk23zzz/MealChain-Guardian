@@ -1,0 +1,176 @@
+{
+  "name": "mealchain-cold-start",
+  "artifact_dir": "verify-out-coldstart",
+  "log_fail_patterns": [
+    "Traceback (most recent call last)",
+    "CRITICAL",
+    "ERROR:    "
+  ],
+  "services": [
+    {
+      "name": "compose down",
+      "cwd": "..",
+      "start": "docker compose down --remove-orphans",
+      "oneshot": true,
+      "timeout": 180
+    },
+    {
+      "name": "compose up",
+      "cwd": "..",
+      "start": "docker compose up -d --wait",
+      "oneshot": true,
+      "timeout": 420,
+      "port": 8000,
+      "port_timeout": 180,
+      "health": "http://127.0.0.1:8000/health",
+      "health_timeout": 60
+    },
+    {
+      "name": "postgres",
+      "external": true,
+      "port": 15432,
+      "timeout": 120
+    },
+    {
+      "name": "mock-sap",
+      "external": true,
+      "port": 8001,
+      "health": "http://127.0.0.1:8001/health",
+      "timeout": 180,
+      "health_timeout": 60
+    },
+    {
+      "name": "frontend",
+      "external": true,
+      "port": 3010,
+      "health": "http://127.0.0.1:3010/",
+      "timeout": 240,
+      "health_timeout": 180,
+      "logs_command": "docker logs mealchain-frontend --tail 200",
+      "log_fail_patterns": [
+        "Unhandled Runtime Error",
+        "Module not found",
+        "ENOENT"
+      ]
+    }
+  ],
+  "login": {
+    "as": "bgn_monitor (nasional, read-only)",
+    "url": "http://127.0.0.1:8000/auth/login",
+    "json": {
+      "email": "bgn.monitor@demo.local",
+      "password": "Demo#BGN2026"
+    }
+  },
+  "http": [
+    {
+      "name": "GET /health setelah boot",
+      "method": "GET",
+      "url": "http://127.0.0.1:8000/health",
+      "no_auth": true,
+      "expect_status": 200,
+      "expect_keys": [
+        "status",
+        "service"
+      ],
+      "max_ms": 2000
+    },
+    {
+      "name": "GET /suppliers total",
+      "method": "GET",
+      "url": "http://127.0.0.1:8000/suppliers",
+      "expect_status": 200,
+      "expect_keys": [
+        "count",
+        "total",
+        "items"
+      ],
+      "extract": "total",
+      "store": "api_suppliers_total",
+      "max_ms": 5000
+    },
+    {
+      "name": "GET /admin/locations",
+      "method": "GET",
+      "url": "http://127.0.0.1:8000/admin/locations",
+      "expect_status": 200,
+      "expect_keys": [
+        "locations"
+      ],
+      "extract_len": "locations",
+      "store": "api_locations",
+      "max_ms": 4000
+    },
+    {
+      "name": "GET /ledger/verify",
+      "method": "GET",
+      "url": "http://127.0.0.1:8000/ledger/verify",
+      "expect_status": 200,
+      "expect_json": {
+        "valid": true
+      },
+      "extract": "entity_blocks",
+      "store": "api_ledger_entity",
+      "max_ms": 8000
+    }
+  ],
+  "db": {
+    "kind": "command",
+    "target": "postgres:15432/mealchain",
+    "run": "docker exec mealchain-postgres psql -U mealchain -d mealchain -At -F \"|\" -c \"{sql}\"",
+    "checks": [
+      {
+        "name": "migrasi alembic head",
+        "sql": "SELECT version_num FROM alembic_version",
+        "expect": "022_disposal_partner"
+      },
+      {
+        "name": "suppliers rows",
+        "sql": "SELECT count(*) FROM suppliers",
+        "expect_min": 1,
+        "store": "db_suppliers"
+      },
+      {
+        "name": "locations rows",
+        "sql": "SELECT count(*) FROM locations",
+        "expect_min": 1,
+        "store": "db_locations"
+      },
+      {
+        "name": "ledger entity blocks",
+        "sql": "SELECT count(*) FROM ledger_blocks WHERE entity_id IS NOT NULL",
+        "expect_min": 1,
+        "store": "db_ledger_entity"
+      }
+    ]
+  },
+  "ui": {
+    "name": "FE hidup setelah cold start (login SPPG Head -> Overview)",
+    "script": "C:/Users/User/AppData/Local/hermes/skills/software-development/fullstack-verification/scripts/ui_check.py",
+    "timeout": 240,
+    "env": {
+      "BASE_URL": "http://127.0.0.1:3010/",
+      "CLICK_SELECTOR": "text=SPPG Head,button:has-text('Masuk')",
+      "SETTLE_MS": "4000",
+      "EXPECT_TEXT": "Overview Pasokan & Distribusi",
+      "IGNORE_CONSOLE": "defaultProps will be removed"
+    }
+  },
+  "compare": [
+    {
+      "name": "jumlah pemasok: API total == DB",
+      "left": "api_suppliers_total",
+      "right": "db_suppliers"
+    },
+    {
+      "name": "jumlah lokasi: API == DB",
+      "left": "api_locations",
+      "right": "db_locations"
+    },
+    {
+      "name": "blok ledger entity: API == DB",
+      "left": "api_ledger_entity",
+      "right": "db_ledger_entity"
+    }
+  ]
+}

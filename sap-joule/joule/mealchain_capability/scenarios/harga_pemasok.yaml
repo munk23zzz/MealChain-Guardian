@@ -1,0 +1,9 @@
+description: >-
+  This skill reports reference prices per kilogram for each school-meal kitchen (SPPG) and
+  commodity, together with the price quotations recorded by trading partners, including the
+  source of the figure and when it was recorded. Use it for questions about harga, price,
+  kuotasi, quote, or tarif per SPPG. Read-only: it never computes the cheapest or average
+  price, and an empty commodity is reported as empty, never as zero.
+target:
+  name: mealchain_query_function
+  type: function

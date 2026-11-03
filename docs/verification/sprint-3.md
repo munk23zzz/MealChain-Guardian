@@ -1,0 +1,336 @@
+# Sprint 3 Verification — Agent Layer (S3-00..S3-16)
+
+> **Snapshot 16 Oktober 2026 (dari waktu berkas)** — angka di dokumen ini hasil pengukuran saat itu, bukan keadaan sekarang. Keadaan terbaru: `docs/state-snapshot.md`.
+
+> Semua angka di bawah adalah hasil eksekusi aktual (fresh run dari HEAD,
+> 2026-10-06, container mealchain). Tidak ada klaim sukses provider eksternal
+> tanpa evidence live; hop yang tidak tersedia dilaporkan jujur sebagai
+> UNAVAILABLE/BLOCKED.
+
+## Ringkasan gate
+
+| Gate | Hasil | Evidence |
+|---|---|---|
+| Alembic upgrade/current/heads | PASS | `006_decision_persistence (head)` |
+| Backend pytest | PASS | **402 passed**, 1 warning (pytest-asyncio deprecation, pre-existing) |
+| Backend ruff | PASS | `All checks passed!` |
+| Frontend vitest | PASS | **25 passed** (3 files) |
+| Frontend lint | PASS | No ESLint warnings or errors |
+| docker compose ps | PASS | backend/frontend/mock-sap Up, postgres healthy |
+| Log scan backend+frontend | PASS | 0 SyntaxError/ImportError/Traceback pada state final (4 NameError historis selama edit import `User`, semua sebelum restart bersih `6660`) |
+| `/health` unauth | PASS | 200 |
+| `/decisions` unauth | PASS (diproteksi) | **401** setelah fix S3-15 (`6744978`) |
+| OpenAPI vs routes | PASS | openapi.json regenerated — 23 paths, 0 missing/stale |
+| core→api boundary | PASS | 0 import `app.api` di `app/core/` |
+| Secrets/PII scan | PASS | 0 temuan (hanya docstring/detail 401) |
+| DB readback | PASS | decisions/agent_traces 0 rows (test ter-cleanup), PO seed mock `4500000001/confirmed` utuh |
+
+## Commit chain Sprint 3 (ground-truth git log)
+
+```text
+77d3fdc  feat: jwt auth rbac approval matrix action boundary (S3-01)
+93ca711  feat: sdc standalone analyze evidence endpoints + tool registry gateway config (S3-02)
+e47e11e  fix: serialize zero penalty as 2dp decimal (S3-02)
+a512e5a  feat: add shared model resilience chain (S3-05)
+689cf26  feat: add verifier rest client with hard safety guard (S3-06)
+21ee4af  feat: add forecast provider with statistical fallback (S3-07)
+0c21a39  feat: orchestrate event one regional imbalance (S3-03+04)
+dacc592  feat: isolate agent decision session memory and observability trace (S3-08+09)
+ffc22b2  feat: persist actual agent trace metadata (S3-10)
+5e5525b  feat: enforce human approval before mock sap execution (S3-11)
+45cb20e  feat: guardian dashboard ui with role scope and approval modal (S3-12)
+4999615  feat: decision feed and agent trace timeline endpoints (S3-12 backend)
+c478d5c  test: certify event one agent e2e path and provider fallback branches (S3-13+14)
+6744978  fix: guard decision read endpoints behind auth (S3-15)
+```
+
+(Di atas ditambah 2 commit docs TODO.md. Baseline Sprint 2 = 296 passed →
+final **402 passed** backend; frontend 25 test.)
+
+## Bukti per slice (hasil aktual, bukan narasi)
+
+- **S3-01 Auth/RBAC/actions boundary**: 323 passed. JWT HS256, 3 role
+  (`sppg_head`, `sppg_nutritionist`, `bgn_monitor`), approval matrix
+  CONSISTENT → OR; FLAGGED/UNAVAILABLE → dual AND
+  `[["sppg_head"],["sppg_nutritionist"]]`.
+- **S3-02 Tool registry + gateway config**: 332 passed. `/cost/safe-delivered`,
+  `/balance/analyze`, `/evidence/fuse`, registry config-driven.
+- **S3-05 Resilience chain**: 8/8. `with_fallback_chain(primary, prompt,
+  fallback_1..3, timeout, retry_policy, circuit_breaker)`; kategori error
+  402≠balance / 429 retryable; chain habis → `ProviderUnavailableError`.
+- **S3-06 Verifier REST client**: 12/12. SAP primary → SAP fallback →
+  Bedrock final via chain; guard keras: safety FAIL tidak bisa diangkat →
+  FLAGGED; output tak terbaca → UNAVAILABLE.
+- **S3-07 Forecast client**: 6/6. Label `SAP-RPT-1.6` hanya untuk response
+  provider nyata; chain habis → `statistical_forecast` (0.5/0.3/0.2) dari
+  core Sprint 1.
+- **S3-03+04 Supervisor orchestrator (Event 1)**: 7/7. DETECT→VERIFY→TRACE→
+  PREDICT→OPTIMIZE→DECIDE; trace aktual 6 langkah tersimpan; Strands Agent
+  `agent/supervisor_agent.py` (root, di luar bind-mount) — **BLOCKED live**
+  (AgentCore Runtime ARN kosong); orchestrator berjalan tanpa Strands di
+  env lokal.
+- **S3-08/09 Memory + Observability**: 14/14. Isolasi session (A≠B),
+  sanitasi secret, trace aktual dengan label; AgentCore Memory/Gateway
+  ARN kosong → adapter local, dilaporkan jujur.
+- **S3-10 Trace persistence**: 382 passed. `persist_trace_steps` — payload
+  disanitasi, `step_at` monoton per indeks (server_default `now()` membuat
+  urutan hilang — fix eksplisit).
+- **S3-11 Approval E2E**: 389 passed. Gap nyata ditemukan+fixed:
+  `/actions/verify` tidak pernah menulis `verifier_note` → sekarang verdict
+  tertulis; rejected/expired diblokir 409; bgn_monitor 403.
+- **S3-12 Frontend**: 25/25 + tsc 0 error + build sukses. Login, feed
+  (polling 5s), detail, ApprovalModal (friksi disengaja §1.3), role scope
+  (bgn_monitor read-only §1.4), AgentTraceViewer dari trace DB, badge mock.
+- **S3-13 Event 1 E2E**: 4/4. Jalur penuh supervisor→decision→propose→dual
+  approve→execute→PO mock (MC-…, data_source=MOCK). Bug seam nyata ditemukan
+  di E2E: orchestrator tidak menulis verifier_note → decision tak pernah
+  bisa dieksekusi; fixed (verdict ditulis saat pembuatan).
+- **S3-14 Resilience acceptance**: 5/5. Matriks 4 cabang chain (primary→ok,
+  f1→ok, f2→ok, exhausted→unavailable) via failure injection deterministik;
+  UNAVAILABLE → dual AND requirement.
+
+## Konfigurasi provider (state aktual, semua nilai [REDACTED])
+
+- Bedrock: LIVE via profile inference (`us.*`) — dibuktikan saat S3-00
+  (STS + invoke sukses). Belum dipakai runtime orchestrator default
+  (SUPERVISOR_MODEL_PRIMARY terpotong di .env; verifier/forecast tanpa
+  konfigurasi → UNAVAILABLE jujur saat E2E).
+- Inferhub: LIVE (429 retryable). SAP AI Core: partial (URL/client kosong).
+- AgentCore Runtime ARN / Gateway URL / Memory: **KOSONG** → BLOCKED live;
+  berjalan config-driven local (tool registry, local memory, local trace).
+
+## Blockers (jujur)
+
+- Live AgentCore Runtime + Gateway + Memory: butuh ARN/URL dari Owner.
+- Live verifier/forecast model: butuh `VERIFIER_MODEL_*`, `FORECAST_MODEL`,
+  `SUPERVISOR_MODEL_PRIMARY` lengkap di .env (nilai saat ini kosong/terpotong).
+- Strands agent live run: butuh AgentCore Runtime; jalur local orchestrator
+  sudah tersertifikasi penuh.
+
+### RBAC endpoint legacy Sprint 1/2 + final gate Sprint 3 (2026-10-08 — arah Roy)
+
+Residual debt ditutup. Kontrak dipertahankan: Architecture.md §232
+("Semua endpoint backend butuh JWT valid") + PRD §77 (bgn_monitor
+read-only). **Tidak ada perubahan architecture/domain logic** — hanya
+dependency auth (`get_current_user` untuk baca, `require_roles(MUTATING_ROLES)`
+untuk mutasi/komputasi) di 10 router: supply, demand, forecast, freshness,
+safety, price, logistics, balance, cost, evidence (13 endpoint).
+
+- **TDD**: `test_legacy_endpoint_rbac.py` RED (endpoint terbuka 200/404)
+  → GREEN 5/5 (unauth 401 ×13, token garbage 401, bgn_monitor baca 200
+  lintas lokasi / mutasi 403, sppg_head lolos guard).
+- **Fallout test legacy**: 46 test yang memanggil endpoint legacy tanpa
+  token diperbaiki via fixture session-scope `auth_headers` di conftest
+  (user DB asli + login JWT nyata, bukan token palsu) + default header
+  di fixture `client` 5 file test. Tidak ada assertion test yang diubah.
+- **Backend gate**: **463 passed** + ruff bersih (baseline 458 + 5 test RBAC).
+- **Frontend gate**: 55 passed + tsc + lint + build bersih (tanpa perubahan
+  frontend — API client sudah mengirim Bearer di semua panggilan).
+- **Alembic**: current = heads = `008_rejection_loop`. **Docker**: 4 service
+  Up (postgres healthy), `/health` 200, log scan 0 temuan pada state final
+  (2 NameError historis = jendela edit transien WatchFiles, hilang setelah
+  restart ke state final).
+- **OpenAPI**: regenerated — 23 → **26 paths** (drift artifact lama sejak
+  `6744978`: tambahan `/demo/seed`, `/actions/repropose`,
+  `/decisions/{id}/chain` dari Revisi 8); 21 path endpoint terproteksi
+  membawa `security` (publik: `/health`, `/auth/login`); set path = set
+  route aktif (0 missing/stale).
+- **Secrets scan**: 0 temuan pada tracked files (hanya kredensial demo
+  `seed_data.py` dan mock test yang memang by-design; tanpa .env.example).
+- **Live probe auth/RBAC** (API live, 10/10): supply/analyze/decisions
+  unauth = **401**; bgn_monitor: baca supply = **200**, decisions = **200**,
+  mutasi `/logistics/estimate` = **403**; sppg_head: supply = **200**,
+  analyze = **200** (14 kandidat), logistics = **200**; `/auth/me` role
+  benar.
+- **AgentCore Runtime live invoke** (data-plane boto3 `bedrock-agentcore`
+  `invoke_agent_runtime`, host, SigV4 akun 679583588036): HTTP **200**
+  latency 4.89s, runtime `mealchain-5iQ9raHpis`, response asli
+  `{"result":{"role":"assistant","content":[{"text":"PONG"}]}}` — **PASS,
+  bukan fallback/synthetic** (latensi jaringan nyata, struktur response
+  runtime asli, jawaban sesuai instruksi prompt). Catatan: boto3 di
+  container belum kenal service `bedrock-agentcore` — probe valid dari host
+  (boto3 1.42.89).
+
+## Residual debt (terbarui 2026-10-08)
+
+- ~~RBAC untuk endpoint lama Sprint 2~~ **DITUTUP** — lihat blok di atas.
+- pytest-asyncio deprecation warning (pre-existing, non-blocking).
+- Frontend tsconfig.tsbuildinfo artifact build (untracked, non-blocking).
+
+
+## Model chain per agent (revisi 2026-10-06 — chain panjang frontier-first)
+
+Setiap agent (supervisor/verifier/forecast) kini punya rantai model PANJANG
+(6 model), frontier dulu, open-weight (kimi/qwen) di posisi fallback
+TERAKHIR (arah Roy). Backend = sumber konfigurasi (env); frontend menampilkan
+identitas model/provider dari trace DB (display-only, `ProviderPanel`).
+`AGENTCORE_RUNTIME_ARN` kini TERISI (runtime `mealchain-5iQ9raHpis`,
+us-west-2, dibuat Roy) → jadi slot `primary:agentcore`; 6 slot env bergeser
+menjadi fallback_1..6 (total 7 referensi per agent). Implementasi invoke
+runtime AgentCore = stub eksplisit (honest-unavailable) → chain otomatis
+jatuh ke fallback_1 Bedrock sampai implementasi runtime siap.
+
+| Slot | Model | Status (probe live, 2026-10-06/07) |
+|---|---|---|
+| primary:agentcore | `AGENTCORE_RUNTIME_ARN` | terkonfigurasi; invoke menyusul |
+| fallback_1 (env primary) | Bedrock `us.anthropic.` (the model 4.6) | LIVE + tersertifikasi E2E |
+| fallback_2 | Inferhub `cb/gpt-6-astra` (GPT-6 Astra, GPQA-D 96.0%) | LIVE 2.3–7.1s (3 ronde; ronde-3 2026-10-07 'pong' 2s) |
+| fallback_3 | Inferhub `cx/gpt-6-astra` | LIVE 4s 'pong' (ronde-3, 2026-10-07) |
+| fallback_4 | Inferhub `cb/gpt-6-sol` | LIVE 2s 'pong' (ronde-3, 2026-10-07) |
+| fallback_5 | Inferhub `cx/gpt-6.1-sol` | LIVE 1s 'pong' (ronde-3, 2026-10-07) |
+| fallback_6 | Inferhub `cc/` | LIVE 2.5–5.2s (2 ronde) |
+| fallback_7 | Inferhub `cc/` | LIVE 2.9s (503 ronde-1 = transien, pulih) |
+| fallback_8 | Inferhub `cb/kimi-k3` | LIVE 7.9s / ronde-3 4s (max_tokens 4000) |
+| fallback_9 | Inferhub `cbcn/kimi-k3` | LIVE 11.0s / ronde-3 8s |
+| fallback_10 | Inferhub `ali/qwen3.8-max-0902` | LIVE 3.1s |
+
+Catatan verifikasi 2026-10-07: probe ronde-3 awalnya salah sasaran — skrip
+menambahkan `/chat/completions` pada `INFERHUB_URL` yang sudah endpoint penuh
+→ 404 palsu untuk SEMUA ID termasuk kontrol. Root cause ditemukan (env =
+endpoint penuh, bukan base URL), probe diulang benar → semua kandidat LIVE.
+Pelajaran: label 404 hanya valid setelah kontrol terbukti 200 dengan path yang
+sama. `cx/` kini prefix Inferhub resmi di registry (TDD: test RED→GREEN,
+suite 446 passed).
+
+### Model access frontier Bedrock (2026-10-07 — FINAL: sales-gated)
+
+Alur `model-access.html` (SDK/CLI): `ListFoundationModelAgreementOffers` →
+`PutUseCaseForModelAccess` (Anthropic: base64 JSON form) →
+`CreateFoundationModelAgreement` → `GetFoundationModelAvailability`.
+Untuk 5 kandidat frontier (5.5/5/fable-5.1/4.8/4.7) SEMUA gerbang level-akun
+hijau: **CREATE_OK 5/5** → `agreementAvailability: AVAILABLE` +
+`authorizationStatus: AUTHORIZED` + `entitlementAvailability: AVAILABLE`;
+form use-case ter-submit (dikonfirmasi `GetUseCaseForModelAccess` mengembalikan
+`formData` terisi); policy `InvokeModel` `Resource *` aktif (kontrol opus-4-6
+invoke **OK** via jalur profil `us.` yang sama). Tetap `AccessDeniedException`
+dan pesan penuhnya menyebut jalur resminya:
+
+> "…is not available for this account. You can explore other available models
+> on Amazon Bedrock. **For additional access options, contact AWS Sales**
+> at https://aws.amazon.com/contact-us/sales-support/"
+
+Kesimpulan: kelima model frontier itu **sales-gated** — akses hanya dibuka
+lewat persetujuan AWS Sales, bukan lewat policy IAM/subscription/use-case.
+Kesimpulan sebelumnya ("tinggal langkah Console") salah dan dicabut. Kalau
+suatu saat akses disetujui Sales → re-test invoke → restrukturisasi blok
+Bedrock (fallback_1 frontier terbaru → fallback_2 frontier kedua → fallback_3
+opus 4.6); kapasitas chain sudah disiapkan (12 slot/agent).
+
+### AgentCore Memory & Gateway (2026-10-07, pasca-attach policy)
+
+- **Memory: SUKES** — `CreateMemory` OK via control client
+  (`bedrock-agentcore-control`), status ACTIVE (`mealchain_memory`,
+  eventExpiry 30 hari). `AGENTCORE_MEMORY_ID` terisi di `.env`; backend
+  recreate → `memory_provider_from_env()` = **agentcore** (terverifikasi di
+  container). Suite penuh 447 passed.
+- **Gateway: SUKES (ronde-2) — status READY, URL masuk `.env`** (len 92,
+  bukti disk via od). Ronde-1 gagal provisioning karena kurang
+  `bedrock-agentcore:CreateWorkloadIdentity` (dari `statusReasons`
+  get_gateway; PassRole sudah attach sebelumnya). Setelah Roy attach policy
+  file 1 yang diperbarui (12 action incl. 3 WorkloadIdentity), create ulang
+  sukses; gateway READY dalam <30s. Terverifikasi di container:
+  `AGENTCORE_GATEWAY_URL` len 92 + `AGENTCORE_MEMORY_ID` len 30 +
+  `memory_provider_from_env()` = **agentcore**. Catatan quirk API:
+  `list_gateways` menampilkan count=0 padahal gateway ada — get_gateway by
+  ID (host subdomain URL) adalah verifikasi yang benar. Gateway FAILED
+  ronde-1 sudah dibersihkan (delete OK); `AGENTCORE_GATEWAY_URL` di-append
+  `.env` dengan newline disiplin (bug penempel tidak keulang).
+- Pelajaran boto3: runtime/gateway/memory = **control plane** (client
+  `bedrock-agentcore-control`); client `bedrock-agentcore` = data plane
+  (invoke runtime). `get_agent_runtime` ada di control client.
+- Bug .env ditemukan & diperbaiki: append tanpa newline menyatu dengan baris
+  qwen (`…0902AGENTCORE_MEMORY_ID=…`) — dipisah ulang; qwen slot valid lagi.
+
+Kandidat dibuang dari .env (alasan terdokumentasi, bukan truncasi):
+`cc/`/`cc/`/`cc/`/`cb/`
+(503/502 down saat 2 ronde probe), `cc/` VALID live tapi
+digantikan Astra/Sonnet-5 di slot atas. `gpt-5.6-sol` = 404 di katalog
+Inferhub (cc/ dan cb/) — tidak bisa dipakai dengan nama itu. Entry mati
+ dikosongkan dari .env; kimi-k3 & qwen3.8-max TIDAK dibuang (posisi terakhir).
+
+Arsitektur chain panjang (TDD, backend **445 passed**):
+- `model_registry.py` — slot fallback bernomor 1..9 tanpa cap 3; gap pertama
+  menghentikan koleksi; AgentCore ARN = primary, env chain utuh.
+- `resilience.py` — `with_fallback_chain(..., fallbacks=[...])` untuk chain
+  panjang (kwargs lama tetap kompatibel) + `provider_slot_index()`.
+- `ai_provider_chain.py` — label slot dinamis mengikuti panjang chain.
+- Client verifier/forecast/supervisor — translasi label generik (fallback_N).
+- conftest isolasi env mencakup fallback_3..9; compose passthrough slot
+  baru (supervisor s.d. _11, verifier/forecast s.d. _9).
+
+Evidence live (ronde 3-slot, arsitektur sama — jalur E2E tersertifikasi):
+- Verifier FLAGGED jujur via `primary:bedrock`; forecast
+  `provider_forecast` 7230.0 (bug kontrak output prompt ditemukan & fixed);
+  supervisor SUPERVISE (non-safety-critical); fallback Inferhub live
+  terbukti (kimi timeout → qwen mengambil alih, fallback_used=True).
+
+### Rejection loop + 4 kasus demo (2026-10-07 — permintaan Roy)
+
+- **Backend (TDD, 11 test baru → 458 passed)**: penolakan WAJIB alasan
+  (approve `approved=false` tanpa `comment` → 422); alasan tersimpan di
+  `decisions.rejection_reason`. `POST /actions/repropose` membuat iterasi
+  baru (v2, v3, ...) yang mewarisi substansi keputusan, terhubung via
+  `supersedes_id`, dan menulis langkah trace **LEARN** berisi alasan
+  penolakan (bahan learning/memory agent). `GET /decisions/{id}/chain`
+  = timeline keluarga v1→v2→v3. Migration `008_rejection_loop`:
+  kolom `rejection_reason/iteration/supersedes_id/demo_case`.
+- **POST /demo/seed** (idempotent, `force=true` untuk reset): 4 kasus —
+  (1) `rejection-loop-kuota`: v1 ditolak kuota → v2 ditolak harga →
+  **v3 pending_approval FRESH** siap approve/execute live saat demo;
+  (2) `shortage-darurat`: 780 kg Bogor→Jakarta, TTL 15 menit (drama
+  safety window); (3) `supplier-janggal`: harga 40% di bawah referensi
+  → verifier FLAGGED (anti-fraud); (4) `gangguan-logistik`: v1 ditolak
+  (rute banjir) → v2 re-rute Cianjur pending_approval. Trace berjenjang
+  (DETECT/PREDICT/DECIDE/OPTIMIZE/VERIFY/LEARN) + timestamp mundur.
+- **Frontend (45 test)**: `DecisionChain` (timeline iterasi + alasan),
+  badge `v{n}` di kartu, tombol **Reject dengan kotak alasan wajib**,
+  tombol **Minta re-propose** pada status rejected (role approver),
+  link 404 "Lihat Detail" dihapus, tombol "Muat kasus demo" di header
+  (seed force idempotent). Panel brand login dirapikan per arah Roy:
+  rute ❄ + kotak angka dihapus.
+- **Verifikasi live end-to-end**: seed 7 keputusan → reject v3 tanpa
+  alasan 422 → reject dgn alasan 200/rejected → repropose 201 (iter 4,
+  supersedes OK) → chain [1,2,3,4] → LEARN trace berisi alasan →
+  restore seed → v3 fresh `pending_approval valid=True`.
+
+### Ops Console interaktif + polish semua role (2026-10-07 — permintaan Roy)
+
+- **Demo-day guard**: kasus berstatus pending_approval/verifier_flagged
+  dijaga TTL ≥ 60 menit pasca-seed (test-guard) — shortage 15 mnt
+  dinaikkan 120 mnt, v3 kuota/janggal 480 mnt, logistik 300 mnt.
+  Drama safety window tetap ada di trace (`safety_window_minutes: 30`).
+- **Ops Console (frontend)**: interaksi SEBELUM hasil — pilih lokasi +
+  komoditas → "Muat kondisi" (GET /balance/{loc}/{com}, angka nyata:
+  Jakarta telur shortage 780 kg) → "Jalankan Analisis Agent"
+  (POST /balance/analyze, 14 kandidat / 7 flagged) → role approver
+  "Ajukan" (POST /decisions + /actions/propose → pending_approval) →
+  kartu masuk feed untuk approve/reject. bgn_monitor read-only penuh.
+- **Alur approval live terverifikasi** (API live): analyze → ajukan →
+  approve sppg_head (menunggu) → approve nutritionist (4-eyes,
+  verdict unavailable karena usulan tanpa verifier) → Verifikasi
+  CONSISTENT → Execute → **PO MC-AFBF221C7AB6** (mock SAP).
+- **UI per role**: RoleHero (judul/misi/langkah per role; BGN =
+  papan pengawasan), header bar navy, feed grid 2 kolom, label kasus
+  demo di kartu, tombol Verifikasi di detail (syarat execute yang
+  tadinya tersembunyi kini eksplisit). Backend +2 field feed
+  (`verified_by`, `verifier_note`).
+- **Gate**: backend 458 passed + ruff; frontend 55 passed + tsc + lint.
+
+## Catatan lintas waktu — 2026-10-16 (Hermes)
+
+Dua klaim di atas sudah tidak lagi benar dan digantikan, bukan dihapus:
+
+- Baris **"Strands Agent `agent/supervisor_agent.py` (root) — BLOCKED live"** (§S3-03+04 di atas):
+  berkasnya **sekarang ADA** (`agent/supervisor_agent.py`, 2026-10-16) dan hello-world-nya sudah
+  dibuktikan **live ke Bedrock** (`us.anthropic.claude-haiku-4-5-20251001-v1:0`, 3,4 dtk, akun
+  624606539664) + tes kontrak `backend/tests/test_supervisor_agent.py` **4 passed**. Yang **tetap
+  Blocked** hanyalah deploy ke AgentCore Runtime (`AGENTCORE_RUNTIME_ARN` & `AGENTCORE_GATEWAY_URL`
+  masih 0 char), dan orkestrator Event 1 masih berjalan **tanpa** memanggil agent Strands.
+- **Orkestrator Event 1 kini punya pemicu di aplikasi**: `POST /demo/event1`
+  (`backend/app/api/demo.py`) + tombol "Jalankan Event 1 penuh" di `frontend/components/OpsConsole.tsx`
+  (tab Demo Control). Sebelum ini `run_event1` hanya dipanggil berkas tes sehingga langkah SUPERVISE
+  tidak pernah muncul di aplikasi.
+- Catatan ID: berkas tes menyebut dirinya kontrak **S0-07**, sedangkan tabel TODO.md menaruh Strands
+  hello-world di **S0-06** dan S0-07 = berkas `.env`. Selisih penomoran ini ada di dokumen, bukan di kode.
+- Bukti lengkap + batas jujur: `docs/verification/fase-11.md`; versi dokumen ini tidak diubah.
+

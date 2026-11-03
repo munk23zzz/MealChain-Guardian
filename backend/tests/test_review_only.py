@@ -1,0 +1,156 @@
+"""Temuan `price_anomaly` lahir sebagai `review_only` (audit M6, 18 Okt 2026).
+
+Masalah: Event 2 membuat keputusan `price_anomaly` berstatus `proposed` tanpa
+`quantity_kg`. `/actions/propose` menawarkannya sebagai usulan transfer, tetapi
+`/actions/execute` selalu menolak (422 "quantity decision tidak valid") dan tidak
+ada jalan menutupnya. Keputusan seperti itu menggantung selamanya di antrean.
+
+Aturan sekarang: temuan lahir `review_only` — terminal, tidak menuntut approval,
+tidak bisa dieksekusi, tetapi tetap terbaca sebagai bukti. Semua endpoint tulis
+menolaknya dengan alasan yang menyebut statusnya.
+"""
+
+import uuid
+
+import pytest
+from fastapi.testclient import TestClient
+from sqlalchemy import create_engine, text
+
+from app.main import app
+from tests.dsn import DSN_ASYNC  # DSN mengikuti DATABASE_URL
+
+# Catatan harness (21 Okt 2026): berkas ini dulu menembak server live
+# http://localhost:8000 lewat urllib. Akibatnya (a) hasilnya bergantung pada
+# proses uvicorn di luar tes — 404 bila proses itu menunjuk DB lain, dan
+# (b) menjalankan suite di DB terpisah tetap mengubah data DB demo. Sekarang
+# semua panggilan memakai TestClient(app) sehingga DB yang dipakai persis
+# DATABASE_URL milik tes.
+DB_URL = (
+    DSN_ASYNC
+).replace("+asyncpg", "+psycopg")
+
+
+def _db():
+    return create_engine(DB_URL)
+
+
+def _exec(sql: str, params: dict | None = None):
+    engine = _db()
+    try:
+        with engine.begin() as conn:
+            res = conn.execute(text(sql), params or {})
+            try:
+                return res.fetchall()
+            except Exception:
+                return []
+    finally:
+        engine.dispose()
+
+
+def _login_demo(client: TestClient, email: str = "sppg.head@demo.local") -> dict:
+    """Login akun demo lewat TestClient; sandi dibaca dari seed (tidak dicetak)."""
+    from app.seed.seed_data import DEMO_USERS
+
+    sandi = next(u["password"] for u in DEMO_USERS if u["email"] == email)
+    r = client.post("/auth/login", json={"email": email, "password": sandi})
+    assert r.status_code == 200, (r.status_code, r.text)
+    return {"Authorization": f"Bearer {r.json()['access_token']}"}
+
+
+def _buat_quote_sintetis() -> tuple[str, str]:
+    """Quote 2x harga acuan → Event 2 pasti 'anomaly'."""
+    baris = _exec(
+        "SELECT c.id, l.id, s.id, "
+        "(SELECT price_per_kg FROM price_signals WHERE commodity_id = c.id "
+        " AND source = 'pihps_reference' ORDER BY recorded_at DESC LIMIT 1) AS ref "
+        "FROM commodities c, locations l, suppliers s "
+        "WHERE c.name = 'telur' AND l.name = 'Cianjur'"
+        " AND s.name = 'Koperasi Telur Cipanas Bersama'"
+    )
+    assert baris, "butuh komoditas/lokasi/pemasok kanonik"
+    komoditas, lokasi, supplier, ref = baris[0]
+    assert ref is not None, "butuh harga acuan pihps_reference untuk telur"
+    quote_id = _exec(
+        "INSERT INTO price_signals (location_id, commodity_id, price_per_kg, recorded_at, "
+        "source, supplier_id, origin) VALUES (:l, :c, :p, now(), 'supplier_quote', :s, 'demo') "
+        "RETURNING id",
+        {"l": lokasi, "c": komoditas, "p": ref * 2, "s": supplier},
+    )[0][0]
+    jakarta = _exec("SELECT id FROM locations WHERE name = 'Jakarta'")[0][0]
+    return str(quote_id), str(jakarta)
+
+
+def _event2(client: TestClient, headers: dict) -> dict:
+    quote_id, target = _buat_quote_sintetis()
+    r = client.post(
+        "/events/price-anomaly",
+        json={
+            "quote_id": quote_id,
+            "target_location_id": target,
+            "operation_key": str(uuid.uuid4()),
+        },
+        headers=headers,
+    )
+    # /events/price-anomaly menjawab 201 Created (temuan baru), bukan 200.
+    assert r.status_code in (200, 201), (r.status_code, r.text)
+    body = r.json()
+    body["_quote_id"] = quote_id
+    return body
+
+
+def _bersihkan(decision_id: str | None, quote_id: str | None) -> None:
+    if decision_id:
+        _exec("DELETE FROM decisions WHERE id = :d", {"d": decision_id})
+    if quote_id:
+        _exec("DELETE FROM price_signals WHERE id = :q", {"q": quote_id})
+
+
+@pytest.fixture()
+def client():
+    with TestClient(app) as c:
+        yield c
+
+
+def test_event2_menghasilkan_review_only():
+    with TestClient(app) as c:
+        headers = _login_demo(c)
+        body = _event2(c, headers)
+        did = body.get("decision_id")
+        try:
+            assert body["status"] != "no_anomaly", body
+            assert did, body
+            baris = _exec("SELECT status FROM decisions WHERE id = :d", {"d": did})
+            assert baris[0][0] == "review_only", baris
+            summary = c.get(f"/decisions/{did}/approval-summary", headers=headers).json()
+            assert summary["status"] == "review_only"
+            assert summary["can_execute"] is False
+            assert summary["can_approve"] is False
+            alasan = summary["blocking_reasons"]
+            assert any("review-only" in r or "tinjauan" in r for r in alasan), alasan
+        finally:
+            _bersihkan(did, body.get("_quote_id"))
+
+
+def test_review_only_menolak_semua_jalur_tulis():
+    with TestClient(app) as c:
+        headers = _login_demo(c)
+        body = _event2(c, headers)
+        did = body.get("decision_id")
+        try:
+            assert did, body
+            for path, payload in (
+                ("/actions/propose", {"decision_id": did}),
+                ("/actions/verify", {"decision_id": did}),
+                ("/actions/approve", {"decision_id": did, "approved": True}),
+                ("/actions/execute", {"decision_id": did}),
+            ):
+                resp = c.post(path, json=payload, headers=headers)
+                assert resp.status_code == 409, (path, resp.status_code, resp.text)
+                detail = str(resp.json().get("detail", "")).lower()
+                assert "review" in detail or "tinjauan" in detail, (path, detail)
+                # Audit M9: /actions/propose bukan "usul ULANG" — kata "ulang"
+                # hanya benar untuk /actions/repropose.
+                if path == "/actions/propose":
+                    assert "ulang" not in detail, (path, detail)
+        finally:
+            _bersihkan(did, body.get("_quote_id"))

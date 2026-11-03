@@ -1,0 +1,343 @@
+// Top bar (acuan mockup Stitch: header global 64px) — logika murni diuji
+// tanpa DOM: model dropdown cakupan, hitungan notifikasi, inisial, dan
+// ringkasan jaringan. Aturan cakupan: HANYA monitor nasional yang boleh
+// memilih lokasi; peran SPPG terikat SPPG-nya (fail-closed).
+import { describe, expect, it } from "vitest";
+
+import {
+  ALL_LOCATIONS,
+  countActionable,
+  countActionableBreakdown,
+  defaultScope,
+  initialsOf,
+  isActionableForRole,
+  isExpired,
+  isScopeChooser,
+  networkState,
+  notifList,
+  scopeModel,
+  type TopBarLocation,
+} from "../lib/topbar";
+
+const LOCATIONS: TopBarLocation[] = [
+  { location: "Bandung", region: "Jawa Barat", status: "surplus" },
+  { location: "Bogor", region: "Jawa Barat", status: "surplus" },
+  { location: "Jakarta", region: "DKI Jakarta", status: "shortage" },
+];
+
+describe("top bar — cakupan lokasi", () => {
+  it("hanya monitor nasional yang boleh memilih lokasi", () => {
+    expect(isScopeChooser("bgn_monitor")).toBe(true);
+    expect(isScopeChooser("sppg_head")).toBe(false);
+    expect(isScopeChooser("sppg_nutritionist")).toBe(false);
+    expect(isScopeChooser(null)).toBe(false);
+    expect(isScopeChooser(undefined)).toBe(false);
+  });
+
+  it("monitor melihat semua lokasi + opsi per lokasi (aktif)", () => {
+    const model = scopeModel({ role: "bgn_monitor", locations: LOCATIONS });
+    expect(model.disabled).toBe(false);
+    expect(model.options[0]).toEqual({
+      value: ALL_LOCATIONS,
+      label: "Semua lokasi SPPG (3 lokasi)",
+    });
+    expect(model.options.map((o) => o.value)).toEqual([
+      ALL_LOCATIONS,
+      "Bandung",
+      "Bogor",
+      "Jakarta",
+    ]);
+  });
+
+  it("peran SPPG terkunci pada SPPG-nya — cakupan tidak bisa diperluas", () => {
+    const model = scopeModel({
+      role: "sppg_head",
+      locations: LOCATIONS,
+      ownLocation: "Jakarta",
+    });
+    expect(model.disabled).toBe(true);
+    expect(model.options).toHaveLength(1);
+    expect(model.options[0]).toEqual({ value: "Jakarta", label: "Jakarta" });
+  });
+
+  it("gagal-tertutup: lokasi SPPG tak diketahui → tidak ada opsi, tidak bisa diganti", () => {
+    const model = scopeModel({ role: "sppg_nutritionist", locations: LOCATIONS });
+    expect(model.disabled).toBe(true);
+    expect(model.options).toEqual([]);
+    expect(model.placeholder).toBe("Lokasi belum diketahui");
+  });
+
+  it("peran tak dikenal juga gagal-tertutup", () => {
+    const model = scopeModel({ role: null, locations: LOCATIONS });
+    expect(model.disabled).toBe(true);
+    expect(model.options).toEqual([]);
+    expect(model.placeholder).toBe("Cakupan tidak diketahui");
+  });
+
+  it("cakupan awal: monitor = semua lokasi, SPPG = lokasinya sendiri", () => {
+    expect(defaultScope({ role: "bgn_monitor" })).toBe(ALL_LOCATIONS);
+    expect(defaultScope({ role: "sppg_head", ownLocation: "Jakarta" })).toBe("Jakarta");
+    // Tanpa lokasi (data belum tiba) jangan menebak cakupan baru.
+    expect(defaultScope({ role: "sppg_head" })).toBe(ALL_LOCATIONS);
+    expect(defaultScope({ role: null })).toBe(ALL_LOCATIONS);
+  });
+});
+
+describe("top bar — notifikasi tindakan", () => {
+  it("menghitung status yang menunggu tindakan manusia, mengabaikan sisanya", () => {
+    // Tanpa `valid`/`expires_at` (mis. respons lama / bentuk minimal): jangan
+    // mengarang kedaluwarsa — status saja yang menentukan.
+    expect(
+      countActionable([
+        { status: "pending_approval" },
+        { status: "VERIFIER_FLAGGED" },
+        { status: "approved" },
+        { status: "needs_verification" },
+        { status: "executed" },
+        { status: "rejected" },
+        {},
+      ]),
+    ).toBe(3);
+    expect(countActionable([])).toBe(0);
+  });
+});
+
+// F1 (QA 16 Okt): lonceng dan chip melaporkan "12 menunggu tindakan" padahal 8
+// di antaranya sudah lewat tenggat 7–8 Okt dan backend MENOLAK tindakan atas
+// mereka (409). `valid` dari GET /decisions adalah sumber kebenaran kedaluwarsa
+// — sudah dipakai components/RecommendationCard.tsx:23 dan
+// lib/recommendations.ts:32 — tetapi hitungan ini dulu mengabaikannya.
+describe("top bar — hitungan menghormati kedaluwarsa", () => {
+  const LEWAT = { status: "pending_approval", valid: false };
+  const HIDUP = { status: "pending_approval", valid: true };
+
+  it("keputusan kedaluwarsa tidak dihitung sebagai menunggu tindakan", () => {
+    expect(countActionable([HIDUP, LEWAT, LEWAT, { status: "executed", valid: true }])).toBe(1);
+  });
+
+  it("tanpa `valid`, tenggat dihitung dari expires_at terhadap now", () => {
+    const now = new Date("2026-10-14T12:00:00Z");
+    expect(
+      countActionable(
+        [
+          { status: "pending_approval", expires_at: "2026-10-10T00:00:00Z" }, // lewat
+          { status: "pending_approval", expires_at: "2026-10-15T00:00:00Z" }, // belum
+        ],
+        now,
+      ),
+    ).toBe(1);
+  });
+
+  it("tanpa `valid` maupun `expires_at` tidak diklaim kedaluwarsa", () => {
+    expect(countActionable([{ status: "pending_approval" }])).toBe(1);
+  });
+
+  it("isExpired: `valid` menang, lalu jatuh ke expires_at, sisanya tidak diklaim", () => {
+    expect(isExpired({ valid: false })).toBe(true);
+    // `valid: true` menang walau `expires_at` sudah lewat — jangan menghitung
+    // ulang apa yang sudah diputuskan server.
+    expect(isExpired({ valid: true, expires_at: "2020-01-01T00:00:00Z" })).toBe(false);
+    const now = new Date("2026-10-14T12:00:00Z");
+    expect(isExpired({ expires_at: "2026-10-15T00:00:00Z" }, now)).toBe(false);
+    expect(isExpired({ expires_at: "2026-10-13T00:00:00Z" }, now)).toBe(true);
+    expect(isExpired({})).toBe(false);
+    expect(isExpired({ expires_at: "bukan-tanggal" })).toBe(false);
+    expect(isExpired(null)).toBe(false);
+  });
+
+  it("breakdown melaporkan yang hidup DAN yang lewat — yang lewat jangan disembunyikan", () => {
+    expect(
+      countActionableBreakdown([
+        HIDUP,
+        LEWAT,
+        LEWAT,
+        { status: "verifier_flagged", valid: false },
+        { status: "proposed", valid: true }, // bukan tindakan → tidak dihitung
+      ]),
+    ).toEqual({ actionable: 1, expired: 3, draft: 0, total: 4 });
+  });
+
+  it("draf proposed yang kedaluwarsa dihitung terpisah, bukan sebagai tunggakan tindakan", () => {
+    // Kepala SPPG satu-satunya yang bisa menekan "Ajukan"; setelah tenggat lewat
+    // tombolnya hilang, jadi baris ini bukan pekerjaan yang bisa diselesaikan.
+    expect(
+      countActionableBreakdown(
+        [
+          HIDUP,
+          { status: "proposed", valid: false },
+          { status: "proposed", valid: false },
+          { status: "proposed", valid: true },
+        ],
+        undefined,
+        "sppg_head",
+      ),
+    ).toEqual({ actionable: 2, expired: 0, draft: 2, total: 4 });
+  });
+});
+
+describe("top bar — identitas & ringkasan jaringan", () => {
+  it("inisial dari email atau label peran, maksimal dua huruf", () => {
+    expect(initialsOf("sppg.head@demo.local")).toBe("SH");
+    expect(initialsOf("SPPG Operations Lead")).toBe("SO");
+    expect(initialsOf("bgn.monitor@demo.local", "National Inspector")).toBe("BM");
+    expect(initialsOf("", null, undefined)).toBe("");
+  });
+
+  it("ringkasan jaringan menandai shortage (dan jujur saat normal)", () => {
+    expect(networkState(LOCATIONS)).toEqual({
+      tone: "warning",
+      label: "1 lokasi shortage (3 terpantau)",
+    });
+    expect(networkState([{ location: "Bogor", status: "surplus" }])).toEqual({
+      tone: "safe",
+      label: "Jaringan normal (1 lokasi)",
+    });
+    expect(networkState([])).toEqual({ tone: "safe", label: "Jaringan normal (0 lokasi)" });
+  });
+});
+
+// Popup notifikasi lonceng (permintaan Roy 11 Okt: lonceng membuka popup, bukan
+// langsung pindah ke tab Recommendations). Logika murni: pilih yang menunggu
+// tindakan, urutkan terbaru lebih dulu, batasi jumlah tampil.
+describe("notifList", () => {
+  const KEPUTUSAN = [
+    {
+      decision_id: "d1",
+      status: "PENDING_APPROVAL",
+      decision_type: "regional_balance",
+      quantity_kg: 400,
+      created_at: "2026-10-11T08:00:00Z",
+    },
+    {
+      decision_id: "d2",
+      status: "EXECUTED", // bukan actionable → tidak masuk notifikasi
+      decision_type: "price_anomaly",
+      quantity_kg: 100,
+      created_at: "2026-10-11T09:00:00Z",
+    },
+    {
+      decision_id: "d3",
+      // Kuorum penuh (dua approval) tetapi PO belum terbit: masih menuntut
+      // tindakan Kepala SPPG (Eksekusi). Sebelum 18 Okt status ini tidak ada.
+      status: "approved",
+      decision_type: "safety_disruption",
+      quantity_kg: 250,
+      created_at: "2026-10-11T07:00:00Z",
+    },
+    {
+      decision_id: "d4",
+      status: "VERIFIER_FLAGGED",
+      decision_type: "supplier_exclusion",
+      quantity_kg: null,
+      created_at: null, // tanpa waktu → paling akhir
+    },
+  ];
+
+  it("hanya memuat keputusan yang menunggu tindakan", () => {
+    const { total, shown } = notifList(KEPUTUSAN);
+    expect(total).toBe(3);
+    expect(shown.map((d) => d.decision_id)).toEqual(["d1", "d3", "d4"]);
+  });
+
+  it("mengurutkan yang terbaru lebih dulu; tanpa waktu paling akhir", () => {
+    const { shown } = notifList(KEPUTUSAN);
+    expect(shown[0].decision_id).toBe("d1"); // 08.00
+    expect(shown[1].decision_id).toBe("d3"); // 07.00
+    expect(shown[2].decision_id).toBe("d4"); // tanpa created_at
+  });
+
+  it("membatasi jumlah tampil dan melaporkan sisanya", () => {
+    const { total, shown, rest } = notifList(KEPUTUSAN, 2);
+    expect(total).toBe(3);
+    expect(shown).toHaveLength(2);
+    expect(rest).toBe(1);
+  });
+
+  it("batas 0 → tidak menampilkan apa pun tetapi total tetap jujur", () => {
+    const { total, shown, rest } = notifList(KEPUTUSAN, 0);
+    expect(shown).toEqual([]);
+    expect(rest).toBe(3);
+    expect(total).toBe(3);
+  });
+
+  it("keputusan kedaluwarsa tidak masuk daftar, tetapi dilaporkan terpisah", () => {
+    // Notifikasi menjanjikan tindakan; keputusan yang tak bisa ditindak tidak
+    // boleh menempati slotnya. Angkanya tetap dilaporkan supaya tidak hilang
+    // diam-diam.
+    const hasil = notifList([
+      { decision_id: "hidup", status: "PENDING_APPROVAL", valid: true, created_at: "2026-10-11T08:00:00Z" },
+      { decision_id: "lewat", status: "PENDING_APPROVAL", valid: false, created_at: "2026-10-11T09:00:00Z" },
+    ]);
+    expect(hasil.total).toBe(1);
+    expect(hasil.shown.map((d) => d.decision_id)).toEqual(["hidup"]);
+    expect(hasil.expired).toBe(1);
+    expect(hasil.draft).toBe(0);
+  });
+
+  it("draf proposed kedaluwarsa dilaporkan sebagai draft, bukan tunggakan tenggat", () => {
+    // Audit 24 Okt 2026: 27 draf membuat lonceng berbunyi "31 lewat tenggat".
+    const hasil = notifList(
+      [
+        { decision_id: "kerja", status: "PENDING_APPROVAL", valid: true, created_at: "2026-10-11T08:00:00Z" },
+        { decision_id: "lewat", status: "PENDING_APPROVAL", valid: false, created_at: "2026-10-11T09:00:00Z" },
+        { decision_id: "draf1", status: "PROPOSED", valid: false, created_at: "2026-10-11T10:00:00Z" },
+        { decision_id: "draf2", status: "PROPOSED", valid: false, created_at: "2026-10-11T11:00:00Z" },
+      ],
+      undefined,
+      "sppg_head",
+    );
+    expect(hasil.total).toBe(1);
+    expect(hasil.expired).toBe(1);
+    expect(hasil.draft).toBe(2);
+    expect(hasil.shown.map((d) => d.decision_id)).toEqual(["kerja"]);
+  });
+
+  it("daftar kosong / null tidak meledak", () => {
+    // `expired` ikut dilaporkan sejak perbaikan F1 (16 Okt).
+    expect(notifList([])).toEqual({ total: 0, shown: [], rest: 0, expired: 0, draft: 0 });
+    expect(notifList(null)).toEqual({ total: 0, shown: [], rest: 0, expired: 0, draft: 0 });
+    expect(notifList(undefined, 5).total).toBe(0);
+  });
+
+  it("entri tanpa status atau status kosong diabaikan", () => {
+    const { total } = notifList([{ decision_id: "x" }, { decision_id: "y", status: "" }]);
+    expect(total).toBe(0);
+  });
+});
+
+describe("hitungan menunggu tindakan per peran (audit M7)", () => {
+  const baris = [
+    { status: "proposed", valid: true },
+    { status: "pending_approval", valid: true },
+    { status: "approved", valid: true },
+    { status: "review_only", valid: true },
+  ];
+
+  it("Kepala SPPG menghitung proposed — hanya dia yang bisa mengajukan", () => {
+    expect(countActionable(baris, undefined, "sppg_head")).toBe(3);
+    expect(notifList(baris, undefined, "sppg_head").total).toBe(3);
+  });
+
+  it("Ahli Gizi tidak menghitung proposed — tombolnya tidak ada untuknya", () => {
+    expect(countActionable(baris, undefined, "sppg_nutritionist")).toBe(2);
+    expect(notifList(baris, undefined, "sppg_nutritionist").total).toBe(2);
+  });
+
+  it("tanpa peran, angka LEBIH KECIL — jangan pernah memanggil tanpa peran", () => {
+    // Temuan audit 19 Okt 2026: kartu "Rekomendasi menunggu" memanggil
+    // notifList(decisions, 4) tanpa peran → 16, sementara lonceng menulis 24
+    // untuk hal yang sama. Tes ini mengunci bahwa selisih itu memang ada,
+    // supaya pemanggil baru tidak "menyederhanakan" dengan membuang peran.
+    expect(notifList(baris, undefined).total).toBe(2);
+    expect(notifList(baris, undefined, "sppg_head").total).toBe(3);
+  });
+
+  it("review_only tidak pernah dihitung sebagai tindakan", () => {
+    expect(isActionableForRole("review_only", "sppg_head")).toBe(false);
+    expect(isActionableForRole("review_only", "sppg_nutritionist")).toBe(false);
+  });
+
+  it("tanpa peran perilaku lama dipertahankan (proposed tidak dihitung)", () => {
+    expect(countActionable(baris)).toBe(2);
+  });
+});

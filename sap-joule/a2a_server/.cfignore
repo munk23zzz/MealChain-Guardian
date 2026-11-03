@@ -1,0 +1,11 @@
+# Berkas yang TIDAK ikut terunggah ke Cloud Foundry (`cf push`).
+# `.env` wajib ada di sini: kredensial harus datang dari `cf set-env`, bukan dari berkas lokal.
+.env
+.venv/
+venv/
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+.python-version
+tests/

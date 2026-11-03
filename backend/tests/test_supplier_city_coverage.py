@@ -1,0 +1,100 @@
+"""Revisi ketiga Roy: supplier lokal di SEMUA kota (bukan hanya Cianjur).
+
+- pihps_reference TETAP sebagai acuan pasar per kota (benchmark /price/deviation)
+- tiap kota punya >=1 supplier lokal (nama memuat wilayah) dengan quote format
+  {source: 'supplier_quote', supplier: '<nama wilayah>', price_per_kg}
+"""
+
+from datetime import UTC, datetime
+
+from app.seed.seed_data import build_seed_rows
+
+REF = datetime(2026, 10, 1, 12, 0, 0, tzinfo=UTC)
+
+TEN_CITIES = {
+    "Jakarta",
+    "Bogor",
+    "Cianjur",
+    "Bandung",
+    "Semarang",
+    "Yogyakarta",
+    "Surabaya",
+    "Makassar",
+    "Palembang",
+    "Medan",
+}
+
+
+def test_every_city_has_local_supplier_quote():
+    rows = build_seed_rows(REF)["price_signals"]
+    quote_cities = {
+        r["location"] for r in rows if r["source"] == "supplier_quote"
+    }
+    assert quote_cities == TEN_CITIES, (
+        f"kota tanpa supplier quote: {TEN_CITIES - quote_cities}"
+    )
+
+
+def test_local_suppliers_are_registered_at_their_city():
+    """Kutipan pemasok harus berasal dari pemasok yang TERDAFTAR di kota itu.
+
+    Versi lama tes ini menuntut nama pemasok memuat nama kota ("Supplier
+    Semarang-1"). Sejak dataset 19 Okt 2026 nama memakai nama usaha nyata
+    (CV/UD/PT/Koperasi + nama pasar/sentra), jadi yang diuji adalah FAKTA
+    keanggotaannya — bukan pola nama. Aturannya tetap: kutipan lokal harus
+    datang dari pemasok lokal, bukan dari pemasok kota lain.
+    """
+    data = build_seed_rows(REF)
+    lokasi_pemasok = {s["name"]: s["location"] for s in data["suppliers"]}
+    for r in data["price_signals"]:
+        if r["source"] != "supplier_quote":
+            continue
+        assert lokasi_pemasok[r["supplier"]] == r["location"], (
+            f"kutipan {r['supplier']} di {r['location']} berasal dari pemasok "
+            f"yang terdaftar di {lokasi_pemasok[r['supplier']]}"
+        )
+
+
+def test_quotes_reference_still_forty_city_prices():
+    """10 kota x 4 komoditas (beras masuk 18 Okt 2026)."""
+    rows = build_seed_rows(REF)["price_signals"]
+    refs = [r for r in rows if r["source"] == "pihps_reference"]
+    assert len(refs) == 40, "acuan pasar 10 kota x 4 komoditas tetap utuh"
+
+
+def test_cianjur_locked_quotes_still_exact():
+    rows = build_seed_rows(REF)["price_signals"]
+    # Hanya telur + beras yang dikunci; ayam/wortel Cianjur ikut punya kutipan
+    # lokal sejak dataset 19 Okt 2026, dan nilai keduanya tidak dijadikan jangkar.
+    cianjur_quotes = {
+        r["supplier"]: float(r["price_per_kg"])
+        for r in rows
+        if r["location"] == "Cianjur"
+        and r["source"] == "supplier_quote"
+        and r["commodity"] in {"telur", "beras"}
+    }
+    assert cianjur_quotes == {
+        "Koperasi Telur Cipanas Bersama": 26200.0,
+        "UD H. Asep Cianjur": 27000.0,
+        "UD Cipanas Telur Sejahtera": 32000.0,
+        "CV Barokah Telur Cianjur": 25400.0,
+        "CV Pandan Wangi Cianjur": 12200.0,
+    }
+
+
+def test_new_local_quotes_within_realistic_bounds():
+    bounds = {
+        "telur": (24000, 34000),
+        "ayam": (32000, 46000),
+        "wortel": (14000, 30000),
+        "beras": (11000, 16000),
+    }
+    rows = build_seed_rows(REF)["price_signals"]
+    for r in rows:
+        if r["source"] != "supplier_quote":
+            continue
+        lo, hi = bounds[r["commodity"]]
+        price = float(r["price_per_kg"])
+        assert lo <= price <= hi, (
+            f"quote {r['supplier']} = {price} di luar batas realistis {bounds[r['commodity']]}"
+        )

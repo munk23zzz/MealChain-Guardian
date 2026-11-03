@@ -1,0 +1,236 @@
+/*
+ * Overview: "Kecukupan pasokan" (kiri) + "Surplus wilayah lain" (kanan) —
+ * 28 Okt 2026; REDESIGN KOLOM 29 Okt 2026.
+ *
+ * Kedua kartu kini SATU bahasa grafik: kelas `ac-*` (kartu, kepala, plot kolom,
+ * garis acuan, angka, label) dari `adequacy-columns.css`. Berkas ini hanya
+ * memuat:
+ *   (a) susunan dua kolom di halaman,
+ *   (b) bagian khas panel surplus: total di kepala, warna batang wilayah,
+ *       lencana "terbesar", chip komoditas;
+ *   (c) penyesuaian kartu sempit.
+ * Tidak ada warna status baru: hijau/kuning/merah tetap berarti aman/tinjau/
+ * bahaya, sedangkan batang wilayah memakai aksen (kuantitas, bukan status).
+ */
+
+/* ── (a) Dua kolom: grafik setengah, surplus wilayah setengah ─────────────── */
+.ov-pasokan-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 12px;
+  /* Tinggi kedua kartu DIPAKSA SAMA (koreksi 28 Okt 2026: "perbaiki lagi
+     keduanya"). Dulu `align-items: start` — tepi bawah jadi ragged. Dengan
+     stretch, panel surplus jadi kolom flex: baris chip "Dari komoditas"
+     menempel di dasar kartu, sisa tinggi di tengah, bukan lubang acak. */
+  align-items: stretch;
+}
+
+.ov-pasokan-grid > * {
+  /* minmax(0, …) + min-width: 0: tanpa ini label panjang memaksa track melebar
+     keluar kolom dan halaman melebar di viewport 1024 px. */
+  min-width: 0;
+}
+
+.ov-pasokan-grid > .adequacy-columns {
+  display: flex;
+  flex-direction: column;
+  container-type: inline-size;
+}
+
+@container (max-width: 520px) {
+  /* Kartu setengah halaman (dan kartu tunggal di ponsel): angka di atas batang
+     diturunkan satu langkah supaya "3.454 kg" tidak menyentuh tepi kolom. */
+  .ov-pasokan-grid .ac-value strong {
+    font-size: var(--fs-4);
+  }
+
+  .ov-pasokan-grid .ac-name {
+    font-size: var(--fs-1);
+  }
+}
+
+@container (max-width: 420px) {
+  /* Kartu ponsel: empat pil tidak muat sebaris (348 px), dan flex-wrap
+     menyisakan satu pil sendirian. Dua kolom membuat pecahannya 2+2.
+     Selektor diberi awalan `.ov-pasokan-grid` karena blok dasar `.sr-mix`
+     ditulis BELAKANGAN di berkas ini: dengan spesifisitas sama, aturan dasar
+     akan menang dan query ini tidak berefek (terukur: tetap flex, pecahan 3+1). */
+  .ov-pasokan-grid .sr-mix {
+    display: grid;
+    grid-template-columns: repeat(2, max-content);
+    gap: 5px 6px;
+  }
+
+  .ov-pasokan-grid .sr-mix-label {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 1180px) {
+  /* Satu kolom: dua kartu selebar setengah halaman tidak lagi terbaca. */
+  .ov-pasokan-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* ── (b) Panel "Surplus wilayah lain" ─────────────────────────────────────── */
+
+/* Total di kepala kartu: angka + jumlah wilayah. Satu pasangan, seperti
+   "4 dari 4 kurang" di kartu sebelah. */
+.sr-count {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.sr-count strong {
+  font-size: var(--fs-5);
+}
+
+/* Batang wilayah = AKSEN, bukan status (hijau/merah milik kecukupan). Warna
+   ini menyatakan "ini kuantitas yang dibandingkan", bukan "ini aman/bahaya". */
+.sr-col {
+  --ac-bar: color-mix(in srgb, var(--accent) 88%, var(--surface));
+  --ac-ink: var(--ink-muted);
+}
+
+/* Wilayah yang SELURUH surplusnya di bawah ambang kirim: batang pucat, karena
+   angkanya nyata tetapi tidak bisa dikirim. Dibedakan lewat nada + catatan
+   "di bawah ambang", bukan disembunyikan. */
+.sr-col.is-kecil {
+  --ac-bar: color-mix(in srgb, var(--ink-muted) 22%, var(--surface));
+}
+
+/* Catatan di bawah nama wilayah bukan selisih status: tinta netral, supaya
+   tidak terbaca sebagai "kurang/lebih" seperti di kartu kecukupan. */
+.sr-panel .ac-gap {
+  color: var(--ink-muted);
+  font-weight: 500;
+}
+
+.sr-badge {
+  margin-left: 5px;
+  padding: 1px 6px;
+  border-radius: var(--radius-chip);
+  background: var(--cat-blue-bg);
+  color: var(--cat-blue-ink);
+  font-size: var(--fs-1);
+  font-weight: 600;
+  white-space: nowrap;
+  vertical-align: 1px;
+}
+
+.sr-mix {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  /* Label di barisnya sendiri, chip mengalir satu baris penuh di bawahnya.
+     Chip menulis angka tanpa "kg" (lihat formatKgTanpaSatuan) karena satuan
+     sudah disebut sekali di label: empat chip 96 px + 3 celah = 399 px, muat di
+     kartu 434 px tanpa satu pil terbuang ke baris kedua. */
+  gap: 4px 5px;
+  /* Chip sekarang hidup di baris alat (di atas plot), bukan di kaki kartu:
+     tanpa garis pemisah dan tanpa jarak atas — cukup satu baris rapat yang
+     menyejajarkan diri dengan pil lensa di kartu sebelahnya. */
+  flex: 1 1 100%;
+  margin-top: 0;
+  padding-top: 0;
+  border-top: 0;
+}
+
+.sr-mix-label {
+  flex: 0 0 100%;
+  color: var(--ink-muted);
+  font-size: var(--fs-1);
+  font-weight: 500;
+  /* Line-height dipadatkan: blok chip harus muat di bawah 44 px, yaitu tinggi
+     baris alat yang dipatok — kalau lebih, baris alat kartu ini 0,4 px lebih
+     tinggi dari kartu sebelah dan plot dua kartu bergeser 1 px. */
+  line-height: 1.1;
+}
+
+.sr-mix-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 7px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--ink);
+  font-size: var(--fs-1);
+  font-weight: 600;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  text-transform: capitalize;
+}
+
+/* Palet komoditas = palet IDENTITAS yang sudah didokumentasikan (docs/design.md):
+   telur amber, ayam rose, beras biru, wortel violet — sama dengan titik pada pil
+   komoditas di peta, jadi satu komoditas berwarna SAMA di peta, legenda, dan
+   chip panel ini. Tidak memakai token status (aman/tinjau/bahaya) supaya makna
+   warna status tidak kabur. */
+.sr-komod-blue {
+  --sr-komod: var(--cat-blue-solid);
+}
+
+.sr-komod-amber {
+  --sr-komod: var(--cat-amber-solid);
+}
+
+.sr-komod-rose {
+  --sr-komod: var(--cat-rose-solid);
+}
+
+.sr-komod-violet {
+  --sr-komod: var(--cat-violet-solid);
+}
+
+.sr-komod-teal {
+  --sr-komod: var(--cat-teal-solid);
+}
+
+/* Cadangan untuk komoditas di luar empat kanonik: indeks urutan daftar. */
+.sr-komod-0 {
+  --sr-komod: var(--cat-blue-solid);
+}
+
+.sr-komod-1 {
+  --sr-komod: var(--cat-violet-solid);
+}
+
+.sr-komod-2 {
+  --sr-komod: var(--cat-teal-solid);
+}
+
+.sr-komod-3 {
+  --sr-komod: var(--cat-amber-solid);
+}
+
+.sr-komod-netral {
+  --sr-komod: var(--line-strong);
+}
+
+/* Titik komoditas di chip: warna penuh (ukurannya 10 px, butuh kontras). */
+.sr-dot {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: var(--radius-chip);
+  background-color: var(--sr-komod, var(--line-strong));
+}
+
+/* Keadaan kosong: satu kalimat sebab, bukan plot kosong. */
+.sr-panel .ac-empty {
+  margin: 10px 0 2px;
+  padding: 14px 16px;
+  border: 1px dashed var(--line-strong);
+  border-radius: var(--radius-control);
+  background: var(--surface-sunken);
+  line-height: 1.5;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sr-panel .ac-fill {
+    transition: none;
+  }
+}

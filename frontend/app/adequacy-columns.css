@@ -1,0 +1,518 @@
+/* Kartu "Kecukupan pasokan" — kolom berdiri, SATU arti per batang (28 Okt 2026).
+ *
+ * Prinsip yang dijaga (hasil keluhan "diagramnya sulit dipahami"):
+ * - Tinggi batang == angka besar di atasnya (yang dihitung lensa ÷ kebutuhan).
+ *   Tidak ada garis kedua di dalam batang, tidak ada segmen kualitas di
+ *   geometri — komposisi kualitas hanya di tooltip/aria.
+ * - Ruang kosong di puncak kotak diberi warna pucat = kekurangan, supaya
+ *   "yang belum ada" terbaca sebagai ruang, bukan kotak kosong tanpa arti.
+ * - Warna batang = status (hijau cukup / kuning tipis / merah kurang). Tidak ada
+ *   legenda warna; hanya satu keterangan "penuh = kebutuhan".
+ * - Semua warna SOLID (permintaan pemilik): tanpa gradasi, tanpa arsiran.
+ * - Semua radius & bayangan memakai token (gerbang radius-scale-css &
+ *   token-bayangan).
+ */
+
+.adequacy-columns {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px 16px 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-dock);
+  background: var(--surface);
+  box-shadow: var(--shadow-2);
+  min-width: 0;
+}
+
+/* ---------- Kepala kartu ---------- */
+
+.ac-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 4px 12px;
+  /* Tinggi minimum disamakan: kartu kecukupan punya judul (+ pil lensa) dan
+     kartu surplus punya judul + baris sub. Tanpa patokan ini isi dua kartu
+     yang berdampingan duduk di ketinggian berbeda dan donatnya tidak sejajar.
+     62 px cukup untuk judul + baris sub + pil lensa yang membungkus. */
+  min-height: 62px;
+}
+
+.ac-title h3 {
+  margin: 0;
+  font-size: var(--fs-5);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+  /* Judul boleh memendek (dengan elipsis) supaya pil lensa + angka muat
+     sebaris di kepala dan tinggi kedua kepala tetap sama. */
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ac-head .ac-title {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.ac-head .ac-count {
+  flex: none;
+  margin-left: auto;
+}
+
+.ac-head .ac-toggle {
+  flex: none;
+}
+
+.ac-sub {
+  margin: 1px 0 0;
+  font-size: var(--fs-1);
+  color: var(--ink-muted);
+  line-height: 1.3;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Ringkasan = satu pasangan angka + kata: "2/4 kurang". Tanpa kalimat. */
+.ac-count {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  font-size: var(--fs-2);
+  color: var(--ink-muted);
+  white-space: nowrap;
+}
+
+.ac-count strong {
+  /* 18/700 → 16/600 (29 Okt 2026): "terlalu mencolok". Angka ini ringkasan di
+     sudut kepala kartu, bukan angka hero; bobotnya cukup satu tingkat di atas
+     label. */
+  font-size: var(--fs-4);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+  color: var(--ink);
+}
+
+/* ---------- Perkakas: pil lensa + satu keterangan ---------- */
+
+.ac-tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px 10px;
+  /* Sama seperti kepala: pil lensa (kiri) vs chip komoditas (kanan) punya
+     tinggi berbeda. Dipatok setinggi blok chip (label + satu baris pil) supaya
+     plot dua kartu mulai di garis yang sama. */
+  min-height: 44px;
+}
+
+/* Baris keterangan di dasar kartu: legenda garis acuan, di kiri sejajar awal
+   sumbu. `margin-top: auto` menempelkannya ke dasar sehingga kedua kartu yang
+   berdampingan ditutup garis yang sama tinggi — sisa ruang kartu yang isinya
+   lebih pendek jadi napas di tengah, bukan ekor kosong di bawah. */
+.ac-foot {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  margin-top: auto;
+  min-height: 16px;
+}
+
+.ac-toggle {
+  display: inline-flex;
+  padding: 2px;
+  gap: 2px;
+  border-radius: 999px;
+  background: var(--surface-sunken);
+  box-shadow: var(--shadow-inset-soft);
+}
+
+.ac-toggle button {
+  appearance: none;
+  border: 0;
+  padding: 4px 11px;
+  border-radius: 999px;
+  font: inherit;
+  font-size: var(--fs-1);
+  font-weight: 600;
+  color: var(--ink-muted);
+  background: transparent;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.ac-toggle button[aria-pressed="true"] {
+  color: var(--accent-strong);
+  background: var(--surface);
+  box-shadow: var(--shadow-1);
+}
+
+.ac-toggle button:hover {
+  color: var(--ink);
+}
+
+/* Keterangan tunggal (`.ac-key`): teks kecil, bukan kalimat. */
+.ac-key {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--fs-1);
+  color: var(--ink-subtle);
+  white-space: nowrap;
+}
+
+/* Contoh di sebelah keterangan: bentuknya SAMA dengan plot — garis acuan putus-
+   putus di atas, batang di bawah, garis dasar. Dulu ini kotak terbenam
+   (meniru track lama); setelah track jadi bidang terbuka, contohnya mengikuti.
+   Tanpa gradasi: isi batang contoh dibuat dengan elemen semu, bukan citra
+   bertingkat. */
+.ac-key-track {
+  position: relative;
+  display: inline-block;
+  width: 12px;
+  height: 14px;
+  border-top: 1.5px dashed var(--line-input);
+  border-bottom: 1px solid var(--line);
+}
+
+.ac-key-track::after {
+  content: "";
+  position: absolute;
+  left: 3px;
+  right: 3px;
+  bottom: 0;
+  height: 8px;
+  border-radius: var(--radius-chip) var(--radius-chip) 0 0;
+  background: color-mix(in srgb, var(--ink-muted) 45%, var(--surface));
+}
+
+/* ---------- Plot kolom ---------- */
+
+/* REDESIGN 29 Okt 2026 — satu plot, satu garis acuan.
+   Sebelumnya setiap kolom duduk di dalam kotak terbenam sendiri
+   (`background: --surface-sunken` + bayangan masuk). Empat kotak berjajar
+   terbaca sebagai empat kolom formulir, bukan satu grafik: tidak ada sumbu
+   bersama, dan "kotak penuh" harus ditebak dari legenda.
+   Sekarang: kolom tanpa kotak (jarak 0) sehingga garis putus-putus di puncak
+   tiap track MENYAMBUNG menjadi satu garis acuan 100% melintasi plot, dan
+   garis dasar di bawah batang juga menyambung menjadi satu sumbu. */
+
+.ac-plot {
+  display: grid;
+  /* Jumlah kolom datang dari komponen (`--ac-kolom`). Bentuk `repeat(N,
+     minmax(0, 140px))` + `justify-content: center` menyelesaikan dua masalah
+     sekaligus:
+     - banyak kolom: track menyusut sama rata mengisi lebar kartu;
+     - satu-dua kolom: track berhenti di 140 px dan seluruhnya dipusatkan,
+       sehingga satu wilayah tidak menjadi blok warna selebar kartu.
+     `margin-inline: auto` TIDAK dipakai: margin otomatis mematikan stretch
+     item, dan track berubah jadi selebar teks (batang jadi tidak sama lebar —
+     terukur 43/52/43/36 px). */
+  grid-template-columns: repeat(var(--ac-kolom, 4), minmax(0, 140px));
+  justify-content: center;
+  gap: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  min-width: 0;
+}
+
+.ac-col {
+  display: flex;
+  min-width: 0;
+}
+
+
+.ac-col-btn {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  width: 100%;
+  min-width: 0;
+  margin: 0;
+  /* Tanpa padding samping: track tetangga harus bersentuhan supaya garis
+     acuan (puncak track) dan garis dasar menyambung jadi satu sumbu. */
+  padding: 4px 0 2px;
+  border: 0;
+  border-radius: var(--radius-control);
+  background: transparent;
+  font: inherit;
+  text-align: center;
+  color: inherit;
+  transition: transform 0.16s ease, background 0.16s ease, box-shadow 0.16s ease;
+}
+
+button.ac-col-btn {
+  cursor: pointer;
+  appearance: none;
+}
+
+button.ac-col-btn:hover {
+  transform: translateY(-2px);
+  background: var(--surface);
+  box-shadow: var(--shadow-1);
+}
+
+button.ac-col-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+/* Angka cakupan di ATAS batang: jawabannya dulu, gambarnya menyusul.
+   Tinggi DIPATOK (bukan min-height): angka ini menempati pita yang sama di
+   setiap kolom, sehingga garis acuan di puncak track berada di satu ketinggian
+   untuk semua kolom. Dengan min-height, kolom yang angkanya membungkus dua
+   baris akan menggeser garis acuannya sendiri. */
+.ac-value {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 28px;
+  overflow: hidden;
+}
+
+.ac-value strong {
+  /* Angka di atas batang: 20/700 → 18/600. Batangnya sendiri yang harus
+     menonjol; angka cukup terbaca. */
+  font-size: var(--fs-5);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+  /* Angka netral; warna status hanya dipakai pada selisih di bawah batang. */
+  color: var(--ink);
+  line-height: 1.1;
+  white-space: nowrap;
+}
+
+/* TEMPAT batang. Dua garis, dua arti:
+   - puncak: garis putus-putus = acuan 100% (kebutuhan / wilayah terbesar);
+   - dasar : garis sumbu, tempat semua batang berdiri.
+   Latar dibuat transparan — bukan kotak terbenam — supaya plot terbaca sebagai
+   satu bidang, bukan empat kolom formulir. */
+.ac-track {
+  position: relative;
+  display: block;
+  /* 168 px (dari 144): kartu kini lebih pendek karena keterangan pindah ke
+     dasar, jadi plot dinaikkan supaya batang tetap jadi tokoh utama kartu,
+     bukan garis tipis di tengah bidang kosong. Nilai sama untuk kedua kartu,
+     jadi sumbu tetap sejajar. */
+  height: 168px;
+  border-top: 1.5px dashed var(--line-input);
+  border-bottom: 1px solid var(--line);
+  background: transparent;
+  /* Batang >100% diberi caret di atas garis acuan; tanpa overflow terlihat,
+     caret itu terpotong. */
+  overflow: visible;
+}
+
+
+.ac-track-empty {
+  border-top-style: dotted;
+  border-top-color: var(--line-strong);
+}
+
+/* Isi batang: satu warna status, tumbuh dari bawah. Lebar 60% kolom dan sudut
+   atas memakai token chip 4 px supaya terbaca sebagai batang data — proporsi
+   inilah yang membedakannya dari kotak yang terisi penuh. (Nilai mentah 6 px
+   dilarang gerbang `radius-scale-css`.) */
+.ac-fill {
+  position: absolute;
+  left: 20%;
+  right: 20%;
+  bottom: 0;
+  z-index: 1;
+  border-radius: var(--radius-chip) var(--radius-chip) 0 0;
+  background: var(--ac-bar, var(--accent));
+  transition: height 0.5s cubic-bezier(0.22, 0.8, 0.24, 1);
+}
+
+/* Pasokan melebihi kebutuhan: batang mentok di garis acuan, jadi kelebihannya
+   ditandai satu caret kecil di atas garis. Angka di atas sudah menyebut
+   berapa persen — caret ini mencegah "180%" terbaca sebagai 100%. */
+.ac-col.is-over .ac-fill::after {
+  content: "";
+  position: absolute;
+  top: -6px;
+  left: 50%;
+  width: 0;
+  height: 0;
+  transform: translateX(-50%);
+  border-left: 4px solid transparent;
+  border-right: 4px solid transparent;
+  border-bottom: 6px solid var(--ac-bar, var(--accent));
+}
+
+
+/* Nama + selisih di bawah batang. */
+.ac-label {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  min-width: 0;
+}
+
+.ac-name {
+  font-size: var(--fs-2);
+  font-weight: 500;
+  color: var(--ink);
+  line-height: 1.15;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ac-gap {
+  font-size: var(--fs-1);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  /* Tinta token status (>= 4,5:1 di atas putih), BUKAN warna batang: warna
+     batang 88% hanya 3–4:1, cukup untuk objek grafis tetapi gagal untuk teks
+     12 px. */
+  color: var(--ac-ink, var(--ink-muted));
+  line-height: 1.15;
+  white-space: nowrap;
+}
+
+/* ---------- Keadaan khusus ---------- */
+
+.ac-empty {
+  margin: 0;
+  font-size: var(--fs-2);
+  color: var(--ink-muted);
+}
+
+.ac-error {
+  margin: 0;
+  font-size: var(--fs-2);
+}
+
+.ac-error button {
+  appearance: none;
+  border: 0;
+  background: none;
+  padding: 0;
+  margin-left: 4px;
+  font: inherit;
+  font-weight: 600;
+  color: var(--accent-strong);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+/* ---------- Nada: satu warna per status ---------- */
+
+/* REDESIGN 29 Okt 2026 — dua peran warna dipisah.
+   `--ac-bar`  : isi batang (objek grafis, perlu >= 3:1 terhadap latar putih);
+   `--ac-ink`  : teks selisih di bawah nama (teks 12 px, wajib >= 4,5:1).
+   Sebelumnya keduanya memakai SATU nilai campuran 55–58% yang terukur hanya
+   2,65:1 (merah) dan 1,46:1 (kuning) untuk teks — jauh di bawah AA, dan
+   batangnya sendiri terlalu pucat untuk terbaca sebagai data. Nilai tinta
+   memakai token tinta status yang sudah lolos audit (5,2 / 5,1 / 6,9:1). */
+
+.ac-tone-safe {
+  --ac-bar: color-mix(in srgb, var(--status-safe) 88%, var(--surface));
+  --ac-ink: var(--safe-ink-tint);
+}
+
+.ac-tone-warning {
+  /* Kuning #F9A825 murni hanya 2,1:1 di atas putih — sebagai batang ia nyaris
+     hilang. Dicampur ke tinta kuning gelap (--warn-ink) supaya tetap "kuning"
+     tetapi lolos ambang objek grafis. */
+  --ac-bar: color-mix(in srgb, var(--status-warning) 52%, var(--warn-ink));
+  --ac-ink: var(--warn-ink);
+}
+
+.ac-tone-danger {
+  --ac-bar: color-mix(in srgb, var(--status-danger) 88%, var(--surface));
+  --ac-ink: var(--danger-ink);
+}
+
+.ac-tone-muted {
+  --ac-bar: var(--line-strong);
+  --ac-ink: var(--neutral-ink);
+}
+
+/* ---------- Banyak kolom (monitor nasional) ---------- */
+
+.ac-plot[data-dense="true"] .ac-value strong {
+  font-size: var(--fs-3);
+}
+
+.ac-plot[data-dense="true"] .ac-label {
+  flex-direction: row-reverse;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 3px;
+  min-height: 74px;
+}
+
+.ac-plot[data-dense="true"] .ac-name,
+.ac-plot[data-dense="true"] .ac-gap {
+  writing-mode: vertical-rl;
+  transform: rotate(180deg);
+  max-height: 92px;
+  white-space: nowrap;
+  text-overflow: clip;
+  letter-spacing: 0.01em;
+}
+
+.ac-plot[data-dense="true"] .ac-gap {
+  font-size: var(--fs-1);
+}
+
+/* ---------- Muat-muat ---------- */
+
+.ac-skeleton {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+  gap: 6px;
+  align-items: end;
+  min-height: 176px;
+}
+
+.ac-skeleton-col {
+  display: block;
+  height: calc(96px + (var(--i, 0) * 14px));
+  max-height: 150px;
+  border-radius: var(--radius-control);
+  background: var(--surface-sunken);
+  animation: ac-pulse 1.6s ease-in-out infinite;
+  animation-delay: calc(var(--i, 0) * 90ms);
+}
+
+@keyframes ac-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.55;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ac-skeleton-col {
+    animation: none;
+  }
+  .ac-col-btn {
+    transition: none;
+  }
+  button.ac-col-btn:hover {
+    transform: none;
+  }
+}
+
+@media (max-width: 720px) {
+  .ac-track {
+    height: 124px;
+  }
+}

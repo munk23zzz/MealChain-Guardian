@@ -1,0 +1,104 @@
+/* Sisa gaya khusus halaman Location Network.
+   Semua yang sudah ada di globals.css (`card`, `board-card-head`, `location-table`,
+   `commodity-filters`, `commodity-pill`, `evidence-note`, `button`) TIDAK
+   diduplikasi di sini — itu yang membuat halaman ini dulu terasa berbeda dari
+   tab lain. Yang tersisa hanya tiga hal yang belum punya padanan global:
+   kalimat ringkasan, tombol baris lokasi, dan angka rata kanan. */
+
+/* `.headline` dan `.issues` PINDAH ke globals sebagai `.network-lead-text` /
+   `.network-lead-issues` (L2, 29 Okt 2026). Alasannya bukan selera: aturan kartu
+   utama halaman ini (`--fs-5`, satu baris, garis tepi bernada) harus satu tempat
+   dengan `.network-lead` supaya bisa dibaca sebagai satu kontrak, dan kelas
+   modul tidak terlihat oleh pratinjau statis sehingga ukurannya tidak bisa
+   diverifikasi tanpa membangun Next. */
+
+.rowButton {
+  display: inline-flex;
+  /* Chevron kini kotak CSS (bukan glyph), jadi tengahkan vertikal. */
+  align-items: center;
+  gap: 4px;
+  min-height: 32px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--navy-900);
+  font: inherit;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+
+.rowButton:hover {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.rowButton:focus-visible {
+  outline: 2px solid var(--navy-900);
+  outline-offset: 2px;
+  border-radius: var(--radius-chip);
+}
+
+.flag {
+  color: var(--warn-ink);
+  font-size: var(--fs-1);
+  font-weight: 400;
+}
+
+.region {
+  color: var(--ink-muted);
+}
+
+.num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* Global `.location-table th` menang atas `.num` (kelas+elemen mengalahkan
+   kelas tunggal), sehingga judul kolom angka tertinggal ke kiri sementara
+   angkanya rata kanan — terukur: `text-align` th = left, sel = right, jadi
+   angka tidak sejajar dengan judulnya. Bungkus nama global dengan `:global()`
+   karena di CSS module `.location-table` ikut di-hash dan tidak akan cocok. */
+:global(.location-table) th.num,
+:global(.location-table) td.num {
+  text-align: right;
+}
+
+.num[data-status="shortage"] {
+  color: var(--danger);
+}
+
+.num[data-status="surplus"] {
+  color: var(--ok-ink);
+}
+
+@media (max-width: 640px) {
+  .region {
+    display: none;
+  }
+}
+
+/* Penanda bahwa nama lokasi bisa dibuka. Sejak upgrade visual 30 Okt 2026
+   chevron digambar dengan CSS (`.row-chevron` di theme-ext.css) — glyph
+   `▸/▾` ikut bergantung font dan duduk di baseline sehingga terbaca seperti
+   tanda hubung. */
+
+
+.openRow td {
+  background: var(--surface-muted, #f4f6f9);
+}
+
+/* Angka asal selisih (pasokan · kebutuhan) di bawah hasilnya. Tanpa baris ini
+   sel tabel hanya menyebut HASIL, dan pembaca harus membuka rincian untuk tahu
+   angkanya datang dari mana. Diletakkan di dalam sel yang sama supaya tidak
+   menambah kolom (dan tidak menggandakan angka di dua tempat). */
+.balanceSub {
+  display: block;
+  margin-top: 2px;
+  font-size: var(--fs-1);
+  font-weight: 400;
+  color: var(--ink-subtle);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}

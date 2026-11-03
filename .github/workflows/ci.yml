@@ -1,0 +1,106 @@
+name: CI
+
+# DEP-02 (audit 24 Okt 2026): sebelum ini semua gerbang (ruff, pytest, tsc,
+# lint, vitest) hanya dijalankan manual, sehingga regresi bisa masuk tanpa
+# terlihat. Workflow ini menjalankan gerbang yang sama seperti yang dipakai
+# saat remediasi — dengan Postgres bersih, migrasi dari nol, dan data kanonik
+# yang sama seperti acuan `docs/design.md`.
+on:
+  push:
+    branches: ["master", "main", "feature/**"]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    name: Backend — ruff + pytest
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: mealchain
+          POSTGRES_PASSWORD: mealchain
+          POSTGRES_DB: mealchain
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U mealchain -d mealchain"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      # Kredensial di bawah hanya hidup selama job ini (service container
+      # sekali pakai) — bukan nilai dari `.env` mana pun.
+      DATABASE_URL: postgresql+asyncpg://mealchain:mealchain@localhost:5432/mealchain
+      JWT_SECRET: ci-jwt-secret-bukan-rahasia
+      JWT_ALGORITHM: HS256
+      JWT_EXPIRE_MINUTES: "60"
+      DEMO_SESSION_ENFORCE: "false"
+      ENABLE_DOCS: "false"
+      # `agent/` ada di akar repo, kode backend di backend/ — dua-duanya harus
+      # bisa diimpor supaya 9 berkas tes agen benar-benar berjalan, bukan skip.
+      PYTHONPATH: ${{ github.workspace }}/backend:${{ github.workspace }}
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+
+      - name: Pasang dependensi
+        run: pip install -r requirements.txt
+
+      - name: Lint (ruff)
+        run: ruff check app tests
+
+      - name: Migrasi skema (alembic) dari database kosong
+        run: alembic upgrade head
+
+      - name: Semai data kanonik
+        # Satu perintah = jangkar waktu dipaku 8 Okt 2026 + generate_timeseries().
+        # Menjalankan seed dengan "hari ini" menggeser jangkar dan membuat tes
+        # agenda/KPI merah (docs/design.md). `--skip-routes` karena CI tidak
+        # punya OSRM.
+        run: python scripts/semai_kanonik.py --skip-routes
+
+      - name: Tes backend
+        run: pytest -q
+
+  frontend:
+    name: Frontend — tsc + lint + vitest
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Pasang dependensi
+        run: npm ci
+
+      - name: Typecheck (tsc)
+        run: npm run typecheck
+
+      - name: Lint (next lint)
+        run: npm run lint
+
+      - name: Tes (vitest)
+        run: npm test

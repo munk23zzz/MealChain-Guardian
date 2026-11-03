@@ -1,0 +1,101 @@
+# Stack TERISOLASI untuk rehearsal Fase 12 (replay + realtime + operasional).
+#
+# Kenapa berkas terpisah dari `docker-compose.mutations.yml`:
+# - stack mutations sengaja berjalan `DEMO_MODE=false` (perilaku produksi) sehingga
+#   seluruh namespace `/demo` kini menjawab 404 (gerbang Fase 12) — justru itu yang
+#   dipakai membuktikan butir 4, bukan untuk rehearsal replay/realtime.
+# - rehearsal replay/realtime MEMANG menulis (sesi, approval, PO, penerimaan) dan
+#   aturan keras fase ini melarang menulis ke DB demo, jadi ia butuh stack sendiri
+#   dengan `DEMO_MODE=true` + `DEMO_SESSION_ENFORCE=true` (pagar sesi ikut diuji).
+#
+# Pemakaian:
+#   docker compose -p mcg-f12 -f verify/docker-compose.f12.yml up -d --wait
+#   ... rehearsal ...
+#   docker compose -p mcg-f12 -f verify/docker-compose.f12.yml down -v
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: mealchain
+      POSTGRES_PASSWORD: mealchain_local
+      POSTGRES_DB: mealchain
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U mealchain -d mealchain"]
+      interval: 3s
+      timeout: 3s
+      retries: 30
+    volumes:
+      - pg_f12:/var/lib/postgresql/data
+
+  mock-sap:
+    image: mealchain-guardian-backend:latest
+    command: uvicorn app.sap_integration.mock_service:app --host 0.0.0.0 --port 8001
+    working_dir: /app
+    volumes:
+      - ../backend:/app
+
+  backend:
+    image: mealchain-guardian-backend:latest
+    working_dir: /app
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql+asyncpg://mealchain:mealchain_local@postgres:5432/mealchain
+      # Rehearsal = perilaku demo sungguhan: namespace /demo HIDUP.
+      DEMO_MODE: "true"
+      DEMO_SESSION_ENFORCE: "true"
+      # Stack ini sekali pakai di 127.0.0.1 dan butuh login otomatis per peran;
+      # di luar stack rehearsal kunci ini WAJIB mati (Rules.md §1.4).
+      DEMO_LOGIN_AUTOFILL: "true"
+      DEBUG: "false"
+      JWT_SECRET: "rehearsal-f12-only-secret"
+      CORS_ORIGINS: "http://localhost:13080,http://127.0.0.1:13080"
+      SAP_MATERIAL_STOCK_MODE: mock
+      SAP_PURCHASE_ORDER_MODE: mock
+      SAP_MATERIAL_DOCUMENT_MODE: mock
+      SAP_BUSINESS_PARTNER_MODE: mock
+      SAP_PRODUCT_MASTER_MODE: mock
+      MOCK_SAP_BASE_URL: "http://mock-sap:8001"
+      # Provider LLM sengaja kosong: rehearsal ini menguji pagar deterministik,
+      # bukan kualitas narasi. Verifier harus fail-closed (UNAVAILABLE).
+      VERIFIER_MODEL_PRIMARY: ""
+    command:
+      - sh
+      - -lc
+      - >
+        alembic upgrade head &&
+        python -m app.seed.seed_data --reference-time 2026-10-08T12:00:00+00:00
+        --with-demo-users --with-demo-suppliers --skip-routes &&
+        uvicorn app.main:app --host 0.0.0.0 --port 8000
+    ports:
+      - "127.0.0.1:${F12_BACKEND_PORT:-18080}:8000"
+    volumes:
+      - ../backend:/app
+      - ../data:/data:ro
+
+  frontend:
+    image: mealchain-frontend-dev:latest
+    working_dir: /app
+    depends_on:
+      - backend
+    environment:
+      NEXT_PUBLIC_API_URL: http://localhost:18080
+      WATCHPACK_POLLING: "true"
+      CHOKIDAR_USEPOLLING: "true"
+    command: npm run dev
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:3000/"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 180s
+    ports:
+      - "127.0.0.1:${F12_FRONTEND_PORT:-13080}:3000"
+    volumes:
+      - ../frontend:/app
+      - /app/node_modules
+      - /app/.next
+
+volumes:
+  pg_f12:

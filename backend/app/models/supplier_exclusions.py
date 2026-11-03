@@ -1,0 +1,83 @@
+"""Administrative, scope-local supplier exclusion history."""
+
+import uuid
+from datetime import datetime
+from typing import Optional
+
+from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Index, Text, func
+from sqlalchemy.dialects.postgresql import JSONB, UUID
+from sqlalchemy.orm import Mapped, mapped_column
+
+from app.db import Base
+
+
+class SupplierExclusion(Base):
+    __tablename__ = "supplier_exclusions"
+    # Sesi demo (025): NULL = data kerja biasa; terisi = milik sesi berjalan.
+    demo_session_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("demo_sessions.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    __table_args__ = (
+        # Indeks FK (migrasi 033): DB sudah punya indeks ini; tanpa
+        # deklarasi di sini `alembic check` akan mengusulkan drop.
+        Index("ix_supplier_exclusions_proposed_by", "proposed_by"),
+        Index("ix_supplier_exclusions_restoration_decision_id", "restoration_decision_id"),
+        Index("ix_supplier_exclusions_scope_location_id", "scope_location_id"),
+        Index("ix_supplier_exclusions_source_decision_id", "source_decision_id"),
+        CheckConstraint(
+            "status IN ('proposed','active','rejected','revoked')",
+            name="supplier_exclusions_status_check",
+        ),
+        Index(
+            "uq_supplier_exclusions_active_scope",
+            "supplier_id",
+            "scope_location_id",
+            unique=True,
+            postgresql_where=("status = 'active'"),
+        ),
+        Index(
+            "idx_supplier_exclusions_scope",
+            "supplier_id",
+            "scope_location_id",
+            "status",
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, server_default=func.gen_random_uuid()
+    )
+    supplier_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("suppliers.id"), nullable=False
+    )
+    scope_location_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("locations.id"), nullable=False
+    )
+    status: Mapped[str] = mapped_column(Text, nullable=False, server_default="proposed")
+    reason: Mapped[str] = mapped_column(Text, nullable=False)
+    evidence_refs: Mapped[list] = mapped_column(JSONB, nullable=False)
+    source_decision_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("decisions.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    restoration_decision_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("decisions.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    proposed_by: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id"), nullable=False
+    )
+    approved_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    activated_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    revoked_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    revocation_reason: Mapped[Optional[str]] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now()
+    )

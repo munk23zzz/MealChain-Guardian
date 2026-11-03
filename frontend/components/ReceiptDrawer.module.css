@@ -1,0 +1,664 @@
+/* Popup penerimaan barang — drawer kanan, tiga langkah (Dok 05 §2).
+   Semua ukuran memakai token proyek; tidak ada warna mentah di sini. */
+
+.sheet {
+  display: grid;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+/* Satu langkah = satu kartu tipis. Langkah yang belum terbuka tidak dirender
+   isinya (bukan disembunyikan visual), jadi tidak ada field yang bisa dijangkau
+   Tab sebelum waktunya. */
+.step {
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-control);
+  background: var(--surface);
+}
+
+.step[data-state="menunggu"] {
+  background: var(--surface-sunken);
+}
+
+.stepHead {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+}
+
+.stepNo {
+  flex: none;
+  display: inline-grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 999px;
+  background: var(--surface-sunken);
+  border: 1px solid var(--line-strong);
+  font-family: var(--font-data);
+  font-size: var(--fs-1);
+  font-weight: 600;
+  color: var(--ink-muted);
+}
+
+.step[data-state="selesai"] .stepNo {
+  background: var(--ok-bg);
+  border-color: var(--ok-border);
+  color: var(--ok-ink);
+}
+
+.step[data-state="aktif"] .stepNo {
+  background: var(--accent-soft);
+  border-color: var(--accent-strong);
+  color: var(--accent-strong);
+}
+
+.stepTitle {
+  margin: 0;
+  font-size: var(--fs-3);
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.stepState {
+  margin-left: auto;
+  font-size: var(--fs-1);
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--ink-subtle);
+}
+
+.batchLine {
+  margin: 0;
+  font-size: var(--fs-2);
+  color: var(--ink);
+}
+
+.batchMeta {
+  color: var(--ink-muted);
+}
+
+.nobr {
+  white-space: nowrap;
+}
+
+.note {
+  margin: 0;
+  font-size: var(--fs-1);
+  line-height: 1.55;
+  color: var(--ink-muted);
+}
+
+.alert {
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-control-sm);
+  border: 1px solid var(--danger-border);
+  background: var(--danger-bg);
+  color: var(--danger-ink);
+  font-size: var(--fs-2);
+}
+
+.progress {
+  margin: 0;
+  font-size: var(--fs-1);
+  color: var(--ink);
+}
+
+/* ---- langkah 2: tiga angka ---- */
+
+.figures {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-2);
+}
+
+.figure {
+  display: grid;
+  gap: 2px;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-control-sm);
+  background: var(--surface-sunken);
+  min-width: 0;
+}
+
+.figureWide {
+  grid-column: 1 / -1;
+}
+
+.figureLabel {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  font-size: var(--fs-1);
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--ink-muted);
+}
+
+.figureValue {
+  font-family: var(--font-data);
+  font-variant-numeric: tabular-nums;
+  font-size: var(--fs-4);
+  font-weight: 600;
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+
+.figureValue[data-status="tidak_tercatat"] {
+  font-family: var(--font-ui);
+  font-size: var(--fs-2);
+  font-weight: 500;
+  color: var(--ink-muted);
+}
+
+.figureBadge {
+  padding: 1px 6px;
+  border-radius: 999px;
+  border: 1px solid var(--warn-border);
+  background: var(--warn-bg);
+  color: var(--warn-ink);
+  font-size: var(--fs-1);
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.priceOrigin {
+  font-size: var(--fs-1);
+  color: var(--ink-muted);
+  overflow-wrap: anywhere;
+}
+
+.reasons {
+  margin: 0;
+  padding-left: 18px;
+  font-size: var(--fs-2);
+  color: var(--ink);
+}
+
+.subhead {
+  margin: var(--space-1) 0 0;
+  font-size: var(--fs-1);
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--ink-muted);
+}
+
+.riwayat {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.riwayat li {
+  display: grid;
+  gap: 2px;
+  padding: 6px 8px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-control-sm);
+}
+
+.riwayatHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--fs-2);
+  color: var(--ink);
+}
+
+.riwayatMeta {
+  font-size: var(--fs-1);
+  color: var(--ink-muted);
+}
+
+/* ---- langkah 3 ---- */
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+@media (pointer: coarse), (max-width: 720px) {
+  .figures {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .step {
+    transition: none;
+  }
+}
+
+/* Cincin fokus eksplisit (tahap 7, 30 Okt 2026). Drawer ini tidak pernah
+   memasang `outline: none`, jadi cincin bawaan peramban masih ada — tetapi
+   cincin bawaan tipis dan mudah hilang di atas bidang berwarna. Ketiga kontrol
+   yang bisa dijangkau Tab (kotak berat, tombol opsi, tombol aksi) diberi cincin
+   yang sama dengan tile di papan: 2 px, jarak 2 px, token --accent-strong. */
+.weighInput:focus-visible,
+.option:has(input:focus-visible),
+.button:focus-visible,
+.sheet summary:focus-visible {
+  outline: 2px solid var(--accent-strong);
+  outline-offset: 2px;
+}
+
+/* ---- langkah 1: tujuh butir berbobot dengan tiga opsi (Dok 05 §3) ---- */
+
+.items {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  counter-reset: butir;
+}
+
+.item {
+  display: grid;
+  gap: 6px;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-control-sm);
+  background: var(--surface);
+  min-width: 0;
+}
+
+.itemHead {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.itemNo {
+  flex: none;
+  font-family: var(--font-data);
+  font-size: var(--fs-1);
+  color: var(--ink-subtle);
+}
+
+.itemLabel {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: var(--fs-2);
+  font-weight: 600;
+  color: var(--ink);
+}
+
+/* Bobot = angka server. Ditulis "25 poin", bukan "25%", karena jumlah bobot
+   seluruh butir memang 100 (Dok 05 §3) tetapi keduanya bukan hal yang sama
+   begitu ada butir yang tidak berlaku untuk suatu komoditas. */
+.itemWeight {
+  flex: none;
+  padding: 1px 6px;
+  border-radius: 999px;
+  border: 1px solid var(--line-strong);
+  background: var(--surface-sunken);
+  font-family: var(--font-data);
+  font-size: var(--fs-1);
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-muted);
+  white-space: nowrap;
+}
+
+.itemHint {
+  margin: 0;
+  font-size: var(--fs-1);
+  line-height: 1.5;
+  color: var(--ink-muted);
+}
+
+.itemMeta {
+  margin: 0;
+  font-size: var(--fs-1);
+  line-height: 1.5;
+  color: var(--ink-muted);
+}
+
+/* Tiga opsi = tiga tombol radio yang bisa dibaca sekali lihat. Grid, bukan flex:
+   label terpanjang ("Tidak sesuai — 6 °C ke atas") menentukan lebar kolom, jadi
+   ketiga pilihan tidak berubah tinggi saat dipilih. */
+.options {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 6px;
+}
+
+.option {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-control-sm);
+  background: var(--surface-sunken);
+  font-size: var(--fs-1);
+  line-height: 1.35;
+  color: var(--ink-muted);
+  cursor: pointer;
+}
+
+.option:hover {
+  border-color: var(--line-strong);
+}
+
+.option[data-state="aktif"] {
+  border-color: var(--accent-strong);
+  background: var(--accent-soft);
+  color: var(--ink);
+}
+
+/* Opsi kritis yang dipilih tetap merah: warna bukan hiasan, ini satu-satunya
+   penanda bahwa jawaban itu sendiri yang menjatuhkan putusan (Dok 05 §4). */
+.option[data-state="aktif"][data-kritis="true"] {
+  border-color: var(--danger-border);
+  background: var(--danger-bg);
+  color: var(--danger-ink);
+}
+
+.option input {
+  margin: 0;
+  accent-color: var(--accent-strong);
+}
+
+.optionLabel {
+  min-width: 0;
+}
+
+/* ---- berat timbangan (Dok 05 §5.1) ---- */
+
+.weighRow {
+  display: grid;
+  grid-template-columns: auto minmax(0, 140px);
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-control-sm);
+  background: var(--surface-sunken);
+}
+
+.weighLabel {
+  font-size: var(--fs-2);
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.weighInput {
+  padding: 6px 8px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-control-sm);
+  background: var(--surface);
+  font-family: var(--font-data);
+  font-size: var(--fs-3);
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+}
+
+.weighHint,
+.weighError {
+  grid-column: 1 / -1;
+  font-size: var(--fs-1);
+  line-height: 1.5;
+  color: var(--ink-muted);
+}
+
+.weighError {
+  color: var(--danger-ink);
+}
+
+.weighInput[aria-invalid="true"] {
+  border-color: var(--danger-border);
+}
+
+/* ---- catatan "Lainnya" ---- */
+
+.other {
+  display: grid;
+  gap: 4px;
+}
+
+.other label {
+  font-size: var(--fs-1);
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.other textarea {
+  padding: 6px 8px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-control-sm);
+  background: var(--surface);
+  font: inherit;
+  font-size: var(--fs-2);
+  color: var(--ink);
+  resize: vertical;
+}
+
+/* ---- layar konfirmasi sebelum aksi tulis (tahap 4, 30 Okt 2026) ---- */
+
+.konfirmasi {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 4px;
+  padding: 12px 14px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-control);
+  background: var(--surface-sunken);
+}
+
+.konfirmasiJudul {
+  margin: 0;
+  font-size: var(--fs-3);
+  font-weight: 650;
+  color: var(--ink);
+}
+
+.konfirmasiFakta {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 6px 16px;
+  margin: 0;
+}
+
+.konfirmasiFakta > div {
+  min-width: 0;
+}
+
+.konfirmasiFakta dt {
+  font-size: var(--fs-1);
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--ink-subtle);
+}
+
+.konfirmasiFakta dd {
+  margin: 1px 0 0;
+  font-size: var(--fs-2);
+  font-weight: 600;
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+
+.konfirmasiAksi {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+@media (max-width: 640px), (pointer: coarse) {
+  .konfirmasiAksi > .button {
+    flex: 1 1 100%;
+    min-height: 44px;
+  }
+}
+
+/* ---- langkah 2: skor kelayakan ---- */
+
+.scoreRow {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  border: 1px solid var(--line);
+  /* 29 Okt 2026: --radius-card-sm tidak pernah dideklarasikan (token hantu);
+     yang benar-benar terpakai selama ini adalah fallback-nya. Ditulis apa
+     adanya supaya uji skala radius tidak lagi membaca rantai cadangan. */
+  border-radius: var(--radius-control);
+  background: var(--surface-sunken);
+}
+
+.scoreBox {
+  display: grid;
+  place-items: center;
+  gap: 0;
+  min-width: 96px;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-control);
+  background: var(--surface);
+}
+
+.scoreValue {
+  font-family: var(--font-data);
+  font-size: 40px;
+  line-height: 1;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+}
+
+.scoreMax {
+  font-size: var(--fs-1);
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--ink-muted);
+}
+
+.scoreBox[data-verdict="pass"] {
+  border-color: var(--ok-border);
+  background: var(--ok-bg);
+}
+
+.scoreBox[data-verdict="pass"] .scoreValue {
+  color: var(--ok-ink);
+}
+
+.scoreBox[data-verdict="needs_verification"] {
+  border-color: var(--warn-border);
+  background: var(--warn-bg);
+}
+
+.scoreBox[data-verdict="needs_verification"] .scoreValue {
+  color: var(--warn-ink);
+}
+
+.scoreBox[data-verdict="fail"] {
+  border-color: var(--danger-border);
+  background: var(--danger-bg);
+}
+
+.scoreBox[data-verdict="fail"] .scoreValue {
+  color: var(--danger-ink);
+}
+
+.scoreSide {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.verdict {
+  justify-self: start;
+  padding: 2px 8px;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  background: var(--surface);
+  font-size: var(--fs-2);
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.verdict[data-verdict="pass"] {
+  border-color: var(--ok-border);
+  background: var(--ok-bg);
+  color: var(--ok-ink);
+}
+
+.verdict[data-verdict="needs_verification"] {
+  border-color: var(--warn-border);
+  background: var(--warn-bg);
+  color: var(--warn-ink);
+}
+
+.verdict[data-verdict="fail"] {
+  border-color: var(--danger-border);
+  background: var(--danger-bg);
+  color: var(--danger-ink);
+}
+
+/* ---- rincian poin per butir ---- */
+
+.pointTable {
+  display: grid;
+  gap: 4px;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--fs-1);
+}
+
+.table th,
+.table td {
+  padding: 5px 8px;
+  text-align: left;
+  vertical-align: top;
+  border-bottom: 1px solid var(--line);
+}
+
+.table th {
+  font-size: var(--fs-1);
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--ink-muted);
+}
+
+.table td {
+  color: var(--ink);
+}
+
+.table tbody tr[data-kritis="true"] td:last-child {
+  color: var(--danger-ink);
+}
+
+.num {
+  text-align: right;
+  font-family: var(--font-data);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+@media (pointer: coarse), (max-width: 720px) {
+  .scoreRow {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .weighRow {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

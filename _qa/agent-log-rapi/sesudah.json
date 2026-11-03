@@ -1,0 +1,41 @@
+{
+  "label": "sesudah",
+  "waktu": "2026-10-28T23:32Z",
+  "halaman": "http://localhost:3010/ tab agent-log",
+  "peran": "SPPG Head / Kepala Bandung",
+  "viewport": 1262,
+  "dokumen_px": 2310,
+  "luapan_horizontal_px": 0,
+  "blok_px": {
+    "page-header": 72,
+    "aa-search": 158,
+    "aa-period": "di dalam baris field (tidak lagi baris sendiri)",
+    "agent-activity": 929,
+    "aa-run-summary": 72,
+    "provider-panel": 50,
+    "agent-console": 267,
+    "aa-agents": 164,
+    "aa-supervisor": 71,
+    "integrity-panel": 412
+  },
+  "judul": {
+    "h1 Agent Activity Log": "20px/600",
+    "h2 Agent Activity (kicker)": "14px/600",
+    "h3 Daftar keputusan": "14px/600",
+    "h2 Status Model Agent": "14px/600",
+    "h3 Dua agent yang bekerja": "14px/600",
+    "h3 Agent supervisor": "14px/600",
+    "h3 Integritas Bukti": "14px/600"
+  },
+  "selisih_px": {
+    "dokumen": -134,
+    "aa-run-summary": -74,
+    "provider-panel": -42,
+    "integrity-panel": -13,
+    "agent-activity": -6,
+    "baris periode terpisah": -28
+  },
+  "jumlah_tahap_strip": 9,
+  "jumlah_tahap_bisa_diklik": "9 (aria-expanded=true setelah klik VERIFY)",
+  "catatan": "Satu judul besar per layar; semua sub-judul 14 px/600; periode masuk bilah filter; panel status model judul + tiga chip sebaris; aturan gaya dibatasi ke .agent-log-section karena ProviderPanel/IntegrityPanel juga dipakai halaman Decision & Evidence."
+}

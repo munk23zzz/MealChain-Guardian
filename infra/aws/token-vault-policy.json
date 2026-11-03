@@ -1,0 +1,26 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "MealChainTokenVaultApiKey",
+      "Effect": "Allow",
+      "Action": [
+        "bedrock-agentcore:CreateApiKeyCredentialProvider",
+        "bedrock-agentcore:UpdateApiKeyCredentialProvider",
+        "bedrock-agentcore:GetApiKeyCredentialProvider",
+        "bedrock-agentcore:DeleteApiKeyCredentialProvider",
+        "bedrock-agentcore:ListApiKeyCredentialProviders"
+      ],
+      "Resource": "arn:aws:bedrock-agentcore:us-west-2:624606539664:token-vault/default/apikeycredentialprovider/*"
+    },
+    {
+      "Sid": "MealChainTokenVaultRead",
+      "Effect": "Allow",
+      "Action": [
+        "bedrock-agentcore:GetTokenVault",
+        "bedrock-agentcore:ListTokenVaults"
+      ],
+      "Resource": "arn:aws:bedrock-agentcore:us-west-2:624606539664:token-vault/default"
+    }
+  ]
+}

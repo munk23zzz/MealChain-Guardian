@@ -1,0 +1,152 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyc
+.Python
+.venv/
+venv/
+.deploy-venv/
+ENV/
+env/
+.eggs/
+*.egg-info/
+*.egg
+
+# Node.js
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Next.js
+.next/
+# Folder build alternatif (NEXT_DIST_DIR), dipakai agar `next build` bisa jalan
+# saat `next dev` memegang .next/trace di Windows.
+.next-build/
+out/
+build/
+# Artefak increment build TypeScript (`tsc --incremental`) — bukan sumber.
+*.tsbuildinfo
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+
+# Linting
+.ruff_cache/
+.mypy_cache/
+
+# IDEs
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Environment files
+# .env = nilai nyata (lokal saja, tidak pernah di-commit — Rules.md §7).
+# .env.example WAJIB ikut ter-commit: templat untuk teman/Kiro tanpa nilai asli.
+.env
+.env.local
+.env.*.local
+# Salinan/backup .env memuat rahasia nyata (mis. .env.bak-gateway).
+.env.bak*
+.env.backup*
+!.env.example
+
+# Scratch diagnosa AWS (dulu ikut ter-commit tanpa sengaja)
+/_diag.py
+/diag_*.py
+/*.stackdump
+/_iam_policy_*.json
+/_role_arn.txt
+
+# Ekspor dump database — memuat hash kata sandi pengguna demo; regenerasi lokal
+# lewat `pg_dump` bila perlu, jangan dibagikan lewat git.
+/data/export/
+# Checkpoint anchor ledger (Fase 11 butir 2): dibuat lokal oleh
+# `scripts/ledger_anchor.py`, isinya keadaan mesin ini — bukan artefak untuk git.
+/data/anchors/
+# Bukti audit DB (dump penuh 1,3 MB + hash kata sandi) — regenerasi lokal dengan
+# `verify/audit-db/run_checks.py`, bukan artefak untuk git.
+/verify/audit-db/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Build artifacts
+dist/
+*.egg
+
+# SDD scratch workspace (subagent-driven-development)
+.superpowers/
+
+# Kredensial lokal (access key AWS) — JANGAN pernah di-commit
+secrets/
+
+# sap-joule (jembatan A2A Joule): kredensial lokal TIDAK pernah di-commit
+sap-joule/*-key.json
+sap-joule/group.json
+sap-joule/keybroker-credentials.txt
+sap-joule/*.env
+sap-joule/**/.venv/
+sap-joule/**/.pytest_cache/
+
+# Sertifikat & kunci TLS (mis. Tailscale untuk akses demo) — JANGAN di-commit
+*.key
+*.crt
+*.pem
+
+# keadaan lokal watchdog tunnel (URL bergantung sesi)
+agent/.tunnel_state.json
+# Server dev kedua (port 3001, NEXT_DIST_DIR) — dibuat 2026-10-18 agar :3000 tidak terganggu.
+.next-dev2/
+
+# Artefak lokal / hasil jalankan (bukan sumber)
+# Log mentah QA, berkas pid, jejak audit token, cadangan DB, dan probe sekali pakai
+# sengaja TIDAK dilacak; laporan QA yang sudah ditulis tangan tetap dilacak.
+_qa/*.txt
+_qa/*.json
+_qa/design-consistency/*.json
+agent/.tunnel_watchdog.pid
+backend/.token_audit
+data/backups/
+de_probe.py
+de_probe2.py
+sap-joule/_qa/
+
+# Folder build frontend khusus stack rehearsi Fase 10 (docker-compose.p10.yml)
+frontend/.next-p10/
+
+# Artefak dump/build yang tidak perlu masuk riwayat (28 Okt 2026)
+frontend/.next-f9-verify/
+qa_*.json
+_qa/f12/layout-*.css
+_qa/f12/*.out
+_qa/f12/*.err
+frontend/public/_preview-band.html
+
+# Salinan pohon aplikasi untuk audit Fase 2 (312 MB) — bukan bukti, cukup hasil ringkasnya
+_qa/f2/staged/
+_qa/f2/staged2/
+
+# Entri filesystem rusak di drive exFAT (WinError 1392) — tidak bisa di-stat/dihapus
+_qa/f6/pytest.txt
+
+# Snapshot harga PIHPS: hanya berkas `pihps_latest.json` yang disimpan di repo
+# (supaya panel Overview jalan tanpa jaringan). Arsip per tanggal tarik tidak.
+data/harga_pihps/pihps_2*.json
+
+# Artefak build & folder sementara verifikasi (jangan pernah ikut commit)
+frontend/.next-*/
+_qa/ukur-viewport.cjs
+_qa/*-*.png
+frontend/tmp/

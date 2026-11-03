@@ -1,0 +1,4 @@
+# Artefak hasil run: laporan, screenshot, dump, log.
+# Yang di-commit hanya spec, skrip, dan dokumen cara pakainya.
+verify-out*/
+*.log

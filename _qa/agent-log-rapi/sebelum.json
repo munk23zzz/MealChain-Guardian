@@ -1,0 +1,40 @@
+{
+  "label": "sebelum",
+  "waktu": "2026-10-28T23:21Z",
+  "halaman": "http://localhost:3010/ tab agent-log",
+  "peran": "SPPG Head / Kepala Bandung",
+  "viewport": 1262,
+  "dokumen_px": 2444,
+  "luapan_horizontal_px": 0,
+  "blok_px": {
+    "page-header": 72,
+    "aa-search": 158,
+    "aa-period (baris sendiri)": 28,
+    "agent-activity": 935,
+    "aa-run-summary": 146,
+    "provider-panel": 92,
+    "agent-console": 267,
+    "aa-agents": 164,
+    "aa-supervisor": 71,
+    "integrity-panel": 425
+  },
+  "judul": {
+    "h1 Agent Activity Log": "20px/600",
+    "h2 Agent Activity": "18px/600",
+    "h3 Daftar keputusan": "14px/600",
+    "h2 Status Model Agent": "16px/600",
+    "h3 Dua agent yang bekerja": "14px/600",
+    "h3 Agent supervisor": "14px/600",
+    "h3 Integritas Bukti": "16px/700"
+  },
+  "catatan": "Dua judul besar (20 px lalu 18 px), dua sub-judul 16 px di antara lima 14 px; filter terpecah ke dua kartu/baris; panel status model 92 px untuk tiga chip 32 px.",
+  "konsep_06_agent_log_sudah_ada": [
+    "tabel keputusan di bawah kepala (sebelum banner)",
+    "strip sembilan tahap sebagai navigasi, chip bisa diklik + aria-expanded",
+    "penanda waktu (aa-mark-time) dan penanda lambat (aa-mark-slow)",
+    "banner kejujuran tiga keadaan (belum dimuat / kosong / 2 langkah tercatat)",
+    "kalimat 'pencarian menyaring DAFTAR KEPUTUSAN, bukan langkah trace'",
+    "tautan 'Nilai benar/salah di Safety & Evidence' hanya pada banner present",
+    "urutan §4.3 kepala → filter → tabel → banner → strip → langkah → agent → supervisor → integritas"
+  ]
+}

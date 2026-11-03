@@ -1,0 +1,9 @@
+description: >-
+  This skill reports food loss for Indonesian school-meal kitchens (SPPG): waste that was
+  recorded, waste that was already diverted to processing partners, and waste that has no
+  partner yet, with the period covered and the partner list. Use it for questions about
+  limbah, waste, kehilangan pangan, susut, terbuang, or pemborosan. Read-only: the three
+  figures are reported separately and never summed by the agent.
+target:
+  name: mealchain_query_function
+  type: function

@@ -1,0 +1,354 @@
+/*
+ * Overview P0 (21 Okt 2026): chip provenance, aksi alert, dan baris antrean
+ * yang bisa diklik. Diimpor setelah globals.css supaya menang urutan tanpa
+ * menyunting stylesheet bersama yang masih dipakai pekerjaan lain.
+ */
+
+.overview-demo-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border: 1px solid var(--warn-border);
+  border-radius: var(--radius-control-sm);
+  background: var(--warn-bg);
+  color: var(--warn-ink);
+  font-size: var(--fs-1);
+  font-weight: 600;
+}
+
+.overview-alert {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.overview-alert p {
+  margin: 0;
+  flex: 1 1 320px;
+  min-width: 0;
+}
+
+.overview-alert-action {
+  flex: none;
+  padding: 6px 12px;
+  border: 1px solid rgba(198, 40, 40, 0.45);
+  border-radius: var(--radius-control);
+  background: var(--surface);
+  color: var(--status-danger);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.overview-alert-action:hover {
+  background: var(--danger-bg);
+}
+
+.overview-alert-action:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.queue-item {
+  display: flex;
+  align-items: stretch;
+  gap: 0;
+  padding: 0;
+  border-top: 1px solid var(--line);
+}
+
+.queue-item-action {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+  min-height: 44px;
+  padding: 8px 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.queue-item-action:hover {
+  background: var(--surface-sunken);
+}
+
+.queue-item-action:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.queue-item-main {
+  flex: 1;
+  min-width: 0;
+}
+
+/* ─── Jejak kepercayaan (28 Okt 2026, permintaan Roy) ────────────────────────
+   Antrean "Perlu keputusan" dirapatkan: barisnya 56 px (dua baris teks), jadi
+   EMPAT keputusan teratas tetap terbaca dalam tinggi yang dulu dipakai dua baris
+   longgar (QUEUE_SHOWN di app/page.tsx). Sisa tingginya dipakai kartu bukti:
+   empat angka yang bisa diperiksa ulang.
+
+   Tinggi kolom kanan: ANTREAN memanjang mengisi sisa kolom supaya tepi bawahnya
+   RATA dengan kartu peta (arah pemilik: "panjangin lagi sampai space kosong rata
+   dengan shape peta"), sedangkan kartu bukti setinggi isinya sehingga tidak ada
+   rongga di dalam kartu bukti. Sisa ruang antrean dikumpulkan di atas tombol
+   "Lihat semua rekomendasi" (`.queue-foot` memakai margin-top:auto), jadi
+   kartunya tidak terlihat berlubang. Di layar ≤1280px kedua kartu bertumpuk
+   selebar halaman (grid `.overview-split`) dan masing-masing setinggi isinya. */
+.overview-side .queue-card {
+  flex: 1 1 auto;
+}
+
+/* Kolom KIRI ikut setinggi kolom kanan: sisa ruangnya diserap KANVAS PETA, bukan
+   dibiarkan jadi rongga di dasar kartu peta. Tanpa aturan ini, menambah baris
+   antrean (empat keputusan, lihat QUEUE_SHOWN) membuat kolom kanan lebih tinggi
+   daripada peta sehingga kartu peta melar dengan ±85 px ruang kosong di bawah
+   "Rincian lapisan peta" (terukur). MapLibre mengikuti ukuran kontainer
+   (canvas ikut membesar 400 -> 485 px saat diuji di DOM), jadi peta yang tumbuh
+   ini bukan kotak kosong. Batas bawahnya tetap 400 px seperti `.map-gl` asli. */
+.overview-split .map-card {
+  display: flex;
+  flex-direction: column;
+}
+
+.overview-split .map-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.overview-split .map-shell {
+  flex: 1 1 auto;
+  min-height: 400px;
+  display: flex;
+}
+
+.overview-split .map-shell .map-gl {
+  flex: 1 1 auto;
+  height: auto;
+  min-height: 400px;
+  width: 100%;
+}
+
+/* Kartu bukti lebih padat daripada kartu peta lain: isinya angka + satu baris
+   alasan, jadi padding 16 px di semua sisi menyisakan rongga. */
+.overview-side .trust-card {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  padding: 14px 16px;
+}
+
+.trust-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+/* `.map-panel h3` memberi margin bawah 10px; di kartu padat ini jaraknya diatur
+   oleh `.trust-grid` supaya kepala + kisi bukti tetap satu blok. */
+.trust-head h3 {
+  margin: 0;
+}
+
+/* Lencana keadaan: titik + KATA, tidak pernah warna saja. */
+.trust-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 8px;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  background: var(--surface-sunken);
+  color: var(--ink-muted);
+  font-size: var(--fs-1);
+  font-weight: 600;
+  line-height: 1.35;
+  white-space: nowrap;
+  flex: none;
+}
+
+.trust-badge-ok {
+  color: var(--safe-ink-tint);
+  border-color: rgba(46, 125, 50, 0.4);
+  background: rgba(46, 125, 50, 0.1);
+}
+
+.trust-badge-warn {
+  color: var(--warn-ink);
+  border-color: var(--warn-border);
+  background: var(--warn-bg);
+}
+
+.trust-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+/* Empat bukti = grid 2 baris × 2 kolom. Pemisahnya garis rambut (bukan empat
+   kotak berbingkai) supaya tidak terasa seperti dashboard kotak-kotak, dan
+   seluruh blok di-center vertikal di sisa tinggi kartu (`align-content`), jadi
+   tidak ada sel yang menggantung di atas sementara sel lain kosong di bawah. */
+.trust-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-rows: repeat(2, minmax(0, 1fr));
+  column-gap: 14px;
+  row-gap: 0;
+  margin: 2px 0 0;
+  flex: 1 1 auto;
+  min-height: 0;
+  align-content: center;
+}
+
+/* Satu sel = DUA baris bila ruang cukup: label di kiri, angka + keadaan di kanan,
+   lalu alasan selebar sel di bawahnya. Dulu label / angka / alasan bertumpuk tiga
+   baris sehingga sel tinggi dan separuh kanan kosong. Bila selnya sempit (kolom
+   kanan ±310 px), angka membungkus sendiri ke baris kedua — tidak ada teks yang
+   dipotong. */
+.trust-cell {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  column-gap: 10px;
+  row-gap: 1px;
+  min-width: 0;
+  padding: 6px 0;
+}
+
+/* Kolom kanan diberi pemisah vertikal, baris kedua pemisah horizontal. */
+.trust-cell:nth-child(even) {
+  padding-left: 14px;
+  border-left: 1px solid var(--line);
+}
+
+.trust-cell:nth-child(n + 3) {
+  border-top: 1px solid var(--line);
+}
+
+/* Nada sel hanya penguat: maknanya tetap ditulis di `.trust-state`. */
+.trust-cell-warn .trust-number {
+  color: var(--warn-ink);
+}
+
+.trust-cell-plain .trust-number {
+  color: var(--ink-muted);
+}
+
+.trust-label {
+  /* JANGAN `flex-grow`: dengan grow, label memakan selebar sel dan memaksa angka
+     turun ke baris kedua — persis kesalahan yang membuat sel tinggi. */
+  flex: 0 1 auto;
+  min-width: 0;
+  /* 12 → 13px: label tidak boleh lebih kecil dari kalimat penjelasnya, kalau
+     tidak mata membaca keterangan sebagai judul. */
+  font-size: var(--fs-2);
+  font-weight: 600;
+  line-height: 1.3;
+  color: var(--ink-muted);
+}
+
+.trust-value {
+  margin: 0 0 0 auto;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 8px;
+  flex: 0 1 auto;
+}
+
+.trust-number {
+  font-family: var(--font-data);
+  font-size: var(--fs-5);
+  font-weight: 600;
+  line-height: 1.1;
+  color: var(--navy-900);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.trust-unit {
+  margin-left: 4px;
+  font-size: var(--fs-1);
+  font-weight: 500;
+  color: var(--ink-muted);
+  letter-spacing: 0.01em;
+}
+
+/* Satuan rasio ("/118") menempel ke angkanya — spasi di situ terbaca sebagai
+   pemisah yang salah. */
+.trust-unit-ratio {
+  margin-left: 0;
+}
+
+.trust-state {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex: none;
+  font-size: var(--fs-1);
+  font-weight: 600;
+  color: var(--ink-muted);
+  white-space: nowrap;
+}
+
+.trust-cell-ok .trust-state {
+  color: var(--safe-ink-tint);
+}
+
+.trust-cell-warn .trust-state {
+  color: var(--warn-ink);
+}
+
+/* Alasan/keadaan: SELALU dicetak penuh (boleh membungkus) — tidak dipotong
+   elipsis dan tidak disembunyikan, karena angka tanpa alasannya tidak bisa
+   diperiksa.
+
+   Ukuran & jarak (29 Okt 2026, arah pemilik "kata deskripsi disesuaikan supaya
+   enak dilihat"): kalimat ini dinaikkan dari 12px/1,35 ke 13px/1,5 dan diberi
+   jarak dari angka. Isinya dipendekkan di `lib/trust-trail` (tanpa kata
+   "masih"/"luar", kategori batch saling meniadakan sehingga jumlahnya cocok
+   dengan /total), jadi baris ini tetap satu-dua baris walau hurufnya lebih
+   besar. */
+.trust-foot {
+  flex: 0 0 100%;
+  margin-top: 3px;
+  /* Dikecilkan kembali ke 12px (29 Okt 2026, arah pemilik "bisa diperkecil
+     mungkin fontnya"): keempat kalimat jadi satu baris rata dan tidak lagi
+     saling berebut perhatian dengan angka. Keterbacaan dijaga lewat
+     line-height 1,4 + tabular-nums, bukan lewat ukuran huruf. */
+  font-size: var(--fs-1);
+  font-weight: 500;
+  line-height: 1.4;
+  color: var(--ink-muted);
+  font-variant-numeric: tabular-nums;
+  text-wrap: pretty;
+}
+
+/* Ponsel: rapatkan sel dan turunkan angka satu tingkat supaya dua kolom tetap
+   muat tanpa memotong label. */
+@media (max-width: 420px) {
+  .trust-cell {
+    padding: 6px 0;
+  }
+
+  .trust-cell:nth-child(even) {
+    padding-left: 10px;
+  }
+
+  .trust-number {
+    font-size: var(--fs-5);
+  }
+}

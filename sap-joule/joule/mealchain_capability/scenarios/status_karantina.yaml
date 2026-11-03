@@ -1,0 +1,10 @@
+description: >-
+  This skill reports the batches currently held in quarantine at Indonesian school-meal
+  kitchens (SPPG, MBG programme): batch identity, commodity, quantity in kg, SPPG, and
+  food-safety status, filtered from the inventory field `quarantine_status`. Use it for
+  questions about karantina, quarantine, or batch yang dikarantina. Read-only: it never
+  releases, moves, or writes a batch, and an empty list means no batch is held today — not
+  that the data is missing.
+target:
+  name: mealchain_query_function
+  type: function

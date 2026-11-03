@@ -1,0 +1,3 @@
+# Skrip shell harus LF di checkout mana pun: dengan core.autocrlf=true sebuah
+# checkout Windows menulis CRLF dan bash gagal dengan "$'\r': command not found".
+*.sh text eol=lf

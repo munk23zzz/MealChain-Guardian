@@ -1,0 +1,427 @@
+# Architecture.md — MealChain Guardian
+
+**Prasyarat baca:** `../IDEA.md`, `PRD.md`
+
+> **Status as-built (27 Okt 2026, Fase 12):** bagian §10–§13 di bawah adalah keadaan yang
+> **benar-benar berjalan** pada branch `feature/db-modes-demo-coverage`, bukan niat desain.
+> Kalau §1–§9 (ditulis saat perencanaan) berbeda dengan §10–§13, yang berlaku §10–§13 —
+> rincian bukti di `docs/verification/fase-12-docs-rehearsal.md` dan
+> `docs/verification/AGENTCORE_STATUS.md`.
+
+---
+
+## 1. Prinsip arsitektur (baca ini sebelum ubah apapun)
+
+1. **Matematika/keputusan safety tidak pernah dihitung oleh LLM.** Semua angka (Safe Delivered
+   Cost, scoring, constraint check) = kode deterministik biasa, unit-tested. LLM hanya
+   mengorkestrasi tool mana dipanggil, menafsirkan hasil, dan menjelaskan ke user.
+2. **Setiap keputusan berisiko tinggi butuh persetujuan manusia** sebelum eksekusi ke SAP
+   (mock). Tidak ada auto-execute untuk aksi yang mengubah data atau mengeksklusi supplier.
+3. **Verifier Agent selalu mengaudit sebelum aksi ditampilkan sebagai "recommended".**
+4. Setiap keputusan teknis harus bisa dijawab: *"ini membantu penuhi syarat juri yang mana?"*
+   (lihat `IDEA.md` bagian syarat kompetisi).
+
+## 2. Tech stack
+
+### Supplier governance boundary
+
+Supplier exclusion adalah workflow administratif lokal SPPG: dedicated proposal/restore API membuat `Decision` bertipe `supplier_exclusion` atau `supplier_exclusion_restoration`, lalu reuse verifier, expiry, `approvals`, matrix, dan ledger pada `/actions/*`. Tidak ada quantity/cost transfer palsu. Candidate payload wajib membawa `batch_id(s)` dan `supplier_id`; keputusan lama tanpa binding yang unik ditolak. Safety FAIL tetap alasan independen. Execute mengunci `suppliers` row, bukan row exclusion yang mungkin belum ada, sebelum revalidasi.
+
+| Layer | Pilihan | Kenapa |
+|---|---|---|
+| Backend API | **Python 3.12 + FastAPI** | Async native, OpenAPI spec otomatis (dibutuhkan AgentCore Gateway untuk auto-convert endpoint jadi MCP tools), tim sudah familiar Python |
+| Agent framework | **Strands Agents SDK** | SDK resmi AWS, dirancang khusus untuk jalan di atas Bedrock AgentCore, ringan (bukan LangChain yang berat) |
+| Agent infra | **Amazon Bedrock AgentCore** (Runtime, Gateway, Memory, Observability) | Wajib untuk memenuhi syarat "AWS/SAP Agentic AI" kompetisi secara literal, bukan cuma "pakai LLM" |
+| Model | **Claude via Amazon Bedrock** (Supervisor + Verifier, prompt/persona berbeda) | Tersedia di Bedrock, tool-use matang |
+| Database | **PostgreSQL 16** | Relasional cocok untuk data supply/demand/evidence yang saling terhubung; satu instance untuk semua data (bukan dipisah) |
+| Frontend | **Next.js 14 (App Router) + TypeScript + Tailwind CSS + shadcn/ui** | Modern, cepat untuk build, tim tidak ada preferensi kuat jadi pilih yang paling banyak dukungan skill (`frontend-design`, `ui-ux-pro-max` Hermes sudah punya konvensi untuk stack ini) |
+| Charting | **Recharts** | Konsisten dengan chart yang sudah dibuat untuk proposal |
+| Map | **MapLibre GL JS** + tile OSM gratis; **garis jalur pakai OSRM** (routing OSM) | Konsisten dengan pemakaian OSM/OSRM di proposal, tidak butuh API key berbayar. Geometri rute JALAN diambil saat seeding/sync lalu di-cache di tabel `road_routes` — peta tidak pernah memanggil OSRM sendiri, jadi demo tetap jalan tanpa internet dan server OSRM demo tidak dibanjiri peramban pengunjung (`docs/verification/fase-10.md`) |
+| Auth | **JWT + bcrypt**, RBAC sederhana (3 role) | Cukup untuk MVP, tidak perlu SSO enterprise |
+| Dev environment | **Docker Compose** (backend, frontend, postgres, mock-sap) | Lokal, konsisten cross-machine untuk duo team |
+| Hosting | Lokal untuk semua service KECUALI agent layer | AgentCore Runtime/Gateway **wajib** jalan di AWS asli (tidak bisa di-Docker-kan lokal) — lihat §5 |
+
+## 3. Kenapa hosting "lokal + AWS asli untuk agent" (bukan full-AWS atau full-lokal)
+
+- **Full-lokal tidak mungkin**: AgentCore Runtime/Gateway adalah managed service AWS, tidak
+  ada versi self-hosted. Kalau mau syarat "Use of AWS/SAP Agentic AI" terpenuhi jujur, bagian
+  agent HARUS memanggil AWS asli.
+- **Full-AWS belum perlu**: backend/frontend/Postgres tidak butuh AWS untuk development —
+  Docker Compose lokal lebih cepat untuk iterasi duo team, dan tidak ada pengumuman deployment
+  yang mengharuskan online 24 jam saat ini.
+- Kalau nanti dibutuhkan demo yang bisa diakses juri dari luar (bukan cuma live di ruangan),
+  baru deploy backend+frontend ke AWS (ECS Fargate atau App Runner) — App Runner direkomendasikan
+  karena setup paling sederhana untuk timeline sesempit ini.
+
+## 4. Struktur folder (monorepo)
+
+```
+mealchain-guardian/
+├── IDEA.md
+├── AGENTS.md
+├── Rules.md
+├── workflows.md
+├── Roadmap.md
+├── TODO.md
+├── docker-compose.yml
+├── .env.example
+├── docs/
+│   ├── PRD.md
+│   ├── Architecture.md
+│   ├── design.md
+│   ├── Schema.md
+│   └── Skill.md
+├── backend/                      # FastAPI — semua tool deterministik
+│   ├── app/
+│   │   ├── main.py
+│   │   ├── api/
+│   │   │   ├── supply.py         # GET /supply, /supply/{location}/{commodity}
+│   │   │   ├── demand.py         # GET /demand, /demand/forecast
+│   │   │   ├── freshness.py      # POST /freshness/evaluate
+│   │   │   ├── safety.py         # POST /safety/evaluate
+│   │   │   ├── price.py          # GET /price, POST /price/deviation
+│   │   │   ├── logistics.py      # POST /logistics/estimate
+│   │   │   ├── evidence.py       # POST /evidence/fuse, GET /evidence/{decision_id}
+│   │   │   ├── balance.py        # POST /balance/analyze, /balance/recommend
+│   │   │   ├── cost.py           # POST /cost/safe-delivered
+│   │   │   ├── decisions.py      # POST /decisions/evaluate, GET /decisions/{id}
+│   │   │   └── actions.py        # POST /actions/propose|approve|execute
+│   │   ├── core/                 # domain logic murni, tidak tahu soal HTTP
+│   │   │   ├── scoring.py        # Candidate Score formula
+│   │   │   ├── safe_delivered_cost.py
+│   │   │   ├── constraints.py    # hard constraint checks
+│   │   │   └── evidence_consistency.py
+│   │   ├── models/                # SQLAlchemy models (cermin Schema.md)
+│   │   ├── sap_integration/       # ADAPTER PATTERN — lihat §9. JANGAN panggil SAP
+│   │   │   │                      # langsung dari core/ atau api/, selalu lewat sini.
+│   │   │   ├── provider_interface.py   # SAPDataProvider (abstract): get_material_stock(),
+│   │   │   │                            # get_purchase_orders(), create_purchase_order(),
+│   │   │   │                            # get_business_partner(), get_product_master()
+│   │   │   ├── mock_provider.py        # MockSAPProvider — implementasi default MVP,
+│   │   │   │                            # meniru struktur OData persis (field sama)
+│   │   │   ├── aws_mcp_provider.py     # AWSforSAPMCPProvider — implementasi real, lihat §9.
+│   │   │   │                            # Ditulis sejak awal (boleh raise NotImplementedError
+│   │   │   │                            # di body), supaya interface teruji sejak Sprint 1.
+│   │   │   └── factory.py              # get_sap_provider() → baca env SAP_MODE=mock|aws_mcp
+│   │   └── db.py
+│   ├── tests/
+│   │   └── test_sap_integration_contract.py  # test yang sama jalan untuk KEDUA provider
+│   │                                            # (mock & aws_mcp) — bukti kontrak identik
+│   └── openapi.json               # auto-generated, dipakai AgentCore Gateway. Endpoint yang
+│                                     # menyentuh SAP tetap sama persis apapun SAP_MODE-nya.
+├── agent/                         # Strands Agent — Supervisor + Verifier
+│   ├── supervisor_agent.py
+│   ├── verifier_agent.py
+│   ├── gateway_config/            # target config AgentCore Gateway (dari openapi.json)
+│   └── prompts/
+│       ├── supervisor_system_prompt.md
+│       └── verifier_system_prompt.md
+├── frontend/                      # Next.js dashboard
+│   ├── app/
+│   │   ├── (auth)/login/
+│   │   ├── dashboard/
+│   │   ├── decisions/[id]/
+│   │   ├── agent-log/
+│   │   └── kpi/
+│   ├── components/
+│   └── lib/
+├── infra/
+│   ├── docker/
+│   └── aws/                       # AgentCore Gateway/Runtime deployment config (Strands starter toolkit)
+└── data/
+    └── seed/                      # dataset sintetis 10 lokasi x 3 komoditas
+```
+
+## 5. Arsitektur agent (inti sistem)
+
+```
+                        ┌────────────────────────┐
+                        │   Frontend (Next.js)   │
+                        │  Dashboard / Approval   │
+                        └───────────┬────────────┘
+                                    │ REST (JWT auth)
+                                    ▼
+                        ┌────────────────────────┐
+                        │  FastAPI Backend        │──────► PostgreSQL
+                        │  (tool deterministik)   │
+                        │  Supply/Demand/Freshness│
+                        │  Safety/Price/Logistics │
+                        │  Evidence/Balancing     │
+                        └───────────┬────────────┘
+                                    │ OpenAPI spec
+                                    ▼
+                        ┌────────────────────────┐
+                        │  AgentCore Gateway      │  ← ubah endpoint FastAPI
+                        │  (MCP tools)            │    jadi MCP tools otomatis
+                        └───────────┬────────────┘
+                                    │
+                                    ▼
+                        ┌────────────────────────┐
+                        │  AgentCore Runtime      │
+                        │  ┌──────────────────┐   │
+                        │  │ Supervisor Agent  │   │  ← Strands SDK, model Claude
+                        │  │ (Strands)         │   │    via Bedrock, panggil tools
+                        │  └─────────┬─────────┘   │
+                        │            │ proposed     │
+                        │            │ action       │
+                        │  ┌─────────▼─────────┐   │
+                        │  │ Verifier Agent     │   │  ← persona skeptis, audit
+                        │  │ (Strands)          │   │    kecocokan aksi vs evidence
+                        │  └────────────────────┘   │
+                        │                            │
+                        │  AgentCore Memory ─────────┼── state per sesi keputusan
+                        │  AgentCore Observability ──┼── trace step-by-step
+                        └────────────────────────────┘
+                                    │
+                                    ▼
+                        Human approval (SPPG Head / SPPG Nutritionist) → Action Agent (tool) → SAP mock
+```
+
+### Mapping "9 worker agent" (nama di proposal) → implementasi teknis
+
+| Nama di proposal | Implementasi nyata |
+|---|---|
+| Supply Agent | Tool group: `GET /supply/*` |
+| Demand Agent | Tool group: `GET /demand/*` |
+| Freshness Guardian | Tool: `POST /freshness/evaluate` |
+| Safety Guardian | Tool: `POST /safety/evaluate` (return PASS/FAIL/NEEDS_VERIFICATION — agent TIDAK BOLEH override ini) |
+| Price Agent | Tool group: `GET /price`, `POST /price/deviation` |
+| Logistics Agent | Tool: `POST /logistics/estimate` |
+| Evidence Fusion Agent | Tool: `POST /evidence/fuse` (consistency check GPS/timestamp/suhu) |
+| Balancing/Optimization Engine | Tool: `POST /balance/recommend` + `POST /cost/safe-delivered` |
+| Action Agent | Tool group: `POST /actions/*` (butuh approval sebelum `/execute`) |
+
+Supervisor Agent = satu-satunya entitas yang "reasoning" — dia memutuskan tool mana dipanggil,
+urutan apa, dan menyusun rekomendasi. Ini genuinely autonomous (bukan state machine hardcoded)
+tapi selalu grounded ke tool deterministik untuk angka/safety.
+
+### Kenapa Verifier Agent terpisah, bukan bagian dari Supervisor
+
+**Ini bukan penambahan di luar proposal — ini implementasi konkret dari langkah `VERIFY` yang
+sudah tertulis di alur keputusan proposal sendiri** (DETECT → **VERIFY** → TRACE → PREDICT →
+OPTIMIZE → DECIDE → ACT → LEARN). Proposal juga sudah mengutip argumen explainable AI bahwa
+akuntabilitas pada sistem otonom berisiko tinggi menuntut *pengawasan eksplisit*, bukan
+keputusan tertutup oleh satu algoritma (Chukwunweike et al., 2024). Kalau `VERIFY` dieksekusi
+oleh entitas yang sama yang mengusulkan (Supervisor menilai pekerjaannya sendiri), itu bukan
+"pengawasan eksplisit" — itu cuma satu agent bicara pada dirinya sendiri. Verifier Agent
+sebagai entitas independen adalah cara paling jujur untuk menunaikan klaim yang sudah kita
+tulis, bukan menambah klaim baru.
+
+Generator-critic pattern: Supervisor mengusulkan, Verifier mengaudit kecocokan usulan itu
+terhadap raw evidence sebelum ditampilkan sebagai rekomendasi. System prompt Verifier
+diposisikan sebagai auditor skeptis (bukan asisten membantu) untuk mengurangi *correlated
+failure* — lihat `agent/prompts/verifier_system_prompt.md`.
+
+**Catatan penamaan (bukan kebetulan):** step "VERIFY" di loop → "Verifier" Agent. Konsistensi
+penamaan ini sengaja dipertahankan supaya kalau juri membaca ulang proposal dan menonton demo
+berdampingan, jelas terlihat sebagai satu garis lurus, bukan dua hal yang tidak nyambung.
+
+## 6. Data flow — 3 skenario demo
+
+### Event 1: Regional imbalance (Cianjur → Jakarta)
+`Supervisor DETECT` → panggil `/supply` & `/demand` → deteksi surplus Cianjur + shortage
+Jakarta → `VERIFY` → panggil `/freshness/evaluate` & `/safety/evaluate` untuk batch kandidat →
+`OPTIMIZE` → panggil `/cost/safe-delivered` untuk tiap kandidat → `DECIDE` → Verifier
+mengaudit → tampil di Recommendation Feed → SPPG Head/SPPG Nutritionist approve → `/actions/execute` → tulis
+ke SAP mock (purchase order) → `LEARN` (update Memory untuk siklus berikutnya)
+
+Alur di atas berlaku untuk **telur, beras, ayam** — Jakarta tetap shortage di tiga
+komoditas itu sehingga Cianjur tetap menjadi sumber surplusnya. Untuk **wortel arahnya
+terbalik**: Jakarta sendiri surplus (seed kanonik `data/seed/sprint1_seed.json`:
+pasokan 360 kg vs kebutuhan 158 kg) karena kelebihan kiriman dari pemasok Subang
+(CV Hortikultura Subang Lestari) dan Puncak (UD Puncak Sayur Asri), sementara **Bogor
+kekurangan ~205 kg** karena kiriman CV Puncak Sayur Sejahtera dipotong (batch 240→120
+dan 160→80 kg). Jadi Event 1 untuk wortel memakai **Jakarta sebagai sumber dan Bogor
+sebagai tujuan**.
+
+Ukuran lotnya dijaga agar wajar, bukan sekadar "ada selisih":
+`quantity = min(surplus sumber, shortage tujuan, batch tersedia)`
+(`app/core/candidate_generation.py:200`) menghasilkan **±189 kg**, setara satu truk
+kecil untuk 50 km. Biaya penanganan tetap Rp 150.000 (`HANDLING_FLAT`) hanya 3,2% dari
+nilai barang (189 kg × Rp 24.900 = Rp 4,7 juta). Sebagai pembanding, memindahkan
+selisih kecil seperti Bandung (−36 kg) akan membuat biaya tetap itu 16,7% nilai
+barang — secara ekonomi tidak layak, dan itulah sebabnya defisit tujuan dibuat pada
+skala satu muatan. Invarian `supply_kg = Σ batch` juga dijaga karena rekomendasi
+memakai jumlah batch, bukan angka pasokan.
+
+
+
+### Event 2: Price anomaly
+`Supervisor DETECT` → panggil `/price/deviation` → deviasi > threshold → `TRACE` → panggil
+`/evidence/fuse` untuk konteks tambahan → status "Procurement price deviation detected —
+review required" (bukan tuduhan fraud) → masuk approval queue
+
+### Event 3: Safety disruption (temperature excursion)
+`Supervisor DETECT` (via webhook/polling sensor mock) → `VERIFY` panggil `/safety/evaluate`
+→ hasil FAIL untuk batch Cianjur → batch otomatis dikeluarkan dari kandidat (tool-level,
+bukan keputusan LLM) → `OPTIMIZE` ulang dengan kandidat tersisa (Bogor) → Verifier audit →
+rekomendasi baru muncul di feed, log lama tetap terlihat di Agent Activity Log (transparansi
+koreksi diri)
+
+## 7. Keamanan (Security Architect view)
+
+- Semua endpoint backend butuh JWT valid; role (`sppg_head` / `sppg_nutritionist` / `bgn_monitor`) di-embed di
+  token, dicek di setiap endpoint sensitif
+- SPPG Head/Nutritionist hanya bisa lihat/approve untuk `location_id` miliknya; `bgn_monitor` read-only lintas lokasi
+- Kredensial AWS (Bedrock/AgentCore) disimpan di `.env`, tidak pernah di-commit — `.env.example`
+  jadi template
+- Mock SAP tidak punya kredensial nyata — clearly labeled sebagai simulasi di response header
+  (`X-Data-Source: MOCK`) supaya tidak tertukar dengan data asli kalau nanti diganti SAP nyata
+- Rate limiting dasar di endpoint publik-facing (kalau demo diakses dari luar)
+
+## 8. Log keputusan teknis (ADR ringkas)
+
+| # | Keputusan | Alternatif dipertimbangkan | Kenapa ini yang dipilih |
+|---|---|---|---|
+| 1 | Strands SDK, bukan LangGraph/CrewAI | LangGraph, CrewAI | Strands = SDK resmi AWS, paling natural jalan di AgentCore, lebih ringan untuk timeline 3-4 minggu |
+| 2 | 1 Supervisor + tool deterministik, bukan 9 agent LLM terpisah | 9 agent LLM saling panggil | 9x biaya/latensi, tidak menyelesaikan masalah "hitung salah" (LLM tetap tidak reliable untuk aritmatika), lebih sulit dipastikan reliable untuk live demo |
+| 3 | Verifier Agent tambahan | Tanpa verifier, andalkan tool-grounding saja | Tool-grounding menyelesaikan "hitung salah", tapi tidak menyelesaikan "salah baca hasil tool" — Verifier menutup gap itu |
+| 4 | AgentCore Observability sebagai sumber Agent Activity Log | Bikin logging custom sendiri | Lebih otentik (trace asli, bukan dikarang), dan langsung menjawab syarat juri "clear autonomous multi-step reasoning" |
+| 5 | Postgres tunggal untuk semua data | Pisah OLTP vs analytics DB | Skala MVP kecil (10 lokasi), tidak perlu kompleksitas tambahan |
+| 6 | Next.js + shadcn/ui | Plain React, Vue | Ekosistem skill Hermes (`frontend-design`, `ui-ux-pro-max`) paling matang untuk stack ini |
+| 7 | SAP diakses lewat adapter interface (`SAPDataProvider`) sejak Sprint 1, bukan hardcode mock | Hardcode mock langsung di endpoint, refactor nanti kalau perlu real SAP | Proposal yang membuat kita lolos finalist SUDAH menyebut AWS for SAP MCP Server sebagai konektivitas SAP kita — harus siap dinyalakan tanpa refactor kalau diminta juri/panitia. Lihat §9 |
+
+## 9. Dual-mode SAP Connectivity — Mock ↔ AWS for SAP MCP Server (siap-switch)
+
+### Kenapa ini bukan penambahan scope, tapi menunaikan proposal
+
+Proposal yang sudah lolos finalist secara eksplisit menyatakan: *"Konektivitas teknis
+dimungkinkan oleh AWS for SAP MCP Server, yang mencapai general availability pada Bedrock
+AgentCore per Mei 2026 dan memungkinkan agent membaca serta memperbarui purchase order,
+material, dan dokumen keuangan SAP melalui protokol OData/MCP secara aman."* — ini sudah
+tertulis, bukan klaim baru. MVP memakai mock karena tidak ada tenant SAP nyata di fase
+development; begitu diberi akses (trial SAP kompetisi atau permintaan juri), kita **menunaikan**
+apa yang sudah ditulis, bukan menambah sesuatu yang di luar proposal.
+
+### Cara kerja switch (harus benar-benar cuma config, bukan rewrite)
+
+```
+SAP_MODE=mock        → factory.py mengembalikan MockSAPProvider
+                        (baca dari sap_mock_material_stock, sap_mock_purchase_orders di Postgres)
+
+SAP_MODE=aws_mcp      → factory.py mengembalikan AWSforSAPMCPProvider
+                        (panggil AWS for SAP MCP Server → SAP tenant nyata via OData)
+```
+
+Tidak ada kode di `core/`, `api/`, atau agent (`agent/supervisor_agent.py`) yang berubah.
+Semua business logic (Safe Delivered Cost, safety constraint, balancing) memanggil
+`SAPDataProvider` interface yang sama — itu murni inovasi kita, bukan sesuatu yang SAP sediakan,
+jadi tidak tersentuh sama sekali oleh switch ini.
+
+### Langkah eksekusi kalau diminta juri/panitia (task list siap pakai — lihat `Roadmap.md` Sprint 5)
+
+1. Provisioning AWS for SAP MCP Server dari AWS Marketplace/console, arahkan ke tenant SAP
+   trial kompetisi (bukan tenant fiktif)
+2. Setup kredensial via **AgentCore Identity** (bukan hardcode API key) — ini juga menaikkan
+   stretch goal S4-07 di `Roadmap.md` jadi wajib, bukan opsional lagi
+3. Implementasi `AWSforSAPMCPProvider` — mapping field sesuai `docs/Skill.md` §8 (real SAP
+   field mapping, sudah disiapkan)
+4. Jalankan `test_sap_integration_contract.py` — WAJIB lolos untuk kedua provider sebelum
+   dianggap selesai, membuktikan tidak ada regresi di business logic
+5. Ganti `SAP_MODE=mock` → `SAP_MODE=aws_mcp` di `.env`, restart, demo ulang Event 1-3 dengan
+   data SAP nyata
+
+### Framing kalau juri bertanya langsung
+
+Lihat `../IDEA.md` bagian "Framing: Mock vs Real SAP" untuk talking points siap pakai.
+
+> **Koreksi 27 Okt 2026.** Kalimat "siap-switch" di §9 berarti **kesiapan kontrak**, bukan
+> koneksi. `AWSforSAPMCPProvider` sudah ada dan diuji dengan contract test yang sama seperti
+> mock, tetapi tanpa `SAP_MCP_ENDPOINT` + `SAP_MCP_TOKEN` ia menolak jalan (fail closed) dan
+> aplikasi memakai `MockSAPProvider`. Memindahkan system of record menuntut tenant S/4HANA/ECC,
+> OData, dan kredensial BTP lebih dulu — lihat §13.
+
+## 10. Tiga mode waktu: replay, realtime, operasional
+
+Dua sumbu waktu dipisahkan dengan sengaja. **Jangkar evaluasi** (`evaluation_anchor`) menentukan
+umur data, freshness, dan timestamp simulasi; **jam dinding** menentukan kapan manusia bertindak.
+Tanpa pemisahan ini, Decision Time menjadi selisih hari dan approval tercatat "sebelum" keputusan
+yang disetujuinya.
+
+| Mode | Sakelar | Cara memuat | Jangkar evaluasi | Waktu kejadian (approval/PO/terima) |
+|---|---|---|---|---|
+| **Replay** | `DEMO_MODE=true` + sesi `mode=replay` | tombol **Muat Demo Utama** → `POST /demo/session/start {mode:"replay"}` | kanon beku `2026-10-08T12:00:00Z`; ID historis stabil dan dapat diulang | jam dinding (`now()`) |
+| **Realtime** | `DEMO_MODE=true` + sesi `mode=realtime` | tombol **Muat Demo Real-time** → `POST /demo/session/start {mode:"realtime"}` | waktu sesi dibuka; `dataset_version` baru; semua offset diturunkan dari anchor ini, tidak ada timestamp masa depan | jam dinding |
+| **Operasional** | `DEMO_MODE=false` | — (tidak ada tombol muat) | jam dinding; **tidak ada fallback** ke anchor demo | jam dinding |
+
+Bukti kode:
+
+- `models/demo_sessions.py` — kolom `mode` (CHECK `IN ('replay','realtime')`),
+  `evaluation_anchor`, `dataset_version` (migrasi `040_session_modes_and_ownership`), plus indeks
+  unik parsial `uq_demo_sessions_satu_aktif` (migrasi `032`) yang menjamin **satu sesi aktif**
+  bahkan antar-worker.
+- `services/demo_session.py` — mode diminta eksplisit; sesi bermode lain **tidak** ditutup diam-diam
+  (balasan membawa `conflict`) kecuali `replace=true`.
+- `app/main.py` → `_gerbang_mode_demo` (Fase 12) — `DEMO_MODE=false` menjawab **404** untuk seluruh
+  namespace `/demo`, sebelum middleware sesi membuka koneksi DB. Gerbang ini sengaja bukan 403/409
+  supaya bisa dibedakan dari pagar sesi. Tes: `tests/test_demo_mode_gate.py`.
+- Reset satu sesi tidak menghapus sesi lain: `tests/test_session_modes.py` (butir 4 rencana Fase 2).
+
+Konsekuensi untuk operator: mematikan `DEMO_MODE` **bukan** cara mengubah data operasional; ia
+adalah cara menyatakan "aplikasi ini tidak punya namespace demo". Data demo yang sudah ada tetap
+terbaca dengan tanggal lamanya, dan tidak ada baris demo baru yang bisa lahir.
+
+## 11. Dua arti biaya: invoice (PO) vs Safe Delivered Cost (analitis)
+
+Satu resolver, dua keluaran (`backend/app/core/commercial_cost.py`):
+
+```
+invoice_total = purchase + transport + handling                       → yang DITAGIH di PO
+sdc_total     = invoice_total + expected_loss + freshness_risk + safety_penalty   (6 komponen)
+```
+
+- **Penalti risiko tidak pernah masuk invoice.** `services/po_document.py` hanya membaca
+  `commercial_cost`; PO menagih barang dan logistik, bukan kerugian internal.
+- `risk_method.kind` menyebut dasar bobotnya: `simulated_policy` (bobot demo, sumber
+  `app/core/safe_delivered_cost.py:bobot_demo`, versi `sdc-policy-1`), `calibrated_model` (hanya
+  bila benar-benar ada kalibrasi), atau `unavailable` (tanpa dasar → jangan tampilkan sebagai fakta
+  finansial).
+- Uang keluar sebagai string desimal 2 angka agar tidak kehilangan presisi di JSON; frontend
+  memformat, tidak menghitung ulang.
+- Keputusan administratif tanpa kuantitas/biaya (mis. `supplier_exclusion`) mengembalikan `None`
+  supaya UI menulis "tidak berlaku", bukan Rp 0 karangan.
+
+## 12. Evaluator batch, karantina, dan hierarki bahan
+
+**Satu definisi kelayakan untuk empat jalur.** `core/batch_eligibility.py` dipakai rekomendasi,
+approval, dispatch, dan penerimaan; keluarannya `USABLE` / `ON_HOLD` / `REJECTED` / `QUARANTINED`
+dengan **kode alasan stabil** (untuk 409 dan UI). Aturannya fail-closed, 12 langkah berurutan:
+karantina → `expiry_unknown` → `batch_expired` → `safety_fail` → `safety_pending` →
+`safety_needs_verification` → `safety_status_unknown` → `evidence_missing` →
+`temperature_evidence_incomplete` → `freshness_fail` → `expired_before_arrival` →
+`delivery_window_exceeded`. `usable_until` NULL **memblokir** (`expiry_unknown`): "tidak dapat
+dibuktikan" bukan "aman".
+
+**Gerbang penerimaan dihitung server.** `services/receipt_gate.py` menambah `can_receive` /
+`can_quarantine` pada `GET /decisions/{id}/approval-summary`; batch acuan = batch di lokasi
+**tujuan**, karena barang diterima di dapur penerima.
+
+**Karantina** (`core/quarantine.py`): status `none → quarantined → released|failed`;
+`bgn_monitor` read-only secara desain; setiap transisi menulis satu blok evidence ledger.
+
+**Hierarki pada ranah bahan** (`core/commodity_policy.py`, tabel `commodity_policies`):
+
+| Hal | Aturan as-built |
+|---|---|
+| Komoditas wajib rantai dingin | `cold_chain_required=true` hanya untuk telur/ayam/wortel (0–8 °C) |
+| Komoditas ambient | beras: **tidak** diukur excursion; suhu ruang 32 °C bukan pelanggaran |
+| Komoditas tak dikenal | `policy_for()` melempar `KeyError` — tidak ada lagi default 0–8 °C |
+| Dasar kebijakan | `policy_kind=simulated_policy` selama belum divalidasi domain owner; `policy_basis` menyebut asalnya |
+| Bukti suhu | `summarize_temperature_log`: **log kosong ≠ `pass`** → `on_hold` / `temperature_evidence_incomplete` |
+
+## 13. Status layanan SAP/AWS — yang dipakai, yang tidak
+
+| Layanan | Status as-built | Bukti |
+|---|---|---|
+| **Amazon Bedrock** (Claude) | dipakai untuk narasi Supervisor; inferensia lewat inference profile | `docs/verification/fase-11.md` §3.7 |
+| **AgentCore Runtime** | **dipakai** — runtime `mealchain_supervisor_agent-…` READY, ARN terisi (94 char) | `TODO.md` S0-06, `AGENTCORE_STATUS.md` |
+| **AgentCore Gateway** | **tidak aktif** — `ListGateways` = 0; `AGENTCORE_GATEWAY_URL` kosong (0 char) | `AGENTCORE_STATUS.md` §1 |
+| **AgentCore Memory** | resource + baca **VERIFIED**, tulis **UNVERIFIED** (IAM menolak `CreateEvent`), `AGENT_MEMORY_WRITE=0` | `AGENTCORE_STATUS.md` §2 |
+| **SAP BTP / AI Core** | dipakai: LLM + RPT forecast (`primary:sap_ai_core`) | `ai_providers/sap_ai_core_caller.py`, `verifier_client.py` |
+| **SAP Joule** | dipakai sebagai **kanal baca/percakapan** lewat bridge A2A (`sap-joule/a2a_server`, lima skill); **bukan** kanal transaksi ERP | `sap-joule/docs/peta-skill-joule.md` |
+| **SAP S/4HANA / ECC** | **tidak tersedia** — tidak ada tenant, tidak ada kredensial OData | `IDEA.md` (Framing), `Roadmap.md` Sprint 5 |
+| **Mock SAP** | **test double** (`MockSAPProvider`, header `X-Data-Source: MOCK`), bukan SAP | `sap_integration/mock_provider.py` |
+
+Satu kalimat untuk juri: *"Layanan SAP yang kami pakai adalah BTP/AI Core dan Joule; SAP sebagai
+system of record belum tersambung karena tidak ada tenant — mock kami adalah test double yang
+dinyatakan sebagai mock."*

@@ -1,0 +1,37 @@
+# =============================================================================
+# MealChain Guardian — jembatan Joule (A2A) di SAP BTP Cloud Foundry
+# =============================================================================
+# Yang TIDAK ada di sini dan memang tidak boleh ada: kredensial apa pun.
+# Username/password akun baca MealChain diisi lewat `cf set-env` (lihat docs/runbook-cf-joule.md),
+# jadi nilainya tidak pernah masuk git.
+#
+# Catatan: manifest ini TIDAK butuh kredensial SAP AI Core, karena jembatan ini hanya membaca
+# backend MealChain. AI Core dipakai oleh skrip probe terpisah (scripts/probe_ai_core.py).
+applications:
+  - name: mealchain-joule-bridge-4sehat3trio
+    memory: 512M
+    disk_quota: 1024M
+    instances: 1
+    buildpacks:
+      - https://github.com/cloudfoundry/python-buildpack/releases/download/v1.8.43/python-buildpack-cflinuxfs4-v1.8.43.zip
+    health-check-type: http
+    health-check-http-endpoint: /health
+    timeout: 180
+    command: python -m uvicorn server:app --host 0.0.0.0 --port $PORT --workers 1
+    env:
+      BP_PYTHON_VERSION: "3.13.11"
+      # URL backend MealChain yang bisa dijangkau DARI Cloud Foundry.
+      #
+      # JANGAN isi URL tunnel yang sudah mati di berkas ini. Tunnel cloudflared berubah setiap
+      # kali dijalankan ulang, dan host lama tetap tertulis di manifest -> deploy berikutnya
+      # diam-diam menunjuk host mati (atau lebih buruk: host milik orang lain yang kebetulan
+      # memakai nama sama). Nilai placeholder di bawah sengaja TIDAK bisa di-resolve supaya
+      # kegagalannya berisik, bukan senyap.
+      #
+      # Urutan yang benar: `cf push --no-start` -> `cf set-env <app> MEALCHAIN_API_URL <url>`
+      # -> `cf start <app>`. Lihat docs/runbook-cf-joule.md langkah 3-4.
+      MEALCHAIN_API_URL: https://ganti-dengan-url-backend.invalid
+      # Origin yang boleh memanggil jembatan ini (dipisah koma).
+      # Jembatan tidak punya autentikasi: batasi ke origin frontend, jangan "*", kalau
+      # URL-nya dibagikan ke luar tim.
+      MEALCHAIN_BRIDGE_CORS_ORIGINS: "http://localhost:3010,http://localhost:3000"

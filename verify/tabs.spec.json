@@ -1,0 +1,51 @@
+{
+  "name": "mealchain-tab-matrix",
+  "artifact_dir": "verify-out-tabs",
+  "services": [],
+  "external": true,
+  "_comment": "Matriks tab per peran. Stack harus sudah hidup; arahkan dengan --ui-url (demo 3010 / stack uji 13010). Setiap tab diperiksa: tombol ada, aria-current=page setelah diklik, isi halaman nyata, heading/teks khas muncul, tanpa console error baru dan tanpa request 4xx/5xx baru. MIN_CHARS 400: halaman empty-state (mis. Recommendation Feed sebelum 'Muat kasus demo') memang pendek - yang menangkap kerusakan adalah marker kegagalan, console/4xx, dan teks khas per tab. Anchor 'Decision & Evidence' sengaja 'Keputusan yang diperiksa' (ada di state kosong maupun terisi) - 'Belum ada keputusan dipilih' hanya muncul saat DB kosong, jadi tidak boleh dipakai sebagai harapan.",
+  "ui": {
+    "script": "C:/Users/User/AppData/Local/hermes/skills/software-development/fullstack-verification/scripts/ui_tabs.py",
+    "env": {
+      "BASE_URL": "http://127.0.0.1:3010/",
+      "IGNORE_CONSOLE": "defaultProps will be removed",
+      "MIN_CHARS": "400",
+      "SETTLE_MS": "2500"
+    },
+    "flows": [
+      {
+        "name": "SPPG Head (Jakarta) - 10 tab, tanpa Pengaturan",
+        "timeout": 300,
+        "env": {
+          "LOGIN_STEPS": "text=SPPG Head,button:has-text('Masuk')",
+          "TABS": "Hari Ini,Overview,Recommendations,Decision & Evidence,Keamanan Pangan,Surplus & Limbah,Pemasok,Agent Log,KPI & Kualitas Agen,Demo Control",
+          "FORBID_TABS": "Pengaturan",
+          "TAB_EXPECT": "{\"Hari Ini\": \"Jakarta\", \"Overview\": \"Konsol Kepala SPPG\", \"Recommendations\": \"Recommendation Feed\", \"Decision & Evidence\": \"Keputusan yang diperiksa\", \"Keamanan Pangan\": \"Ringkasan pengawasan\", \"Surplus & Limbah\": \"Neraca hari ini\", \"Pemasok\": \"Papan kiriman\", \"Agent Log\": \"Agent Activity Log\", \"KPI & Kualitas Agen\": \"Kualitas Agen\", \"Demo Control\": \"Siapkan data demo\"}",
+          "TAB_FORBID": "{\"Overview\": \"Papan Pengawasan BGN\", \"Hari Ini\": \"Semua lokasi SPPG\", \"Agent Log\": \"Bukti integrasi per komponen\"}"
+        }
+      },
+      {
+        "name": "BGN Monitor - 9 tab, Pengaturan ada, Surplus/Limbah & Demo Control tidak",
+        "timeout": 300,
+        "env": {
+          "LOGIN_STEPS": "text=BGN Monitor,button:has-text('Masuk')",
+          "TABS": "Hari Ini,Overview,Recommendations,Decision & Evidence,Keamanan Pangan,Pemasok,Agent Log,KPI & Kualitas Agen,Pengaturan",
+          "FORBID_TABS": "Surplus & Limbah,Demo Control",
+          "TAB_EXPECT": "{\"Hari Ini\": \"Semua lokasi SPPG\", \"Overview\": \"Papan Pengawasan BGN\", \"Recommendations\": \"Recommendation Feed\", \"Decision & Evidence\": \"Keputusan yang diperiksa\", \"Keamanan Pangan\": \"Ringkasan pengawasan\", \"Pemasok\": \"Papan kiriman\", \"Agent Log\": \"Agent Activity Log\", \"KPI & Kualitas Agen\": \"Kualitas Agen\", \"Pengaturan\": \"Pengguna\"}",
+          "TAB_FORBID": "{\"Overview\": \"Konsol Kepala SPPG\", \"Hari Ini\": \"Cakupan lokasi yang ditampilkan | Jakarta\", \"Agent Log\": \"Bukti integrasi per komponen\"}"
+        }
+      },
+      {
+        "name": "Kepala Bandung - 10 tab, cakupan Bandung, tanpa Pengaturan",
+        "timeout": 300,
+        "env": {
+          "LOGIN_STEPS": "text=Kepala Bandung,button:has-text('Masuk')",
+          "TABS": "Hari Ini,Overview,Recommendations,Decision & Evidence,Keamanan Pangan,Surplus & Limbah,Pemasok,Agent Log,KPI & Kualitas Agen,Demo Control",
+          "FORBID_TABS": "Pengaturan",
+          "TAB_EXPECT": "{\"Hari Ini\": \"Bandung\", \"Overview\": \"Konsol Kepala SPPG\", \"Recommendations\": \"Recommendation Feed\", \"Decision & Evidence\": \"Keputusan yang diperiksa\", \"Keamanan Pangan\": \"Ringkasan pengawasan\", \"Surplus & Limbah\": \"Neraca hari ini\", \"Pemasok\": \"Papan kiriman\", \"Agent Log\": \"Agent Activity Log\", \"KPI & Kualitas Agen\": \"Kualitas Agen\", \"Demo Control\": \"Siapkan data demo\"}",
+          "TAB_FORBID": "{\"Overview\": \"Papan Pengawasan BGN\", \"Hari Ini\": \"Semua lokasi SPPG\", \"Agent Log\": \"Bukti integrasi per komponen\"}"
+        }
+      }
+    ]
+  }
+}

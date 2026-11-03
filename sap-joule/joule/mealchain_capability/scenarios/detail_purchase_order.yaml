@@ -1,0 +1,10 @@
+description: >-
+  This skill looks up purchase orders (PO) in MealChain Guardian for Indonesian school-meal
+  kitchens (SPPG): PO number, status, destination kitchen, supplier, material, ordered
+  quantity in kg, price per kg, total value, and the decision the PO came from. Use it for
+  questions about purchase order, purchase orders, PO, nomor PO, pesanan pembelian, pemasok,
+  supplier, or a specific PO number such as MC-661695B2C685. Read-only: this skill never
+  creates, changes, or approves a purchase order.
+target:
+  name: mealchain_query_function
+  type: function
