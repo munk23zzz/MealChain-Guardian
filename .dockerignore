@@ -19,3 +19,17 @@ coverage
 htmlcov
 .tox
 .nox
+
+# --- konteks build VPS (akar repo) -----------------------------------------
+# infra/vps/backend.Dockerfile hanya menyalin backend/ dan agent/. Sisanya tidak
+# perlu dikirim ke daemon: kiriman besar memperlambat build di VPS 2 vCPU dan
+# bisa menghabiskan disk.
+frontend/
+_qa/
+docs/
+data/
+hermes/
+.git*
+backend/.venv
+backend/tests
+*.md
