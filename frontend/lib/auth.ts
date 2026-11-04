@@ -3,6 +3,11 @@
 
 export function decodeRole(token: string | null): string | null {
   if (!token) return null;
+  // Token sisa build lama mode statis berbentuk "mock:<peran>", bukan JWT.
+  // Tanpa cabang ini, pengunjung yang belum keluar dari build sebelumnya
+  // kehilangan SEMUA menu bergerbang peran (mis. Demo Control) tanpa penjelasan.
+  const lama = /^mock:([a-z_]+)$/.exec(token.trim());
+  if (lama) return lama[1];
   const parts = token.split(".");
   if (parts.length !== 3) return null;
   try {

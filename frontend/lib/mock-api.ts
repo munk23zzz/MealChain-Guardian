@@ -70,6 +70,10 @@ export function peranDariHeader(headers: HeadersInit | undefined): PeranMock | n
           null);
   if (!mentah) return null;
   const token = mentah.trim().replace(/^Bearer\s+/i, "");
+  // Token sisa build lama ("mock:<peran>") tetap dilayani agar pengunjung lama
+  // tidak melihat panel kosong hanya karena belum keluar dari sesi sebelumnya.
+  const lama = /^mock:([a-z_]+)$/.exec(token);
+  if (lama) return lama[1] as PeranMock;
   const peran = peranDariToken(token);
   return peran;
 }
