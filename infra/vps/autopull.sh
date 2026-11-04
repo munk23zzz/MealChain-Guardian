@@ -56,6 +56,7 @@ STATUS="$APP_DIR/.autopull-status"
 BATAS_FETCH="${BATAS_FETCH:-120}"
 BATAS_BUILD="${BATAS_BUILD:-1800}"
 BATAS_UP="${BATAS_UP:-300}"
+BATAS_MIGRASI="${BATAS_MIGRASI:-180}"
 
 # Siapkan log dengan izin 0600 (umask di atas hanya berlaku untuk berkas baru;
 # log lama dari versi sebelumnya mungkin masih 0644).
@@ -175,6 +176,19 @@ if [ "${#LAYANAN[@]}" -gt 0 ]; then
     catat "GAGAL up ${LAYANAN[*]}"
     echo "gagal-up ${SESUDAH:0:7}" >"$STATUS"
     exit 0
+  fi
+fi
+
+# Migrasi skema WAJIB dijalankan setelah backend baru hidup: commit yang
+# menambah migrasi akan membuat endpoint 500 di tengah demo sementara /health
+# tetap 200 (temuan T-2 audit keamanan). deploy.sh sudah melakukannya; autopull
+# dulu tidak, jadi jalur otomatis ini bisa diam-diam melewatkan skema.
+if [[ " ${LAYANAN[*]:-} " == *" backend "* ]]; then
+  if terbatas "$BATAS_MIGRASI" "${COMPOSE[@]}" exec -T backend alembic upgrade head >>"$LOG" 2>&1; then
+    catat "migrasi alembic: ok"
+  else
+    catat "PERINGATAN ${SESUDAH:0:7} — alembic upgrade head gagal; skema mungkin tertinggal"
+    echo "migrasi-gagal ${SESUDAH:0:7}" >"$STATUS"
   fi
 fi
 
