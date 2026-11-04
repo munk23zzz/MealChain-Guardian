@@ -55,16 +55,49 @@ for svc in caddy nginx apache2 httpd; do
     systemctl disable "$svc" >/dev/null 2>&1 || true
   fi
 done
-if command -v docker >/dev/null 2>&1; then
-  ids="$(docker ps --format '{{.ID}} {{.Names}} {{.Ports}}' | grep -E '0\.0\.0\.0:(80|443)->' | grep -v mealchain-vps | awk '{print $1}' || true)"
-  if [ -n "$ids" ]; then
-    for id in $ids; do
-      info "menghentikan kontainer lama di 80/443: $(docker inspect -f '{{.Name}}' "$id" 2>/dev/null || echo "$id")"
-      docker stop "$id" >/dev/null 2>&1 || true
-    done
-  else
-    info "tidak ada kontainer lain di 80/443"
+
+# Pemegang port dideteksi lewat ss, bukan lewat `docker ps --format {{.Ports}}`:
+# kontainer dengan `--network host` (pola umum Caddy) TIDAK menampilkan pemetaan
+# port sama sekali, sehingga cara lama melewatkannya (terukur 4 Nov 2026: Caddy
+# lama tetap menjawab 308 di :80 dan kontainer kita gagal bind).
+pemegang_port() {
+  { ss -ltnpH 'sport = :80' 2>/dev/null; ss -ltnpH 'sport = :443' 2>/dev/null; } \
+    | grep -o 'pid=[0-9]*' | cut -d= -f2 | sort -u
+}
+for pid in $(pemegang_port); do
+  [ -r "/proc/$pid/cgroup" ] || continue
+  cid="$(grep -oE '[0-9a-f]{64}' "/proc/$pid/cgroup" | head -1)"
+  if [ -z "$cid" ]; then
+    cid="$(grep -oE 'docker-[0-9a-f]{12,}' "/proc/$pid/cgroup" | head -1 | sed 's/^docker-//')"
   fi
+  if [ -n "$cid" ] && command -v docker >/dev/null 2>&1; then
+    cname="$(docker inspect -f '{{.Name}}' "$cid" 2>/dev/null || echo '')"
+    case "$cname" in
+      *mealchain-vps*)
+        info "port dipegang kontainer kita sendiri ($cname) — dilewati"
+        ;;
+      "")
+        info "menghentikan PID $pid (pemegang port, bukan kontainer yang dikenal)"
+        kill "$pid" 2>/dev/null || true
+        ;;
+      *)
+        info "menghentikan kontainer lama $cname (memegang 80/443)"
+        docker stop "$cid" >/dev/null 2>&1 || true
+        docker update --restart=no "$cid" >/dev/null 2>&1 || true
+        ;;
+    esac
+  else
+    info "menghentikan PID $pid ($(ps -o comm= -p "$pid" 2>/dev/null || echo proses)) di 80/443"
+    kill "$pid" 2>/dev/null || true
+    sleep 1
+    kill -9 "$pid" 2>/dev/null || true
+  fi
+done
+sleep 1
+if [ -n "$(pemegang_port)" ]; then
+  info "PERINGATAN: port 80/443 masih dipegang PID: $(pemegang_port | tr '\n' ' ')"
+else
+  info "port 80/443 bebas"
 fi
 
 # -----------------------------------------------------------------------------
