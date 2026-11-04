@@ -85,7 +85,7 @@ def main() -> None:
     today = date.today().isoformat()
     start = (date.today() - timedelta(days=14)).isoformat()
 
-    def common_paths(loc: str) -> list[str]:
+    def common_paths(loc: str, ids_keputusan: list[str] | None = None) -> list[str]:
         paths = [
             "/auth/me",
             "/kpi?periode=today",
@@ -131,19 +131,28 @@ def main() -> None:
         paths += ["/supplier-exclusions"]
         for b in batch_ids:
             paths.append(f"/receipts?batch_id={b}&limit=50")
-        for decision_id in decision_ids:
+        daftar_id = ids_keputusan or decision_ids
+        for posisi, decision_id in enumerate(daftar_id):
+            # Semua keputusan di daftar WAJIB punya rincian inti; kalau tidak,
+            # membuka barisnya memunculkan "Sebagian bukti gagal dibaca".
             paths += [
                 f"/decisions/{decision_id}",
                 f"/decisions/{decision_id}/chain",
-                f"/decisions/{decision_id}/ledger",
                 f"/decisions/{decision_id}/traces",
-                f"/decisions/{decision_id}/dossier",
-                f"/decisions/{decision_id}/packet",
-                f"/decisions/{decision_id}/review",
                 f"/decisions/{decision_id}/approval-summary",
-                f"/decisions/{decision_id}/compliance",
                 f"/supplier-exclusions/context/{decision_id}",
             ]
+            # Panel tambahan (dossier/packet/review/ledger/compliance) cukup
+            # untuk dua belas keputusan pertama: itu yang tampil paling atas,
+            # dan tiap berkas tambahan menambah ukuran unduhan halaman.
+            if posisi < 12:
+                paths += [
+                    f"/decisions/{decision_id}/ledger",
+                    f"/decisions/{decision_id}/dossier",
+                    f"/decisions/{decision_id}/packet",
+                    f"/decisions/{decision_id}/review",
+                    f"/decisions/{decision_id}/compliance",
+                ]
         return paths
 
     fixtures: dict[str, dict] = {}
@@ -152,7 +161,13 @@ def main() -> None:
         _, me = call("/auth/me", token=token)
         loc = me["location_name"] if me.get("location_name") else locations[0]
         scope = locations if role == "bgn_monitor" else [loc]
-        paths = set(common_paths(scope[0]))
+        # Id keputusan diambil dari daftar PERAN INI, bukan dari daftar BGN:
+        # 20 dari 52 keputusan SPPG sebelumnya tidak punya rincian terekam,
+        # sehingga membuka barisnya memunculkan "Sebagian bukti gagal dibaca".
+        _, daftar_peran = call("/decisions", token=token)
+        butir = daftar_peran.get("items", []) if isinstance(daftar_peran, dict) else daftar_peran
+        ids_peran = [x["decision_id"] for x in (butir or [])][:120]
+        paths = set(common_paths(scope[0], ids_peran))
         if role == "bgn_monitor":
             paths |= {"/admin/locations", "/admin/users"}
             for other in scope:
