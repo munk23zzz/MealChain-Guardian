@@ -110,6 +110,8 @@ let sesiDemoAktif = (() => {
   }
 })();
 
+let sesiPernahDibangun = false;
+
 function tandaiSesi(aktif: boolean) {
   sesiDemoAktif = aktif;
   try {
@@ -148,6 +150,111 @@ function kunci(path: string): { utuh: string; polos: string; pola: string } {
   };
 }
 
+// ── Simulasi putaran agent ──────────────────────────────────────────────────
+// Demo statis tidak punya pipeline sungguhan, tetapi tombol "Jalankan agent"
+// harus menghasilkan jejak yang bisa diperiksa: 5 langkah, satu keputusan baru
+// berstatus `proposed`, dan bukti putaran terakhir. Semuanya dibuat di klien
+// lalu disimpan sampai halaman dimuat ulang.
+
+export type LangkahPutaran = { step: string; tool: string | null; ringkas: string; at: string };
+
+type Putaran = {
+  decision_id: string;
+  commodity: string;
+  steps: LangkahPutaran[];
+  at: string;
+  quantity_kg: number;
+};
+
+let putaranTerakhir: Putaran | null = null;
+
+/** UUID v4 acak — bentuknya penting karena UI memotong 8 karakter pertama. */
+function uuidPalsu(): string {
+  const hex = (n: number) =>
+    Array.from({ length: n }, () => Math.floor(Math.random() * 16).toString(16)).join("");
+  return `${hex(8)}-${hex(4)}-4${hex(3)}-a${hex(3)}-${hex(12)}`;
+}
+
+/** Lima langkah pipeline dengan jeda 700 ms — sama untuk SSE dan bukti putaran. */
+export function langkahPutaran(komoditas: string): LangkahPutaran[] {
+  const bahan = komoditas && komoditas.trim() ? komoditas.trim() : "komoditas terpilih";
+  const mulai = Date.now();
+  const jam = (i: number) => new Date(mulai + i * 700).toISOString();
+  return [
+    {
+      step: "DETECT",
+      tool: "stock_scan",
+      ringkas: `Memindai stok dan permintaan ${bahan} di lokasi Anda`,
+      at: jam(0),
+    },
+    {
+      step: "ANALYZE",
+      tool: "gap_analysis",
+      ringkas: `Menghitung selisih pasokan–permintaan ${bahan} untuk 7 hari ke depan`,
+      at: jam(1),
+    },
+    {
+      step: "MATCH",
+      tool: "supplier_search",
+      ringkas: "Mencari pemasok dalam jangkauan yang bisa menutup celah",
+      at: jam(2),
+    },
+    {
+      step: "PROPOSE",
+      tool: "propose_decision",
+      ringkas: "Menyusun usulan alokasi — status proposed, belum disetujui",
+      at: jam(3),
+    },
+    {
+      step: "SUPERVISE",
+      tool: "supervisor_review",
+      ringkas: "Tinjauan supervisor atas usulan sebelum masuk antrean keputusan",
+      at: jam(4),
+    },
+  ];
+}
+
+/** Catat putaran baru (dipanggil dari POST /demo/agent/run). */
+function catatPutaran(komoditas: string): Putaran {
+  const keputusan = {
+    decision_id: uuidPalsu(),
+    commodity: komoditas,
+    steps: langkahPutaran(komoditas),
+    at: new Date().toISOString(),
+    quantity_kg: 0,
+  };
+  putaranTerakhir = keputusan;
+  return keputusan;
+}
+
+/** Sisipkan keputusan hasil putaran ke daftar /decisions (kalau ada). */
+function sisipkanKeputusan(body: unknown, putaran: Putaran): unknown {
+  if (!body || typeof body !== "object") return body;
+  const amplop = body as { items?: unknown[]; count?: number; total?: number };
+  if (!Array.isArray(amplop.items)) return body;
+  const contoh = (amplop.items[0] ?? {}) as Record<string, unknown>;
+  const baru: Record<string, unknown> = {
+    ...contoh,
+    decision_id: putaran.decision_id,
+    decision_type: "regional_balance",
+    status: "proposed",
+    proposed_by: "supervisor_agent",
+    quantity_kg: putaran.quantity_kg || contoh.quantity_kg || 220,
+    created_at: putaran.at,
+    expires_at: new Date(Date.now() + 30 * 60 * 1000).toISOString(),
+    valid: true,
+    seconds_remaining: 1800,
+    rejection_reason: null,
+    has_agent_review: true,
+  };
+  return {
+    ...amplop,
+    items: [baru, ...amplop.items.filter((x) => (x as { decision_id?: string }).decision_id !== putaran.decision_id)],
+    count: typeof amplop.count === "number" ? amplop.count + 1 : amplop.count,
+    total: typeof amplop.total === "number" ? amplop.total + 1 : amplop.total,
+  };
+}
+
 /** Jawaban untuk satu panggilan; null bila tidak ada data demo yang cocok. */
 export async function jawabMock(
   peran: PeranMock,
@@ -166,6 +273,39 @@ export async function jawabMock(
   // status sesi di memori supaya tombol "Muat Demo"/"Akhiri sesi" tidak diam,
   // dan balasannya berbentuk sesi — UI memakai balasan itu sebagai state.
   if (menulis(method)) {
+    if (polosPath === "/demo/agent/run") {
+      let isi: Record<string, unknown> = {};
+      try {
+        isi = init.body ? (JSON.parse(String(init.body)) as Record<string, unknown>) : {};
+      } catch {
+        isi = {};
+      }
+      const p = catatPutaran(String(isi.commodity ?? "beras"));
+      tandaiSesi(true);
+      // Putaran sungguhan butuh beberapa detik; panel menutup kanal langkah
+      // begitu POST selesai, jadi tunda balasan agar 5 langkah sempat tampil.
+      await new Promise((selesai) => setTimeout(selesai, 3800));
+      return {
+        status: 200,
+        body: {
+          ok: true,
+          mode: isi.mode ?? "realtime",
+          commodity: p.commodity,
+          run_token: isi.run_token ?? null,
+          session_id: (isi.demo_session as string) ?? "demo-statis",
+          created: [
+            {
+              decision_id: p.decision_id,
+              status: "proposed",
+              commodity: p.commodity,
+              quantity_kg: p.quantity_kg,
+            },
+          ],
+          skipped: [],
+          steps: p.steps,
+        },
+      };
+    }
     if (polosPath === "/demo/session/end") {
       tandaiSesi(false);
       return {
@@ -174,8 +314,12 @@ export async function jawabMock(
       };
     }
     if (polosPath.startsWith("/demo/")) {
+      // Panel memakai `created` untuk memutuskan memuat ulang halaman: klik
+      // pertama "Muat Demo" = dataset dibangun, klik berikutnya = sudah aktif.
+      const dibuat = !sesiPernahDibangun;
+      sesiPernahDibangun = true;
       tandaiSesi(true);
-      return { status: 200, body: sesiDemoAktifkan(contohSesi) };
+      return { status: 200, body: { ...sesiDemoAktifkan(contohSesi), created: dibuat } };
     }
     return { status: 200, body: { ok: true, simulated: true, mode: "demo-statis" } };
   }
@@ -198,6 +342,46 @@ export async function jawabMock(
       ? { status: 200, body: sesiDemoAktifkan(langsung.body as Record<string, unknown>) }
       : langsung;
   }
+
+  // Bukti putaran terakhir: setelah "Jalankan agent", panel membaca endpoint ini
+  // dan menampilkan 5 langkah + id keputusan yang benar-benar dibuat.
+  if (polos === "/demo/agent/last-run" && putaranTerakhir) {
+    const dasar = (langsung?.body ?? {}) as Record<string, unknown>;
+    return {
+      status: 200,
+      body: {
+        ...dasar,
+        found: true,
+        decision_id: putaranTerakhir.decision_id,
+        steps: putaranTerakhir.steps,
+        agents: ["detector", "analyst", "matcher", "proposer", "supervisor"],
+        agents_run_id: `demo-statis-${putaranTerakhir.decision_id.slice(0, 8)}`,
+        supervisor: {
+          status: "ok",
+          provider: "demo-statis",
+          fallback_used: false,
+          summary: `Supervisor menyetujui usulan alokasi ${putaranTerakhir.commodity} untuk ditinjau manusia.`,
+        },
+        agent_review: { status: "ok", error: null, run_id: "demo-statis" },
+        mode: "realtime",
+        supplier: dasar.supplier ?? null,
+        supply_gap: dasar.supply_gap ?? null,
+      },
+    };
+  }
+
+  // Daftar keputusan: keputusan hasil putaran disisipkan paling atas supaya
+  // tab Recommendations dan Decision & Evidence benar-benar bertambah.
+  if (putaranTerakhir && polos === "/decisions" && langsung) {
+    return { status: langsung.status, body: sisipkanKeputusan(langsung.body, putaranTerakhir) };
+  }
+
+  // Bukti data: setelah sesi dibangun, "as_of" mengikuti waktu sekarang.
+  if (polos === "/demo/data-status" && sesiDemoAktif && langsung) {
+    const dasar = (langsung.body ?? {}) as Record<string, unknown>;
+    return { status: 200, body: { ...dasar, as_of: new Date().toISOString() } };
+  }
+
   if (langsung) return langsung;
 
   // Pola: UUID pada kunci terekam diganti `{id}` supaya id lain tetap kena.

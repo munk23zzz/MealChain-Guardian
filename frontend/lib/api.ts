@@ -6,6 +6,7 @@ import { balancePath } from "./balance-url";
 import { bacaSse, langkahDari, type LangkahAgent } from "./agent-stream";
 import {
   jawabMock,
+  langkahPutaran,
   peranDariEmail,
   peranDariHeader,
   tokenMock,
@@ -1430,6 +1431,29 @@ export async function streamDemoAgent(
   } = {},
 ): Promise<void> {
   const path = `/demo/agent/stream?run_token=${encodeURIComponent(runToken)}`;
+
+  // Demo statis: tidak ada SSE. Langkah disiarkan dari klien dengan jeda yang
+  // sama seperti pipeline sungguhan, supaya log "Proses pengambilan data" tetap
+  // bergerak dan tombol tidak terasa mati.
+  if (MOCK) {
+    const langkah = langkahPutaran("");
+    opsi.onSiap?.();
+    for (const satu of langkah) {
+      if (opsi.signal?.aborted) return;
+      await new Promise((selesai) => setTimeout(selesai, 700));
+      if (opsi.signal?.aborted) return;
+      opsi.onLangkah?.(satu);
+    }
+    // Kanal dibiarkan terbuka sampai pemanggil menutupnya — sama seperti server
+    // yang menutup kanal setelah POST selesai. Tanpa ini, aliran berakhir lebih
+    // dulu dan panel menulis "kanal log ditutup sebelum putaran selesai".
+    await new Promise<void>((selesai) => {
+      if (opsi.signal?.aborted) return selesai();
+      opsi.signal?.addEventListener("abort", () => selesai(), { once: true });
+    });
+    return;
+  }
+
   let resp: Response;
   try {
     resp = await fetch(`${API_URL}${path}`, {
