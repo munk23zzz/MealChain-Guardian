@@ -154,9 +154,14 @@ export default function SupplierBoard({
   const jumlahKiriman = ruteDimuat ? barisRute(supplierRoutes).length : null;
   // Satu kalimat konteks menggantikan deskripsi dua baris yang mendaftar ulang
   // isi halaman; daftar bagiannya sudah dibawa lima tautan di bawah judul.
-  const eksklusi = exclusionCounts(exclusions);
+  // `exclusions` bisa berbentuk {items: []} (endpoint register) — exclusionCounts
+  // memanggil exclusionRows yang mengharapkan array, jadi kirim daftar yang sama
+  // dengan tabel register (`register`), bukan payload mentah.
+  const eksklusi = exclusionCounts(register);
   const ringkasEksklusi =
-    eksklusi.total === 0
+    !registerDimuat
+      ? "eksklusi belum dimuat"
+      : eksklusi.total === 0
       ? "belum ada eksklusi"
       : `eksklusi: ${[
           eksklusi.active ? `${eksklusi.active} aktif` : null,
