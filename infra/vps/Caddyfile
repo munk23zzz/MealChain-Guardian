@@ -1,0 +1,125 @@
+# =============================================================================
+# Caddyfile — MealChain Guardian di satu VPS
+# =============================================================================
+# Dua situs:
+#   https://<DOMAIN>       → frontend:3000  (Next.js, UI juri)
+#   https://api.<DOMAIN>   → backend:8000   (FastAPI)
+#
+# Variabel diambil dari environment kontainer caddy (docker-compose.vps.yml):
+#   DOMAIN, ACME_EMAIL, MAX_BODY_API, MAX_BODY_FRONTEND
+#
+# Sertifikat: Let's Encrypt otomatis (ACME HTTP-01 + TLS-ALPN). Syaratnya
+# port 80 dan 443 terbuka di firewall VPS dan DNS A record sudah menunjuk ke IP
+# VPS SEBELUM `docker compose up` — Caddy akan mencoba ulang, tetapi percobaan
+# gagal berulang bisa kena rate limit Let's Encrypt.
+# =============================================================================
+{
+	email {$ACME_EMAIL}
+	# Tidak ada endpoint admin Caddy yang diekspos (default-nya localhost:2019,
+	# tetapi dimatikan total supaya tidak ada permukaan tambahan).
+	admin off
+	# Log akses sudah ditulis per situs di bawah.
+
+	# Batas waktu untuk SEMUA server (direktif `timeouts` hanya sah di sini,
+	# bukan di blok situs). Cukup longgar untuk rantai agent (DETECT→…→SUPERVISE
+	# bisa ~30 detik) tetapi tetap memutus koneksi menggantung.
+	servers {
+		timeouts {
+			read_header 10s
+			read_body 60s
+			write 300s
+			idle 120s
+		}
+	}
+}
+
+# -----------------------------------------------------------------------------
+# Potongan bersama: kompresi, header keamanan dasar, timeout, log JSON.
+# -----------------------------------------------------------------------------
+(umum) {
+	encode zstd gzip
+
+	header {
+		# HSTS. Aman karena semua trafik sudah TLS di sini; subdomain ikut.
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		# Jangan bocorkan versi server.
+		-Server
+	}
+
+	log {
+		output stdout
+		format json
+	}
+}
+
+# -----------------------------------------------------------------------------
+# UI (Next.js)
+# -----------------------------------------------------------------------------
+https://{$DOMAIN} {
+	import umum
+
+	# UI hanya menerima form login kecil; unggahan besar tidak pernah sah di sini.
+	request_body {
+		max_size {$MAX_BODY_FRONTEND}
+	}
+
+	header {
+		Referrer-Policy "strict-origin-when-cross-origin"
+		Permissions-Policy "geolocation=(), microphone=(), camera=()"
+		# CSP sengaja TIDAK dipasang di sini. frontend/next.config.js sudah
+		# mengirim CSP lengkap (termasuk izin tile peta & origin API). Dua header
+		# CSP digabung MENJADI LEBIH KETAT oleh browser, sehingga menambah satu
+		# lagi di sini berisiko mematikan UI (peta putih, skrip diblokir).
+	}
+
+	reverse_proxy frontend:3000 {
+		transport http {
+			dial_timeout 5s
+			response_header_timeout 60s
+		}
+	}
+}
+
+# -----------------------------------------------------------------------------
+# API (FastAPI)
+# -----------------------------------------------------------------------------
+https://api.{$DOMAIN} {
+	import umum
+
+	# Permintaan API terbesar adalah payload simulasi keputusan/PO; 10 MB sudah
+	# jauh di atas kebutuhan nyata dan menutup unggahan liar.
+	request_body {
+		max_size {$MAX_BODY_API}
+	}
+
+	header {
+		# Backend menyajikan JSON saja. Header ini melengkapi CSP ketat yang
+		# sudah dikirim backend sendiri (default-src 'none').
+		Referrer-Policy "no-referrer"
+		X-Frame-Options "DENY"
+	}
+
+	reverse_proxy backend:8000 {
+		transport http {
+			dial_timeout 5s
+			# Rantai agent bisa ~30 detik; beri ruang sebelum Caddy memutus.
+			response_header_timeout 180s
+			read_timeout 300s
+		}
+
+		# Streaming SSE (tab Agent Log / progres langkah) butuh flush segera.
+		# Tanpa ini Caddy menahan buffer dan UI tampak "macet" sampai selesai.
+		flush_interval -1
+
+		# Timpa (bukan tambah) X-Forwarded-For dengan IP asli klien. Caddy
+		# menambahkan IP ke header yang sudah ada; nilai kiriman klien yang
+		# dibiarkan di depan bisa dipakai memalsukan IP untuk melewati pembatas
+		# login per-IP di backend. `caddy validate` memberi peringatan
+		# "Unnecessary header_up ..." karena perilaku BAKU Caddy adalah
+		# meneruskan header apa adanya — penimpaan inilah yang menghapus nilai
+		# palsu, jadi peringatan itu sengaja dibiarkan.
+		header_up X-Forwarded-For {remote_host}
+		header_up X-Real-IP {remote_host}
+	}
+}

@@ -56,6 +56,12 @@ htmlcov/
 .env.bak*
 .env.backup*
 !.env.example
+# Templat VPS boleh di-commit; .env hasil salinannya TIDAK (tertangkap `.env`
+# di atas). Artefak deploy tidak perlu masuk riwayat:
+#   .seed-done     = penanda "seed demo sudah jalan sekali" (deploy.sh)
+#   .last-seed.json = laporan seed terakhir (reset-demo.sh)
+infra/vps/.seed-done
+infra/vps/.last-seed.json
 
 # Scratch diagnosa AWS (dulu ikut ter-commit tanpa sengaja)
 /_diag.py
@@ -149,4 +155,4 @@ data/harga_pihps/pihps_2*.json
 frontend/.next-*/
 _qa/ukur-viewport.cjs
 _qa/*-*.png
-frontend/tmp/
+frontend/tmp/

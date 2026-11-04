@@ -27,6 +27,16 @@ CMD ["npm", "run", "dev"]
 FROM deps AS builder
 WORKDIR /app
 ENV NEXT_TELEMETRY_DISABLED=1
+# NEXT_PUBLIC_* di-inline ke bundel KLIEN saat build; menyetelnya di runtime
+# kontainer tidak berefek. Deploy VPS (infra/vps/docker-compose.vps.yml)
+# meneruskan nilainya lewat `build.args`. Default kosong/false = perilaku lama
+# (UI memakai path relatif + proxy Next), jadi build lain tidak berubah.
+ARG NEXT_PUBLIC_API_URL=""
+ARG NEXT_PUBLIC_USE_MOCK="false"
+ARG NEXT_PUBLIC_BASE_PATH=""
+ENV NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL} \
+    NEXT_PUBLIC_USE_MOCK=${NEXT_PUBLIC_USE_MOCK} \
+    NEXT_PUBLIC_BASE_PATH=${NEXT_PUBLIC_BASE_PATH}
 COPY . .
 RUN npm run build
 

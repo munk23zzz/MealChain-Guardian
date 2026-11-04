@@ -1,0 +1,200 @@
+# =============================================================================
+# MealChain Guardian — stack VPS tunggal (Ubuntu 22/24, 2 vCPU / 2 GB RAM)
+# =============================================================================
+#
+# Isi: postgres + backend (FastAPI) + mock-sap + frontend (Next.js) + Caddy
+# (HTTPS otomatis). Hanya Caddy yang mempublish port ke host (80/443).
+#
+# Pakai (dari root repo ATAU dari direktori ini — path di bawah relatif ke
+# berkas ini, jadi tidak bergantung pada CWD):
+#
+#   cp infra/vps/.env.vps.example infra/vps/.env     # lalu isi nilainya
+#   docker compose -f infra/vps/docker-compose.vps.yml --env-file infra/vps/.env up -d --build
+#
+# Lebih mudah: `bash infra/vps/deploy.sh` (idempoten, termasuk seed demo).
+#
+# Catatan desain yang penting:
+#   * `.env` dibaca dua kali: sebagai `env_file` (masuk ke kontainer verbatim —
+#     penting karena SAP_AI_CORE_CLIENT_SECRET bisa memuat `$`) DAN sebagai
+#     sumber interpolasi `${...}` untuk nilai turunan (DATABASE_URL, CORS_ORIGINS).
+#   * Nilai di blok `environment:` MENANG atas `env_file`. Karena itu
+#     DATABASE_URL sengaja DITURUNKAN dari POSTGRES_*, bukan disalin dari .env:
+#     password DB dan DSN tidak mungkin berbeda (sumber kegagalan tersembunyi
+#     yang paling sering pada deploy pertama).
+#   * postgres, backend, dan mock-sap TIDAK punya `ports:` sama sekali — hanya
+#     `expose:` (dokumentasi, tetap hanya di jaringan internal compose).
+# =============================================================================
+
+name: mealchain-vps
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: mealchain-vps-postgres
+    restart: unless-stopped
+    environment:
+      # Tanpa fallback: nilai default yang tertanam adalah kredensial yang bisa
+      # ditebak. Compose menolak start (fail-closed) bila kosong.
+      POSTGRES_USER: "${POSTGRES_USER:?POSTGRES_USER wajib diisi di infra/vps/.env}"
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:?POSTGRES_PASSWORD wajib diisi di infra/vps/.env - openssl rand -hex 24}"
+      POSTGRES_DB: "${POSTGRES_DB:?POSTGRES_DB wajib diisi di infra/vps/.env}"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      # `$$` = escape compose, supaya shell DI DALAM kontainer yang mengembang.
+      test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    # SENGAJA tanpa `ports:` — DB tidak terjangkau dari internet maupun host.
+    expose:
+      - "5432"
+    networks:
+      - internal
+
+  backend:
+    build:
+      context: ../../backend
+      dockerfile: Dockerfile
+    image: mealchain-vps-backend:latest
+    container_name: mealchain-vps-backend
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    env_file:
+      - .env
+    environment:
+      # Lihat catatan kepala berkas: diturunkan, bukan disalin.
+      DATABASE_URL: "postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}"
+      PYTHONPATH: /app
+      # UI memanggil API di origin https://api.<DOMAIN> (lintas origin), jadi
+      # allow-list CORS harus memuat origin UI. Kosong di .env = diturunkan.
+      CORS_ORIGINS: "${CORS_ORIGINS:-https://${DOMAIN}}"
+      JWT_SECRET: "${JWT_SECRET:?JWT_SECRET wajib diisi di infra/vps/.env - openssl rand -hex 32}"
+      DEBUG: "false"
+      ENABLE_DOCS: "${ENABLE_DOCS:-false}"
+      DEMO_MODE: "${DEMO_MODE:-false}"
+    command: >-
+      uvicorn app.main:app --host 0.0.0.0 --port 8000
+      --proxy-headers --forwarded-allow-ips=${FORWARDED_ALLOW_IPS:-172.16.0.0/12}
+    healthcheck:
+      # GET sungguhan ke /health (tanpa auth), bukan cek port.
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request,sys;sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/health',timeout=5).status==200 else 1)"
+      interval: 15s
+      timeout: 10s
+      retries: 20
+      # Migrasi/seed tidak dijalankan otomatis oleh app; 60 detik cukup untuk
+      # boot pertama di VPS 2 vCPU (impor modul + koneksi DB).
+      start_period: 60s
+    volumes:
+      # Seed sintetis read-only (data/*.json). Kode TIDAK di-mount: image yang
+      # dipakai persis yang dibangun, bukan isi disk yang bisa menyimpang.
+      - ../../data:/data:ro
+    expose:
+      - "8000"
+    networks:
+      - internal
+
+  mock-sap:
+    build:
+      context: ../../backend
+      dockerfile: Dockerfile
+    image: mealchain-vps-mock-sap:latest
+    container_name: mealchain-vps-mock-sap
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: "postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}"
+      DEMO_MODE: "${DEMO_MODE:-false}"
+    command: uvicorn app.sap_integration.mock_service:app --host 0.0.0.0 --port 8001
+    expose:
+      - "8001"
+    networks:
+      - internal
+
+  frontend:
+    build:
+      context: ../../frontend
+      dockerfile: Dockerfile
+      # Image produksi (`next build` + `next start`), bukan dev server.
+      target: runner
+      args:
+        # NEXT_PUBLIC_* di-INLINE saat `next build`; nilai runtime saja TIDAK
+        # berpengaruh pada bundel klien. Karena itu diteruskan sebagai build arg
+        # (Dockerfile: tahap `builder`). Tanpa ini UI akan memanggil
+        # http://localhost:8000 dan semua panel kosong + login gagal.
+        NEXT_PUBLIC_API_URL: "${NEXT_PUBLIC_API_URL:-https://api.${DOMAIN}}"
+        NEXT_PUBLIC_USE_MOCK: "false"
+        # Base path kosong: UI disajikan di akar https://<DOMAIN>/.
+        NEXT_PUBLIC_BASE_PATH: ""
+    image: mealchain-vps-frontend:latest
+    container_name: mealchain-vps-frontend
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      NEXT_PUBLIC_API_URL: "${NEXT_PUBLIC_API_URL:-https://api.${DOMAIN}}"
+      NEXT_PUBLIC_USE_MOCK: "false"
+      # Dipakai next.config.js hanya bila NEXT_PUBLIC_API_URL kosong (mode proxy).
+      # Di stack ini nilainya absolut, jadi rewrite tidak terpakai — tetap diisi
+      # supaya tidak ada kejutan bila operator mengosongkan API URL.
+      BACKEND_INTERNAL_URL: http://backend:8000
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:3000/"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      # `next start` menyajikan build siap pakai; tidak perlu 120 dtk seperti dev.
+      start_period: 40s
+    expose:
+      - "3000"
+    networks:
+      - internal
+
+  caddy:
+    image: caddy:2.8-alpine
+    container_name: mealchain-vps-caddy
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_healthy
+      frontend:
+        condition: service_started
+    ports:
+      # SATU-SATUNYA layanan yang menghadap internet.
+      - "80:80"
+      - "443:443"
+      # HTTP/3 (QUIC). Tanpa ini browser tetap jalan lewat TCP/443.
+      - "443:443/udp"
+    environment:
+      DOMAIN: "${DOMAIN:?DOMAIN wajib diisi di infra/vps/.env - contoh demo.mealchain.id}"
+      ACME_EMAIL: "${ACME_EMAIL:-admin@${DOMAIN}}"
+      MAX_BODY_API: "${MAX_BODY_API:-10MB}"
+      MAX_BODY_FRONTEND: "${MAX_BODY_FRONTEND:-2MB}"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      # Sertifikat Let's Encrypt. WAJIB volume bernama: tanpa ini setiap
+      # `docker compose up` meminta sertifikat baru dan kena rate-limit ACME.
+      - caddy_data:/data
+      - caddy_config:/config
+    networks:
+      - internal
+
+volumes:
+  postgres_data:
+  caddy_data:
+  caddy_config:
+
+networks:
+  internal:
+    driver: bridge
