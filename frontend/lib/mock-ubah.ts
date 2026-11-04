@@ -15,7 +15,13 @@ const KUNCI = "mealchain.demo.ubahan";
 type Ubahan = {
   keputusan: Record<
     string,
-    { status?: string; approved_at?: string; executed_at?: string; verdict?: string }
+    {
+      status?: string;
+      approved_at?: string;
+      executed_at?: string;
+      verdict?: string;
+      po_number?: string;
+    }
   >;
   batch: Record<string, { quarantine_status?: string | null }>;
   penerimaan: Record<string, { status?: string }>;
@@ -145,9 +151,17 @@ function saringKeputusan(utuh: string, b: Record<string, unknown>, u: Ubahan): R
   // padahal barisnya dari tiga hari lalu.
   const jendela = q(utuh, "window");
   if (jendela) {
-    const jam = /^(\d+)h$/.exec(jendela);
+    const jam = /^(\d+)([hd])$/.exec(jendela);
     if (jam) {
-      const batas = Date.now() - Number(jam[1]) * 3600_000;
+      // Jam acuan = jam REKAMAN (baris terbaru), bukan Date.now(): pada demo
+      // statis data bisa berumur beberapa hari, dan memakai jam dinding membuat
+      // chip "24 jam" kosong sementara lonceng masih menghitung 2 keputusan.
+      const cap = daftar
+        .map((r) => Date.parse(String(r.created_at ?? "")))
+        .filter((n) => Number.isFinite(n));
+      const acuan = cap.length ? Math.max(...cap) : Date.now();
+      const satuan = jam[2] === "d" ? 86_400_000 : 3600_000;
+      const batas = acuan - Number(jam[1]) * satuan;
       hasil = hasil.filter((baris) => {
         const waktu = Date.parse(String(baris.created_at ?? ""));
         return Number.isFinite(waktu) && waktu >= batas;
@@ -187,7 +201,7 @@ function ubahBatch(b: Record<string, unknown>, u: Ubahan): Record<string, unknow
 
 function ringkasGerbang(
   b: Record<string, unknown>,
-  ubah: { status?: string; verdict?: string }
+  ubah: { status?: string; verdict?: string; po_number?: string }
 ): Record<string, unknown> {
   const status = ubah.status ?? "pending_approval";
   const selesai = status === "executed";
@@ -205,6 +219,16 @@ function ringkasGerbang(
       : (b.verifier ?? { verdict: "unavailable", verified_by: null }),
     expiry: { ...(b.expiry as Record<string, unknown> | undefined), valid: status === "pending_approval" },
     blocking_reasons: terverifikasi || selesai ? [] : (b.blocking_reasons ?? []),
+    // PO yang terbit setelah Eksekusi harus terlihat di panel Detail; rekaman
+    // selalu `purchase_order: null` sehingga tanpa ini "Unduh PDF"/"Review PO"
+    // tetap mati walau PO benar-benar dibuat.
+    purchase_order: ubah.po_number
+      ? {
+          ...(b.purchase_order as Record<string, unknown> | null | undefined),
+          po_number: ubah.po_number,
+          status: "confirmed",
+        }
+      : (b.purchase_order ?? null),
   };
 }
 
@@ -214,7 +238,8 @@ function saringHarga(utuh: string, b: Record<string, unknown>): Record<string, u
   const wilayah = q(utuh, "region");
   const komoditas = q(utuh, "commodity");
   const kode = komoditas ? komoditas.split(",").filter(Boolean) : null;
-  if (!wilayah && !kode) return null;
+  const adaHari = Number(q(utuh, "days") ?? 0) > 0;
+  if (!wilayah && !kode && !adaHari) return null;
 
   let hasil = baris;
   if (wilayah) {
@@ -236,6 +261,34 @@ function saringHarga(utuh: string, b: Record<string, unknown>): Record<string, u
       return kode.some((k) => teks.includes(k.toLowerCase()));
     });
   }
+  // Pilihan rentang 7/30/90 hari: rekaman hanya punya satu jendela 30 hari,
+  // jadi saring baris menurut `days` dan tulis ulang jendela + cakupannya.
+  // Tanpa ini pil "7 hari" menyala sementara judul tetap "28 Sep – 28 Okt".
+  const mintaHari = Number(q(utuh, "days") ?? 0);
+  if (Number.isFinite(mintaHari) && mintaHari > 0) {
+    const jendela = (b.window ?? {}) as Record<string, unknown>;
+    const akhir = Date.parse(String(jendela.end ?? ""));
+    if (Number.isFinite(akhir)) {
+      const mulaiMs = akhir - (mintaHari - 1) * 86_400_000;
+      hasil = hasil.filter((r) => {
+        const t = Date.parse(String(r.observed_on ?? ""));
+        return Number.isFinite(t) && t >= mulaiMs && t <= akhir;
+      });
+      const tanggal = new Set(hasil.map((r) => String(r.observed_on ?? "")));
+      return {
+        ...b,
+        days: mintaHari,
+        window: { ...jendela, start: new Date(mulaiMs).toISOString().slice(0, 10) },
+        coverage: {
+          ...((b.coverage ?? {}) as Record<string, unknown>),
+          tanggal_terisi: tanggal.size,
+          tanggal_diminta: mintaHari,
+        },
+        rows: hasil,
+        row_count: hasil.length,
+      };
+    }
+  }
   return { ...b, rows: hasil, row_count: hasil.length };
 }
 
@@ -247,9 +300,25 @@ function saringHarga(utuh: string, b: Record<string, unknown>): Record<string, u
 function geserAgenda(utuh: string, b: Record<string, unknown>): Record<string, unknown> | null {
   const diminta = q(utuh, "start");
   const lama = (b.period as Record<string, unknown> | undefined)?.start;
+  const akhirRekaman = (b.period as Record<string, unknown> | undefined)?.end;
   const hari = Array.isArray(b.days) ? (b.days as Record<string, unknown>[]) : null;
   if (!diminta || !lama || !hari) return null;
-  const selisih = Math.round((Date.parse(diminta) - Date.parse(String(lama))) / 86_400_000);
+  // Jangkar di UJUNG rekaman, bukan di awal. Dulu selisih dihitung dari `start`
+  // yang diminta (grid 42 sel bisa mulai 5 hari sebelum awal rekaman), sehingga
+  // sel "hari ini" menampilkan entri 5 hari lalu — mis. menu 1.200 porsi ada,
+  // padahal hari ini tidak ada menu, dan keputusan hari ini hilang.
+  const jangkar = Date.parse(String(akhirRekaman ?? lama));
+  const kini = Date.now() + 7 * 3600_000; // WIB
+  const hariIni = Date.UTC(
+    new Date(kini).getUTCFullYear(),
+    new Date(kini).getUTCMonth(),
+    new Date(kini).getUTCDate()
+  );
+  const selisih = Math.round((hariIni - Date.UTC(
+    new Date(jangkar).getUTCFullYear(),
+    new Date(jangkar).getUTCMonth(),
+    new Date(jangkar).getUTCDate()
+  )) / 86_400_000);
   if (!Number.isFinite(selisih) || selisih === 0) return null;
   const geser = (tgl: unknown) => {
     const t = Date.parse(String(tgl ?? ""));
@@ -283,14 +352,23 @@ export function terapkanTulisan(
 
   if (polos === "/actions/execute") {
     const id = String(b.decision_id ?? "");
-    u.keputusan[id] = { ...(u.keputusan[id] ?? {}), status: "executed", executed_at: sekarang };
+    const nomorPo = `PO-DEMO-${id.slice(0, 6).toUpperCase()}`;
+    // PO harus ikut tercatat pada ringkasan: setelah Eksekusi, panel Detail
+    // membaca `purchase_order` dari approval-summary. Tanpa ini UI berkata
+    // "PO … dibuat" lalu panelnya menulis "Belum ada PO untuk keputusan ini".
+    u.keputusan[id] = {
+      ...(u.keputusan[id] ?? {}),
+      status: "executed",
+      executed_at: sekarang,
+      po_number: nomorPo,
+    };
     simpan(u);
     return {
       ok: true,
       decision_id: id,
       status: "executed",
       executed_at: sekarang,
-      po_number: `PO-DEMO-${id.slice(0, 6).toUpperCase()}`,
+      po_number: nomorPo,
       po_status: "confirmed",
       dikirim: 1,
       ditahan: 0,
@@ -316,6 +394,9 @@ export function terapkanTulisan(
     const asal = String(b.decision_id ?? b.supersedes_id ?? "");
     const id = uuidDemo();
     u.keputusan[id] = { status: "pending_approval" };
+    // Keputusan asal IKUT berpindah status; kalau tidak, tombol "Ajukan" tampak
+    // tidak melakukan apa pun (baris lama tetap "proposed"/"ditolak").
+    if (asal) u.keputusan[asal] = { ...(u.keputusan[asal] ?? {}), status: "pending_approval" };
     simpan(u);
     return {
       ok: true,
@@ -346,7 +427,7 @@ export function terapkanTulisan(
       status: "proposed",
       reason: String(b.reason ?? ""),
       evidence_refs: b.evidence_refs ?? [],
-      source_decision_id: "",
+      source_decision_id: String(b.decision_id ?? b.source_decision_id ?? ""),
       restoration_decision_id: null,
       activated_at: null,
       revoked_at: null,
@@ -362,6 +443,9 @@ export function terapkanTulisan(
       status: "proposed",
       reason: String(b.reason ?? ""),
       evidence_refs: b.evidence_refs ?? [],
+      // Panel pemulihan membaca `restoration_decision_id`; tanpa field ini ia
+      // melesak saat memanggil onRestored (TypeError, bukan pesan).
+      restoration_decision_id: String(b.decision_id ?? b.restoration_decision_id ?? ""),
       revoked_at: sekarang,
       revocation_reason: String(b.reason ?? ""),
     };

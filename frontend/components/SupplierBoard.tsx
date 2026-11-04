@@ -31,6 +31,7 @@ import {
   directoryReachLabel,
   directoryReachSummary,
   directoryReachTagLabel,
+  exclusionCounts,
   exclusionRows,
   exclusionStatusLabel,
   filterDirectoryByReach,
@@ -153,9 +154,19 @@ export default function SupplierBoard({
   const jumlahKiriman = ruteDimuat ? barisRute(supplierRoutes).length : null;
   // Satu kalimat konteks menggantikan deskripsi dua baris yang mendaftar ulang
   // isi halaman; daftar bagiannya sudah dibawa lima tautan di bawah judul.
+  const eksklusi = exclusionCounts(exclusions);
+  const ringkasEksklusi =
+    eksklusi.total === 0
+      ? "belum ada eksklusi"
+      : `eksklusi: ${[
+          eksklusi.active ? `${eksklusi.active} aktif` : null,
+          eksklusi.proposed ? `${eksklusi.proposed} menunggu` : null,
+        ]
+          .filter(Boolean)
+          .join(" · ")}`;
   const ringkasKepala =
     reachKm !== null
-      ? `Pemasok jaringan SPPG Anda — ringkasan, kiriman aktif, daftar dalam jangkauan ${reachKm} km, dan register eksklusi.`
+      ? `Pemasok jaringan SPPG Anda — ringkasan, kiriman aktif, daftar (dapat disaring dalam jangkauan ${reachKm} km), dan register eksklusi.`
       : "Pemasok jaringan SPPG Anda — ringkasan, kiriman aktif, daftar, dan register eksklusi.";
 
   return (
@@ -173,7 +184,7 @@ export default function SupplierBoard({
           {jumlahKiriman !== null ? (
             <span className="commodity-pill">{jumlahKiriman} kiriman</span>
           ) : null}
-          <span className="commodity-pill">{register.length} eksklusi</span>
+          <span className="commodity-pill">{ringkasEksklusi}</span>
         </span>
       }
     >

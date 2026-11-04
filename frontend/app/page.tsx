@@ -614,6 +614,19 @@ export default function Home() {
   // React Query. Nilai kosong tetap "—", bukan 0.
   const todayQuery = useToday(token, identityScope);
   const batches = todayQuery.data?.batches ?? null;
+  // Kartu "Batch <48 jam" di halaman Today milik satu SPPG: kiriman kota lain
+  // (BDG/SBY/SMG) tidak boleh muncul di sana — juri membacanya sebagai salah
+  // cakupan. Panel Food Safety tetap memakai daftar jaringan penuh (ia punya
+  // sakelar cakupan sendiri), jadi penyaringan hanya di sini.
+  const batchesHariIni = useMemo(() => {
+    if (!batches) return batches;
+    if (role !== "sppg_head" && role !== "sppg_nutritionist") return batches;
+    const sendiri = me?.location_name?.trim().toLowerCase();
+    if (!sendiri) return batches;
+    return batches.filter(
+      (b) => String((b as { location?: string }).location ?? "").trim().toLowerCase() === sendiri
+    );
+  }, [batches, role, me?.location_name]);
   const ledger = todayQuery.data?.ledger ?? null;
   const batchesLoading = todayQuery.isFetching;
   const batchesError = errorMessage(todayQuery.error);
@@ -1365,7 +1378,7 @@ export default function Home() {
              status rantai audit. Klik baris membawa ke halaman terkait. */
           <TodayDashboard
             decisions={decisions}
-            batches={batches}
+            batches={batchesHariIni}
             locations={mapData?.locations ?? []}
             commodity={mapData?.commodity ?? mapCommodity}
             kpi={kpi}

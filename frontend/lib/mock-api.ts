@@ -492,14 +492,32 @@ export async function jawabMock(
           const lama = gabung.get(kunciWilayah) ?? { surplus_kg: 0, layak_kg: 0, lokasi: 0 };
           lama.surplus_kg += Number(r.surplus_kg ?? 0);
           lama.layak_kg += Number(r.layak_kg ?? 0);
+          // Rincian per komoditas HARUS ikut digabung: donut "Surplus per wilayah"
+          // membaca `by_commodity`, dan tanpa ini panel menulis "Server belum
+          // memerinci surplus per komoditas" padahal totalnya sudah benar.
+          const rinci = (lama as unknown as { byCommodity?: Record<string, number> }).byCommodity ?? {};
+          const perBaris = (r.by_commodity ?? {}) as Record<string, unknown>;
+          if (Object.keys(perBaris).length) {
+            for (const [namaKom, nilai] of Object.entries(perBaris)) {
+              rinci[namaKom] = Number((rinci[namaKom] ?? 0) + Number(nilai ?? 0));
+            }
+          } else if (Number(r.surplus_kg ?? 0) > 0) {
+            rinci[nama] = Number((rinci[nama] ?? 0) + Number(r.surplus_kg ?? 0));
+          }
+          (lama as unknown as { byCommodity: Record<string, number> }).byCommodity = rinci;
           gabung.set(kunciWilayah, lama);
           totalSurplus += Number(r.surplus_kg ?? 0);
           totalLayak += Number(r.layak_kg ?? 0);
         }
       }
       const regions = Array.from(gabung.entries())
-        .map(([region, v]) => ({ region, surplus_kg: v.surplus_kg, layak_kg: v.layak_kg }))
-        .sort((a, b) => b.surplus_kg - a.surplus_kg);
+      .map(([region, v]) => ({
+        region,
+        surplus_kg: v.surplus_kg,
+        layak_kg: v.layak_kg,
+        by_commodity: (v as unknown as { byCommodity?: Record<string, number> }).byCommodity ?? {},
+      }))
+      .sort((a, b) => b.surplus_kg - a.surplus_kg);
       return {
         status: 200,
         body: {
