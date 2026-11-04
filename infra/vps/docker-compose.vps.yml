@@ -55,8 +55,11 @@ services:
 
   backend:
     build:
-      context: ../../backend
-      dockerfile: Dockerfile
+      # Konteks AKAR repo (bukan backend/): review 9 agen mengimpor paket
+      # `agent/` di akar. Dengan konteks backend/ saja, review gagal di VPS
+      # dengan ModuleNotFoundError dan papan Kualitas per agen kosong.
+      context: ../..
+      dockerfile: infra/vps/backend.Dockerfile
     image: mealchain-vps-backend:latest
     container_name: mealchain-vps-backend
     restart: unless-stopped
