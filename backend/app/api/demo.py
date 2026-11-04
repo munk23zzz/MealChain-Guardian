@@ -74,6 +74,7 @@ from app.seed.timeseries import (
     validate_range,
 )
 from app.services import agent_progress, agent_review_hook
+from app.services.agent_attribution import agent_key_for
 from app.services.demo_cost import hitung_biaya_demo
 from app.services.demo_procurement_orchestrator import (
     run_supplier_procurement,
@@ -420,6 +421,7 @@ async def _add_trace(
     input_summary: dict,
     output_summary: dict,
     acuan: datetime | None = None,
+    agent_name: str | None = None,
 ):
     """Satu baris jejak agent.
 
@@ -427,12 +429,20 @@ async def _add_trace(
     berada pada offset dari jangkar, bukan dari jam dinding. Tanpa itu, replay
     yang dibangun dua kali menghasilkan timestamp berbeda dan Agent Log
     menampilkan "beberapa menit lalu" untuk kejadian 8 Oktober.
+
+    `agent_name` (4 Nov 2026) WAJIB jatuh ke salah satu kunci tampilan
+    "Kualitas per agen" (`supply`..`verifier`, lihat
+    `services.agent_attribution`). Dulu baris kasus demo ditulis tanpa agen
+    (`NULL`), sehingga panel menghitung 0 untuk semua agen walau jejaknya ada.
+    Pemanggil boleh menyebut agennya sendiri; selain itu diturunkan dari alat
+    dan tahap — bukan dibiarkan kosong.
     """
     db.add(
         AgentTrace(
             decision_id=decision_id,
             step_name=step_name,
             tool_called=tool,
+            agent_name=agent_name or agent_key_for(step_name, tool),
             input_summary=input_summary,
             output_summary=output_summary,
             step_at=(acuan or datetime.now(timezone.utc)) - timedelta(minutes=minutes_ago),

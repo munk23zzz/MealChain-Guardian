@@ -44,6 +44,7 @@ from app.models import (
     SapMockPurchaseOrder,
 )
 from app.seed.seed_data import stable_uuid
+from app.services.agent_attribution import agent_key
 
 #: Penanda baris; dipakai juga oleh tes supaya dapat dicari kembali.
 DEMO_CASE = "bukti-hari-ini"
@@ -131,22 +132,25 @@ async def semai_kasus_bukti_hari_ini(
             setattr(keputusan, kunci, isi)
 
     # Tiga langkah agent yang membuat kasus ini terlihat "hidup" di log agen.
+    # `agent_name` = KUNCI TAMPILAN panel "Kualitas per agen" (`supply`,
+    # `supervisor`, `verifier`); nama kelas lama (`orchestrator`,
+    # `supervisor_agent`) tidak dihitung panel itu (terukur 4 Nov 2026).
     langkah = (
         (
             "DETECT",
-            "orchestrator",
+            agent_key("DETECT"),
             {"sinyal": "selisih pasokan Jakarta-Bandung"},
             {"catatan": "Selisih pasokan terdeteksi pada menu hari ini."},
         ),
         (
             "DECIDE",
-            "supervisor_agent",
+            agent_key("DECIDE"),
             {"decision_type": "regional_balance"},
             {"alokasi_kg": 300, "asal": lokasi_asal, "tujuan": nama_lokasi},
         ),
         (
             "VERIFY",
-            "verifier",
+            agent_key("VERIFY"),
             {"decision_type": "regional_balance"},
             {"verdict": "consistent", "catatan": "Tiga angka saling cocok."},
         ),

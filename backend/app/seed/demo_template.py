@@ -68,6 +68,7 @@ from app.seed.demo_kpi_riwayat import geser_aksi_ke_riwayat
 from app.seed.rapikan_jejak import rapikan_jejak
 from app.seed.seed_data import nama_lokasi_kanonik
 from app.services import demo_session as sesi
+from app.services.agent_attribution import agent_key
 from app.services.batch_eligibility_service import USABLE, evaluasi_batch
 
 KOTA_TEMPLATE = ("Jakarta", "Bandung", "Surabaya")
@@ -1277,9 +1278,14 @@ async def _pastikan_jejak_putusan(
     Idempoten: hanya menambah langkah/approval yang belum ada, sehingga baris
     lama dari seed sebelumnya juga ikut tertambal.
     """
-    langkah = [("DETECT", "detection_agent"), ("DECIDE", "supervisor_agent")]
+    # Nama agen = KUNCI TAMPILAN panel "Kualitas per agen" (supply..verifier).
+    # Dulu di sini tertulis `detection_agent` / `sap_agent`: dua nama kelas yang
+    # tidak pernah cocok dengan kunci panel, sehingga baris jejaknya tidak
+    # dihitung (terukur 4 Nov 2026). `agent_key` menjaga nama tetap selaras
+    # dengan kontrak frontend tanpa menyalin daftar kuncinya ke berkas ini.
+    langkah = [("DETECT", agent_key("DETECT")), ("DECIDE", agent_key("DECIDE"))]
     if peran == "aktif":
-        langkah.append(("ACT", "sap_agent"))
+        langkah.append(("ACT", agent_key("ACT")))
 
     ada_langkah = set(
         (
@@ -1561,7 +1567,7 @@ async def _semai_status_tambahan(db: AsyncSession, now: datetime) -> dict:
         db.add(siap)
         await db.flush()
     hasil["approved"] = str(siap.id)
-    await jejak(siap, (("DETECT", "detection_agent"), ("DECIDE", "supervisor_agent")))
+    await jejak(siap, (("DETECT", agent_key("DETECT")), ("DECIDE", agent_key("DECIDE"))))
     jumlah = int(
         (
             await db.execute(
@@ -1617,7 +1623,7 @@ async def _semai_status_tambahan(db: AsyncSession, now: datetime) -> dict:
         db.add(tinjau)
         await db.flush()
     hasil["review_only"] = str(tinjau.id)
-    await jejak(tinjau, (("DETECT", "detection_agent"), ("DECIDE", "supervisor_agent")))
+    await jejak(tinjau, (("DETECT", agent_key("DETECT")), ("DECIDE", agent_key("DECIDE"))))
 
     # (3) proposed — pengadaan dari pemasok (supplier_procurement) yang belum
     # diputuskan. Ini satu-satunya status `proposed` di template: jalur "usulan
@@ -1650,7 +1656,7 @@ async def _semai_status_tambahan(db: AsyncSession, now: datetime) -> dict:
             db.add(usul)
             await db.flush()
         hasil["proposed"] = str(usul.id)
-        await jejak(usul, (("DETECT", "detection_agent"), ("DECIDE", "supervisor_agent")))
+        await jejak(usul, (("DETECT", agent_key("DETECT")), ("DECIDE", agent_key("DECIDE"))))
 
     # (4) supplier_exclusion_restoration — usul memulihkan pemasok yang sedang
     # dikecualikan. Tipe ini ada di DB dan di alur `/supplier-exclusions/{id}/restore`,
@@ -1683,7 +1689,7 @@ async def _semai_status_tambahan(db: AsyncSession, now: datetime) -> dict:
             await db.flush()
         hasil["restoration"] = str(pulih.id)
         await jejak(
-            pulih, (("DETECT", "detection_agent"), ("DECIDE", "supervisor_agent"))
+            pulih, (("DETECT", agent_key("DETECT")), ("DECIDE", agent_key("DECIDE")))
         )
     return hasil
 
@@ -2623,6 +2629,233 @@ async def _lengkapi_bukti_kasus(db: AsyncSession, now: datetime) -> dict:
     return {"bukti_ditambah": ditambah}
 
 
+async def _lengkapi_bukti_pemasok(db: AsyncSession, now: datetime) -> dict:
+    """Sambungkan keputusan eksklusi ke batch pemasoknya.
+
+    Audit 4 Nov 2026: `GET /supplier-exclusions/context/{id}` membangun daftar
+    pemasok dari `batch_id` di payload bukti. Bukti kasus eksklusi hanya berisi
+    `catatan`, sehingga `suppliers: []` dan `can_propose: false` — form "Usul
+    eksklusi" tampil tanpa satu pun pilihan, dan pemulihan tidak bisa diajukan.
+
+    Penambal ini idempoten: menambah `batch_ids` + `evidence_refs` ke payload
+    bukti yang sudah ada, atau membuat satu baris bukti baru bila belum ada.
+    `evidence_type` mengikuti constraint DB (`human_inspection`).
+    """
+    from app.models import Batch, DecisionEvidence, SupplierExclusion
+
+    keputusan = list(
+        (
+            await db.execute(
+                select(Decision)
+                .where(Decision.decision_type.like("supplier_exclusion%"))
+                .order_by(Decision.created_at)
+            )
+        ).scalars()
+    )
+    ditambal = 0
+    tanpa_batch = 0
+    for d in keputusan:
+        eksklusi = (
+            await db.execute(
+                select(SupplierExclusion)
+                .where(SupplierExclusion.scope_location_id == d.target_location_id)
+                .order_by(SupplierExclusion.created_at.desc())
+                .limit(1)
+            )
+        ).scalar_one_or_none()
+        if eksklusi is None:
+            tanpa_batch += 1
+            continue
+        batch_ids = list(
+            (
+                await db.execute(
+                    select(Batch.id)
+                    .where(
+                        Batch.supplier_id == eksklusi.supplier_id,
+                        Batch.location_id == d.target_location_id,
+                    )
+                    .limit(3)
+                )
+            ).scalars()
+        )
+        if not batch_ids:
+            # Pemasok yang dieksklusi sering sudah tidak punya kiriman di lokasi
+            # itu. Form usulan tetap harus punya kandidat, jadi pakai batch
+            # lokasi tersebut dari pemasok berkeandalan rendah — alasan yang
+            # sama dengan kasus aslinya (pemasok berisiko), bukan angka karangan.
+            batch_ids = list(
+                (
+                    await db.execute(
+                        select(Batch.id)
+                        .join(Supplier, Supplier.id == Batch.supplier_id)
+                        .where(Batch.location_id == d.target_location_id)
+                        .order_by(Supplier.reliability_score.asc())
+                        .limit(3)
+                    )
+                ).scalars()
+            )
+        if not batch_ids:
+            tanpa_batch += 1
+            continue
+        baris = list(
+            (
+                await db.execute(
+                    select(DecisionEvidence).where(DecisionEvidence.decision_id == d.id)
+                )
+            ).scalars()
+        )
+        kunci = [str(b) for b in batch_ids]
+        refs = [{"type": "batch", "id": k} for k in kunci]
+        if baris:
+            for b in baris:
+                payload = dict(b.payload or {})
+                if payload.get("batch_id") in kunci:
+                    continue
+                payload.setdefault("batch_id", kunci[0])
+                payload["batch_ids"] = kunci
+                payload["evidence_refs"] = refs
+                b.payload = payload
+            ditambal += 1
+        else:
+            db.add(
+                DecisionEvidence(
+                    id=_uid("bukti-pemasok", str(d.id)),
+                    decision_id=d.id,
+                    evidence_type="human_inspection",
+                    payload={
+                        "catatan": "Bukti batch pemasok untuk usulan administratif.",
+                        "jenis_kasus": d.decision_type,
+                        "demo": True,
+                        "batch_id": kunci[0],
+                        "batch_ids": kunci,
+                        "evidence_refs": refs,
+                    },
+                    is_consistent=True,
+                    recorded_at=d.created_at or now,
+                )
+            )
+            ditambal += 1
+    await db.flush()
+    return {"bukti_pemasok_ditambal": ditambal, "tanpa_batch": tanpa_batch}
+
+
+async def _lengkapi_batch_eksklusi(db: AsyncSession, now: datetime) -> dict:
+    """Beri pemasok yang dieksklusi satu batch di lokasi sasarannya.
+
+    Dua cacat sekaligus (audit 4 Nov 2026):
+    1. `GET /supplier-exclusions/context/{id}` hanya memuat pemasok dari batch
+       pada bukti. Pemasok yang dieksklusi tidak punya kiriman di Jakarta, jadi
+       form "Ajukan pemulihan" tidak pernah punya entri `exclusions`.
+    2. Jakarta/telur: `/supply` mencatat 300 kg, tetapi batch layak berjumlah
+       180 kg → kecukupan menulis −900 kg sementara ubin kekurangan menulis
+       −780 kg (300 − 1.080). Batch 120 kg menutup selisih itu secara jujur.
+
+    Idempoten: batch dibuat sekali dengan id deterministik.
+    """
+    from app.models import Batch, Commodity, Location, SupplierExclusion
+
+    jakarta = (
+        await db.execute(select(Location).where(Location.name == "Jakarta"))
+    ).scalar_one_or_none()
+    telur = (
+        await db.execute(select(Commodity).where(Commodity.name == "telur"))
+    ).scalar_one_or_none()
+    if jakarta is None or telur is None:
+        return {"dilewati": "lokasi/komoditas tidak ada"}
+    eksklusi = (
+        await db.execute(
+            select(SupplierExclusion)
+            .where(SupplierExclusion.scope_location_id == jakarta.id)
+            .order_by(SupplierExclusion.created_at.desc())
+            .limit(1)
+        )
+    ).scalar_one_or_none()
+    if eksklusi is None:
+        return {"dilewati": "tidak ada eksklusi di Jakarta"}
+
+    ada = (
+        await db.execute(
+            select(Batch.id).where(
+                Batch.supplier_id == eksklusi.supplier_id,
+                Batch.location_id == jakarta.id,
+            )
+        )
+    ).first()
+    if ada is not None:
+        return {"dilewati": "batch pemasok sudah ada"}
+
+    db.add(
+        Batch(
+            id=_uid("batch-eksklusi", str(eksklusi.supplier_id)),
+            commodity_id=telur.id,
+            location_id=jakarta.id,
+            supplier_id=eksklusi.supplier_id,
+            quantity_kg=Decimal("120"),
+            harvested_at=now - timedelta(hours=5),
+            usable_until=now + timedelta(days=21),
+            certification_status="hygiene",
+            # origin "seed": penyapu sesi menghapus baris demo tanpa stempel,
+            # dan batch ini harus bertahan seperti baris kanonik lain.
+            origin="seed",
+            safety_status="pass",
+            quarantine_status="none",
+            freshness_score=Decimal("0.90"),
+            temperature_log=[
+                {
+                    "timestamp": (now - timedelta(minutes=240 - 30 * i)).isoformat(),
+                    "temperature_c": 4.0,
+                }
+                for i in range(8)
+            ],
+            demo_session_id=None,
+        )
+    )
+    await db.flush()
+    return {"batch_eksklusi": "telur 120 kg"}
+
+
+async def _lengkapi_po_draft(db: AsyncSession, now: datetime) -> dict:
+    """Sisakan SATU PO berstatus `draft` pada keputusan Jakarta.
+
+    Audit 4 Nov 2026: 29 PO kini tertaut ke keputusan, tetapi semuanya
+    `confirmed`, sehingga gerbang kedua ("Review & kirim" PO oleh Kepala SPPG)
+    dan tombol unduh PDF tidak pernah bisa dicoba di demo. Satu PO `draft`
+    pada keputusan procurement Jakarta membuat alur itu nyata tanpa mengarang
+    angka: nomor, harga, dan pemasok tetap milik baris SAP yang sudah ada.
+    """
+    from app.models import Location, SapMockPurchaseOrder
+
+    jakarta = (
+        await db.execute(select(Location).where(Location.name == "Jakarta"))
+    ).scalar_one_or_none()
+    if jakarta is None:
+        return {"dilewati": "Jakarta tidak ada"}
+    baris = (
+        await db.execute(
+            select(SapMockPurchaseOrder.id, SapMockPurchaseOrder.po_number)
+            .join(Decision, Decision.id == SapMockPurchaseOrder.decision_id)
+            .where(
+                Decision.decision_type == "supplier_procurement",
+                Decision.status == "executed",
+                Decision.target_location_id == jakarta.id,
+                SapMockPurchaseOrder.status == "confirmed",
+            )
+            .order_by(SapMockPurchaseOrder.po_number)
+            .limit(1)
+        )
+    ).first()
+    if baris is None:
+        return {"dilewati": "tidak ada PO tertaut Jakarta"}
+    await db.execute(
+        update(SapMockPurchaseOrder)
+        .where(SapMockPurchaseOrder.id == baris.id)
+        .values(status="draft")
+        .execution_options(synchronize_session=False)
+    )
+    await db.flush()
+    return {"po_draft": baris.po_number}
+
+
 async def _bekukan(db: AsyncSession) -> dict:
     """Tandai baris demo sebagai CETAKAN tanpa mengubah provenance-nya.
 
@@ -2983,6 +3216,11 @@ async def build_into(db: AsyncSession, *, purge: bool = True, freeze: bool = Tru
     """
     now = datetime.now(timezone.utc)
     laporan: dict = {}
+    # Sentinel `cetakan` harus ADA sebelum baris apa pun distempel ke id-nya:
+    # penyemai KPI harian menulis `disposal_events.demo_session_id` = CETAKAN_ID,
+    # dan pada database baru FK itu gagal (terukur 4 Nov 2026: build berhenti di
+    # penyemaian KPI, sesudah 6 keputusan tertulis).
+    await sesi.cetakan(db)
     if purge:
         laporan["dibersihkan"] = await sesi.kosongkan_kecuali(db, None)
     laporan["inti"] = await _semai_inti(db, now)
@@ -3056,6 +3294,14 @@ async def build_into(db: AsyncSession, *, purge: bool = True, freeze: bool = Tru
         laporan["beku"] = await _bekukan(db)
     if bersihkan_sisa:
         laporan["bersih"] = await _bersihkan_sisa(db)
+    # SESUDAH penyapuan, bukan sebelumnya: `_bersihkan_sisa` menghapus baris demo
+    # tanpa stempel, termasuk batch yang barusan dirujuk bukti — dulu urutannya
+    # sebelum sapuan, sehingga `batch_id` di bukti menunjuk batch yang sudah
+    # tidak ada dan konteks pemasok kembali kosong (terukur 4 Nov 2026).
+    laporan["batch_eksklusi"] = await _lengkapi_batch_eksklusi(db, now)
+    laporan["bukti_pemasok"] = await _lengkapi_bukti_pemasok(db, now)
+    laporan["po_draft"] = await _lengkapi_po_draft(db, now)
+    await db.commit()
     laporan["hitung"] = await hitung(db)
     return laporan
 
