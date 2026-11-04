@@ -71,7 +71,10 @@ services:
     environment:
       # Lihat catatan kepala berkas: diturunkan, bukan disalin.
       DATABASE_URL: "postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}"
-      PYTHONPATH: /app
+      # WAJIB memuat /opt: paket `agent/` disalin ke /opt oleh
+      # infra/vps/backend.Dockerfile. Nilai `/app` saja MENIMPA ENV image dan
+      # membuat review gagal "ModuleNotFoundError: No module named 'agent'".
+      PYTHONPATH: /app:/opt
       # UI memanggil API di origin https://api.<DOMAIN> (lintas origin), jadi
       # allow-list CORS harus memuat origin UI. Kosong di .env = diturunkan.
       CORS_ORIGINS: "${CORS_ORIGINS:-https://${DOMAIN}}"
