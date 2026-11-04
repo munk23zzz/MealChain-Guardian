@@ -1,4 +1,5 @@
 import { metodeMenulis, segarkanSetelahTulis } from "./refresh";
+import { jawabMock, peranDariHeader } from "./mock-api";
 
 // `??` bukan `||` — sama seperti `lib/api.ts`: seluruh konsol memanggil API lewat
 // origin sendiri (rewrites di next.config), dan CSP `connect-src 'self'` menolak
@@ -6,8 +7,25 @@ import { metodeMenulis, segarkanSetelahTulis } from "./refresh";
 // http://localhost:8000 dan diblokir CSP → panel "konteks pemasok" selalu gagal.
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
 
+// Mode demo statis (GitHub Pages): tidak ada server. Modul ini punya pembungkus
+// fetch sendiri, jadi ia WAJIB ikut menjawab dari rekaman — tanpa cabang ini
+// register eksklusi dan konteks pemasok tampil kosong di demo publik.
+const MOCK = process.env.NEXT_PUBLIC_USE_MOCK === "true";
+
 // Keep backend validation details visible; generic api.request drops them.
 async function request<T>(path: string, init: RequestInit): Promise<T> {
+  if (MOCK) {
+    const peran = peranDariHeader(init.headers) ?? "sppg_head";
+    const jawaban = await jawabMock(peran, path, init);
+    if (!jawaban) {
+      throw new Error(`Mode demo statis: data untuk "${path.split("?")[0]}" tidak terekam.`);
+    }
+    if (jawaban.status >= 400) {
+      throw new Error(`HTTP ${jawaban.status}: Usulan tidak dapat diproses. Muat ulang konteks dan coba kembali.`);
+    }
+    if (metodeMenulis(init.method)) segarkanSetelahTulis();
+    return jawaban.body as T;
+  }
   const response = await fetch(`${API_URL}${path}`, init);
   const text = await response.text();
   if (!response.ok) {

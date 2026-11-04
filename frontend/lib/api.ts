@@ -193,6 +193,18 @@ export function fetchPurchaseOrderSummary(token: string): Promise<any> {
  */
 export async function fetchPurchaseOrderPdf(poNumber: string, token: string): Promise<Blob> {
   const path = `/sap/purchase-orders/${encodeURIComponent(poNumber)}/pdf`;
+  // Demo statis: tidak ada server yang bisa mencetak PDF. Daripada tombolnya
+  // gagal dengan "Failed to fetch" (fetch ke localhost dari github.io), dokumen
+  // ringkas dibuat di klien supaya "Unduh PO" tetap menghasilkan sesuatu.
+  if (MOCK) {
+    const isi = [
+      "%PDF-1.4",
+      "% MealChain Guardian — demo statis",
+      `% PO ${poNumber}`,
+      "% Dokumen ini dihasilkan di peramban; bukan PDF sah dari SAP.",
+    ].join("\n");
+    return new Blob([isi], { type: "application/pdf" });
+  }
   const resp = await fetch(`${API_URL}${path}`, {
     headers: { Authorization: `Bearer ${token}` },
  });

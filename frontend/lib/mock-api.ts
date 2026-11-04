@@ -18,6 +18,8 @@
 //     yang sama — jujur, bukan pura-pura berubah.
 //   * Tidak ada rahasia di berkas fixture: hanya data demo yang memang publik.
 
+import { terapkanBaca, terapkanTulisan } from "./mock-ubah";
+
 export type Fixture = { status: number; body: unknown };
 
 /** Peran demo yang dikenali token mock. */
@@ -325,6 +327,19 @@ export async function jawabMock(
       tandaiSesi(true);
       return { status: 200, body: { ...sesiDemoAktifkan(contohSesi), created: dibuat } };
     }
+    // Aksi lain (setujui, eksekusi, karantina, penerimaan, periksa ulang)
+    // mengubah keadaan demo sehingga penyegaran berikutnya tidak lagi
+    // memperlihatkan data lama di bawah pesan "berhasil".
+    let isiTulis: unknown = null;
+    if (init.body) {
+      try {
+        isiTulis = JSON.parse(String(init.body));
+      } catch {
+        isiTulis = null;
+      }
+    }
+    const balasTulis = terapkanTulisan(polosPath, isiTulis);
+    if (balasTulis) return { status: 200, body: balasTulis };
     return { status: 200, body: { ok: true, simulated: true, mode: "demo-statis" } };
   }
 
@@ -425,13 +440,72 @@ export async function jawabMock(
     return { status: 200, body: { ...dasar, as_of: new Date().toISOString() } };
   }
 
-  if (langsung) return langsung;
+  // Surplus wilayah: UI meminta BEBERAPA komoditas sekaligus (?commodity=…&
+  // commodity=…), sedangkan rekaman menyimpan satu varian per komoditas.
+  // Tanpa penggabungan, panel berjudul "4 komoditas" hanya menampilkan ayam.
+  if (polos === "/surplus/regions" && langsung) {
+    const kueri = new URLSearchParams(utuh.split("?")[1] ?? "");
+    const diminta = kueri.getAll("commodity");
+    if (diminta.length > 1) {
+      const gabung = new Map<string, Record<string, number>>();
+      const dasar = (langsung.body ?? {}) as Record<string, unknown>;
+      let totalSurplus = 0;
+      let totalLayak = 0;
+      for (const nama of diminta) {
+        const satu = peta[`GET /surplus/regions?commodity=${nama}&limit=6`];
+        const isi = (satu?.body ?? {}) as Record<string, unknown>;
+        for (const r of (isi.regions ?? []) as Record<string, unknown>[]) {
+          const kunciWilayah = String(r.region ?? "");
+          const lama = gabung.get(kunciWilayah) ?? { surplus_kg: 0, layak_kg: 0, lokasi: 0 };
+          lama.surplus_kg += Number(r.surplus_kg ?? 0);
+          lama.layak_kg += Number(r.layak_kg ?? 0);
+          gabung.set(kunciWilayah, lama);
+          totalSurplus += Number(r.surplus_kg ?? 0);
+          totalLayak += Number(r.layak_kg ?? 0);
+        }
+      }
+      const regions = Array.from(gabung.entries())
+        .map(([region, v]) => ({ region, surplus_kg: v.surplus_kg, layak_kg: v.layak_kg }))
+        .sort((a, b) => b.surplus_kg - a.surplus_kg);
+      return {
+        status: 200,
+        body: {
+          ...dasar,
+          commodities: diminta,
+          excluded_location: kueri.get("exclude"),
+          regions,
+          totals: { ...(dasar.totals as Record<string, unknown> | undefined), surplus_kg: totalSurplus, layak_kg: totalLayak, regions: regions.length },
+        },
+      };
+    }
+  }
+
+  if (langsung) {
+    // Keadaan demo (status keputusan, karantina batch, saringan wilayah/agenda)
+    // diterapkan di sini supaya hasil tulis langsung terlihat pada penyegaran.
+    const ubah = terapkanBaca(utuh, polos, langsung.body);
+    return ubah ? { status: langsung.status, body: ubah } : langsung;
+  }
 
   // Pola: UUID pada kunci terekam diganti `{id}` supaya id lain tetap kena.
   const awalan = `${method} `;
   for (const [k, v] of Object.entries(peta)) {
     if (!k.startsWith(awalan)) continue;
-    if (k.slice(awalan.length).split("?")[0].replace(POLA_UUID, "{id}") === pola) return v;
+    if (k.slice(awalan.length).split("?")[0].replace(POLA_UUID, "{id}") === pola) {
+      const ubah = terapkanBaca(utuh, polos, v.body);
+      return ubah ? { status: v.status, body: ubah } : v;
+    }
+  }
+
+  // Keputusan yang lahir di sesi ini (mis. dari "Jalankan agent") tidak punya
+  // rekaman rincian. Pakai baris daftarnya supaya popup tidak menampilkan galat.
+  if (polos.startsWith("/decisions/")) {
+    const id = polos.split("/")[2] ?? "";
+    const daftar = ((peta["GET /decisions"]?.body ?? {}) as Record<string, unknown>).items;
+    if (Array.isArray(daftar)) {
+      const baris = (daftar as Record<string, unknown>[]).find((x) => x.decision_id === id);
+      if (baris) return { status: 200, body: baris };
+    }
   }
   return null;
 }

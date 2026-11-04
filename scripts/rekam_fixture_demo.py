@@ -70,12 +70,17 @@ def main() -> None:
 
     _, daftar = call("/decisions", token=bgn)
     items = daftar.get("items", daftar) if isinstance(daftar, dict) else daftar
-    decision_ids = [x["decision_id"] for x in items][:4] if items else []
-    _, batches = call("/batches?limit=5", token=bgn)
+    # SEMUA keputusan, bukan empat pertama: rincian tiap id dipakai popup
+    # "Decision & Evidence". Kalau hanya sebagian yang direkam, sisa baris jatuh
+    # ke pola {id} dan menampilkan isi keputusan LAIN (mis. baris "pending"
+    # membuka body "executed") — kontradiksi yang langsung terlihat juri.
+    decision_ids = [x["decision_id"] for x in items][:60] if items else []
+    _, batches = call("/batches?limit=500", token=bgn)
     batch_list = batches if isinstance(batches, list) else batches.get("batches", [])
-    batch_id = batch_list[0]["batch_id"] if batch_list and "batch_id" in batch_list[0] else (
-        batch_list[0].get("id") if batch_list else ""
-    )
+    def id_batch(x):
+        return x.get("batch_id") or x.get("id") or ""
+    batch_id = id_batch(batch_list[0]) if batch_list else ""
+    batch_ids = [id_batch(x) for x in batch_list if id_batch(x)][:10]
 
     today = date.today().isoformat()
     start = (date.today() - timedelta(days=14)).isoformat()
@@ -114,6 +119,7 @@ def main() -> None:
         for commodity in commodities:
             paths += [
                 f"/balance/map?commodity={commodity}",
+                f"/balance/{loc}/{commodity}",
                 f"/surplus/regions?commodity={commodity}&limit=6",
                 f"/surplus/allocations?commodity={commodity}&limit=6",
                 f"/supply/{loc}/{commodity}",
@@ -122,6 +128,9 @@ def main() -> None:
                 f"/price/quotes/{loc}/{commodity}",
                 f"/suppliers?limit=200&commodity={commodity}",
             ]
+        paths += ["/supplier-exclusions"]
+        for b in batch_ids:
+            paths.append(f"/receipts?batch_id={b}&limit=50")
         for decision_id in decision_ids:
             paths += [
                 f"/decisions/{decision_id}",
@@ -133,6 +142,7 @@ def main() -> None:
                 f"/decisions/{decision_id}/review",
                 f"/decisions/{decision_id}/approval-summary",
                 f"/decisions/{decision_id}/compliance",
+                f"/supplier-exclusions/context/{decision_id}",
             ]
         return paths
 
