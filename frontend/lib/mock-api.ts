@@ -370,6 +370,45 @@ export async function jawabMock(
     };
   }
 
+  // Ringkasan gerbang untuk keputusan yang baru lahir: rekaman tidak punya
+  // contoh "proposed", jadi warisi bentuknya lalu netralkan hasil eksekusi —
+  // tanpa ini panel menampilkan "Sudah dieksekusi" plus daftar alasan yang
+  // saling bertentangan untuk keputusan yang belum disetujui siapa pun.
+  if (
+    putaranTerakhir &&
+    polos === `/decisions/${putaranTerakhir.decision_id}/approval-summary`
+  ) {
+    const cetakan = peta[`${method} ${kunci(polos).pola}`];
+    const dasar = ((langsung ?? cetakan)?.body ?? {}) as Record<string, unknown>;
+    const safety = (dasar.safety ?? {}) as Record<string, unknown>;
+    return {
+      status: 200,
+      body: {
+        ...dasar,
+        decision_id: putaranTerakhir.decision_id,
+        status: "proposed",
+        proposed_by: "supervisor_agent",
+        can_execute: false,
+        commodity: putaranTerakhir.commodity,
+        quantity_kg: putaranTerakhir.quantity_kg,
+        verifier: { verdict: "pending", verified_by: null },
+        safety: {
+          ...safety,
+          worst_status: "pending",
+          blocked: false,
+          block_code: null,
+          reason: null,
+          reasons: [],
+          codes: [],
+          batches_checked: 0,
+          batch_ids: [],
+        },
+        purchase_order: null,
+        execution_target: null,
+      },
+    };
+  }
+
   // Daftar keputusan: keputusan hasil putaran disisipkan paling atas supaya
   // tab Recommendations dan Decision & Evidence benar-benar bertambah.
   if (putaranTerakhir && polos === "/decisions" && langsung) {
