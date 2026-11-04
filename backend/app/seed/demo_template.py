@@ -2733,6 +2733,123 @@ async def _lengkapi_bukti_pemasok(db: AsyncSession, now: datetime) -> dict:
     return {"bukti_pemasok_ditambal": ditambal, "tanpa_batch": tanpa_batch}
 
 
+async def _lengkapi_batch_eksklusi(db: AsyncSession, now: datetime) -> dict:
+    """Beri pemasok yang dieksklusi satu batch di lokasi sasarannya.
+
+    Dua cacat sekaligus (audit 4 Nov 2026):
+    1. `GET /supplier-exclusions/context/{id}` hanya memuat pemasok dari batch
+       pada bukti. Pemasok yang dieksklusi tidak punya kiriman di Jakarta, jadi
+       form "Ajukan pemulihan" tidak pernah punya entri `exclusions`.
+    2. Jakarta/telur: `/supply` mencatat 300 kg, tetapi batch layak berjumlah
+       180 kg → kecukupan menulis −900 kg sementara ubin kekurangan menulis
+       −780 kg (300 − 1.080). Batch 120 kg menutup selisih itu secara jujur.
+
+    Idempoten: batch dibuat sekali dengan id deterministik.
+    """
+    from app.models import Batch, Commodity, Location, SupplierExclusion
+
+    jakarta = (
+        await db.execute(select(Location).where(Location.name == "Jakarta"))
+    ).scalar_one_or_none()
+    telur = (
+        await db.execute(select(Commodity).where(Commodity.name == "telur"))
+    ).scalar_one_or_none()
+    if jakarta is None or telur is None:
+        return {"dilewati": "lokasi/komoditas tidak ada"}
+    eksklusi = (
+        await db.execute(
+            select(SupplierExclusion)
+            .where(SupplierExclusion.scope_location_id == jakarta.id)
+            .order_by(SupplierExclusion.created_at.desc())
+            .limit(1)
+        )
+    ).scalar_one_or_none()
+    if eksklusi is None:
+        return {"dilewati": "tidak ada eksklusi di Jakarta"}
+
+    ada = (
+        await db.execute(
+            select(Batch.id).where(
+                Batch.supplier_id == eksklusi.supplier_id,
+                Batch.location_id == jakarta.id,
+            )
+        )
+    ).first()
+    if ada is not None:
+        return {"dilewati": "batch pemasok sudah ada"}
+
+    db.add(
+        Batch(
+            id=_uid("batch-eksklusi", str(eksklusi.supplier_id)),
+            commodity_id=telur.id,
+            location_id=jakarta.id,
+            supplier_id=eksklusi.supplier_id,
+            quantity_kg=Decimal("120"),
+            harvested_at=now - timedelta(hours=5),
+            usable_until=now + timedelta(days=21),
+            certification_status="hygiene",
+            # origin "seed": penyapu sesi menghapus baris demo tanpa stempel,
+            # dan batch ini harus bertahan seperti baris kanonik lain.
+            origin="seed",
+            safety_status="pass",
+            quarantine_status="none",
+            freshness_score=Decimal("0.90"),
+            temperature_log=[
+                {
+                    "timestamp": (now - timedelta(minutes=240 - 30 * i)).isoformat(),
+                    "temperature_c": 4.0,
+                }
+                for i in range(8)
+            ],
+            demo_session_id=None,
+        )
+    )
+    await db.flush()
+    return {"batch_eksklusi": "telur 120 kg"}
+
+
+async def _lengkapi_po_draft(db: AsyncSession, now: datetime) -> dict:
+    """Sisakan SATU PO berstatus `draft` pada keputusan Jakarta.
+
+    Audit 4 Nov 2026: 29 PO kini tertaut ke keputusan, tetapi semuanya
+    `confirmed`, sehingga gerbang kedua ("Review & kirim" PO oleh Kepala SPPG)
+    dan tombol unduh PDF tidak pernah bisa dicoba di demo. Satu PO `draft`
+    pada keputusan procurement Jakarta membuat alur itu nyata tanpa mengarang
+    angka: nomor, harga, dan pemasok tetap milik baris SAP yang sudah ada.
+    """
+    from app.models import Location, SapMockPurchaseOrder
+
+    jakarta = (
+        await db.execute(select(Location).where(Location.name == "Jakarta"))
+    ).scalar_one_or_none()
+    if jakarta is None:
+        return {"dilewati": "Jakarta tidak ada"}
+    baris = (
+        await db.execute(
+            select(SapMockPurchaseOrder.id, SapMockPurchaseOrder.po_number)
+            .join(Decision, Decision.id == SapMockPurchaseOrder.decision_id)
+            .where(
+                Decision.decision_type == "supplier_procurement",
+                Decision.status == "executed",
+                Decision.target_location_id == jakarta.id,
+                SapMockPurchaseOrder.status == "confirmed",
+            )
+            .order_by(SapMockPurchaseOrder.po_number)
+            .limit(1)
+        )
+    ).first()
+    if baris is None:
+        return {"dilewati": "tidak ada PO tertaut Jakarta"}
+    await db.execute(
+        update(SapMockPurchaseOrder)
+        .where(SapMockPurchaseOrder.id == baris.id)
+        .values(status="draft")
+        .execution_options(synchronize_session=False)
+    )
+    await db.flush()
+    return {"po_draft": baris.po_number}
+
+
 async def _bekukan(db: AsyncSession) -> dict:
     """Tandai baris demo sebagai CETAKAN tanpa mengubah provenance-nya.
 
@@ -3125,7 +3242,6 @@ async def build_into(db: AsyncSession, *, purge: bool = True, freeze: bool = Tru
     laporan["po_tautan"] = await _tautkan_po_ke_keputusan(db)
     laporan["bukti"] = await _semai_bukti_dan_rantai(db, now)
     laporan["bukti_tambahan"] = await _lengkapi_bukti_kasus(db, now)
-    laporan["bukti_pemasok"] = await _lengkapi_bukti_pemasok(db, now)
     # Invarian "penolakan selalu punya pencatat" — lihat docstring fungsinya.
     laporan["penolakan"] = await _pastikan_penolakan_tercatat(db, now)
     # Invarian "satu keputusan, satu angka biaya" (audit data 26 Okt 2026).
@@ -3172,6 +3288,14 @@ async def build_into(db: AsyncSession, *, purge: bool = True, freeze: bool = Tru
         laporan["beku"] = await _bekukan(db)
     if bersihkan_sisa:
         laporan["bersih"] = await _bersihkan_sisa(db)
+    # SESUDAH penyapuan, bukan sebelumnya: `_bersihkan_sisa` menghapus baris demo
+    # tanpa stempel, termasuk batch yang barusan dirujuk bukti — dulu urutannya
+    # sebelum sapuan, sehingga `batch_id` di bukti menunjuk batch yang sudah
+    # tidak ada dan konteks pemasok kembali kosong (terukur 4 Nov 2026).
+    laporan["batch_eksklusi"] = await _lengkapi_batch_eksklusi(db, now)
+    laporan["bukti_pemasok"] = await _lengkapi_bukti_pemasok(db, now)
+    laporan["po_draft"] = await _lengkapi_po_draft(db, now)
+    await db.commit()
     laporan["hitung"] = await hitung(db)
     return laporan
 

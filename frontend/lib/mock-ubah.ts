@@ -25,10 +25,12 @@ type Ubahan = {
   >;
   batch: Record<string, { quarantine_status?: string | null }>;
   penerimaan: Record<string, { status?: string }>;
+  /** Status PO per nomor: hasil "Review & kirim" di sesi ini. */
+  po: Record<string, { status?: string }>;
 };
 
 function kosong(): Ubahan {
-  return { keputusan: {}, batch: {}, penerimaan: {} };
+  return { keputusan: {}, batch: {}, penerimaan: {}, po: {} };
 }
 
 function muat(): Ubahan {
@@ -40,6 +42,7 @@ function muat(): Ubahan {
       keputusan: isi.keputusan ?? {},
       batch: isi.batch ?? {},
       penerimaan: isi.penerimaan ?? {},
+      po: isi.po ?? {},
     };
   } catch {
     return kosong();
@@ -118,11 +121,25 @@ export function terapkanBaca(
     const ubah = u.keputusan[id];
     if (!ubah) return null;
     const b = body(isi);
-    if (polos.endsWith("/approval-summary")) return ringkasGerbang(b, ubah);
+    if (polos.endsWith("/approval-summary")) return ringkasGerbang(b, ubah, u.po);
     if (pecah.length === 3) return { ...b, status: ubah.status ?? b.status };
     return null;
   }
 
+  if (polos === "/sap/purchase-orders") {
+    const b = body(isi);
+    const daftar = Array.isArray(b.items) ? (b.items as Record<string, unknown>[]) : null;
+    if (!daftar) return null;
+    let tersentuhPo = false;
+    const hasilPo = daftar.map((r) => {
+      const ubah = u.po[String(r.po_number ?? "")];
+      if (!ubah) return r;
+      tersentuhPo = true;
+      return { ...r, ...ubah };
+    });
+    if (!tersentuhPo) return null;
+    return { ...b, items: hasilPo };
+  }
   if (polos === "/price/monitor") return saringHarga(utuh, body(isi));
   if (polos === "/agenda") return geserAgenda(utuh, body(isi));
   return null;
@@ -201,7 +218,8 @@ function ubahBatch(b: Record<string, unknown>, u: Ubahan): Record<string, unknow
 
 function ringkasGerbang(
   b: Record<string, unknown>,
-  ubah: { status?: string; verdict?: string; po_number?: string }
+  ubah: { status?: string; verdict?: string; po_number?: string },
+  poSesi: Record<string, { status?: string }> = {}
 ): Record<string, unknown> {
   const status = ubah.status ?? "pending_approval";
   const selesai = status === "executed";
@@ -222,13 +240,17 @@ function ringkasGerbang(
     // PO yang terbit setelah Eksekusi harus terlihat di panel Detail; rekaman
     // selalu `purchase_order: null` sehingga tanpa ini "Unduh PDF"/"Review PO"
     // tetap mati walau PO benar-benar dibuat.
-    purchase_order: ubah.po_number
-      ? {
-          ...(b.purchase_order as Record<string, unknown> | null | undefined),
-          po_number: ubah.po_number,
-          status: "confirmed",
-        }
-      : (b.purchase_order ?? null),
+    purchase_order: (() => {
+      const dasar = (b.purchase_order ?? null) as Record<string, unknown> | null;
+      const nomor = ubah.po_number ?? (dasar?.po_number as string | undefined);
+      if (!nomor) return null;
+      const statusSesi = poSesi[nomor]?.status;
+      return {
+        ...(dasar ?? {}),
+        po_number: nomor,
+        status: statusSesi ?? (dasar?.status as string | undefined) ?? "confirmed",
+      };
+    })(),
   };
 }
 
@@ -406,6 +428,14 @@ export function terapkanTulisan(
       iteration: Number(b.iteration ?? 1) + 1,
       expires_at: new Date(Date.now() + 30 * 60_000).toISOString(),
     };
+  }
+
+  const setujuPo = /^\/actions\/purchase-orders\/([^/]+)\/approve$/.exec(polos);
+  if (setujuPo) {
+    const nomor = decodeURIComponent(setujuPo[1]);
+    u.po[nomor] = { status: "confirmed" };
+    simpan(u);
+    return { ok: true, po_number: nomor, status: "confirmed", approved_at: sekarang };
   }
 
   const karantina = /^\/batches\/([^/]+)\/quarantine$/.exec(polos);

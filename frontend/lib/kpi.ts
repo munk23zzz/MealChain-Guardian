@@ -33,7 +33,7 @@ export type KpiWindowKey = "today" | "7d" | "1bulan";
 export const KPI_WINDOWS: readonly { key: KpiWindowKey; label: string }[] = [
   { key: "today", label: "Hari ini" },
   { key: "7d", label: "7 hari" },
-  { key: "1bulan", label: "1 bulan" },
+  { key: "1bulan", label: "Bulan ini" },
 ];
 
 /** Kunci bawaan saat halaman dibuka: hari kalender berjalan (WIB). */

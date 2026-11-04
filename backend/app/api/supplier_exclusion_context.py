@@ -80,10 +80,13 @@ async def exclusion_context(
         Supplier, Batch.supplier_id == Supplier.id,
     ).where(Batch.id.in_(batch_ids)))).all() if batch_ids else []
     supplier_ids = {supplier.id for _, supplier in rows}
-    exclusions = (await db.execute(select(SupplierExclusion).where(
-        SupplierExclusion.supplier_id.in_(supplier_ids),
+    # Eksklusi yang berlaku di lokasi ini SELALU ikut, bukan hanya milik pemasok
+    # yang kebetulan punya batch di bukti. Tanpa ini panel "Ajukan pemulihan"
+    # tidak pernah melihat entri `active` yang justru ingin dipulihkan
+    # (terukur 4 Nov 2026: context.exclusions kosong untuk 6/6 keputusan).
+    exclusions = list((await db.execute(select(SupplierExclusion).where(
         SupplierExclusion.scope_location_id == decision.target_location_id,
-    ).order_by(SupplierExclusion.created_at.desc()))).scalars().all() if supplier_ids else []
+    ).order_by(SupplierExclusion.created_at.desc()))).scalars().all())
     allowed = (
         user.role in {"sppg_head", "sppg_nutritionist"}
         and user.location_id == decision.target_location_id

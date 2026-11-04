@@ -108,6 +108,13 @@ const AGENT_KEY_SET = new Set<string>(SWARM_AGENTS.map((agent) => agent.key));
 function agentKeyOf(step: QualityStep): string | null {
   const nama = String(step?.agent_name ?? "").trim().toLowerCase();
   if (nama && AGENT_KEY_SET.has(nama)) return nama;
+  // Jejak menulis nama kelas agen (`supervisor_agent`, `verifier_agent`, …),
+  // bukan kunci tampilan (`supervisor`). Tanpa alias ini barisnya tak terhitung
+  // dan kolom "tercatat" menulis 0 padahal jejaknya ada (audit 4 Nov 2026).
+  if (nama.endsWith("_agent")) {
+    const inti = nama.slice(0, -"_agent".length);
+    if (AGENT_KEY_SET.has(inti)) return inti;
+  }
   const tahap = String(step?.step_name ?? "").trim().toUpperCase();
   const alat = String(step?.tool_called ?? "").trim().toLowerCase();
   if (tahap === "SUPERVISE" || alat.startsWith("supervisor.")) return "supervisor";
