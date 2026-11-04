@@ -37,16 +37,19 @@
 		max_size {$MAX_BODY_API:10MB}
 	}
 
-	# SSE/streaming agen: jangan buffer.
-	@stream path /api/agent* /api/*/stream*
-	handle @stream {
+	# Seluruh /api diteruskan ke backend dengan prefix /api DIBUANG, dan buffer
+	# dimatikan supaya SSE agen (mis. /api/demo/agent/stream) mengalir langsung.
+	#
+	# Kenapa `handle` + `uri strip_prefix`, bukan `handle_path`: `handle_path`
+	# membuang SELURUH pola yang cocok, termasuk bagian wildcard-nya — pada
+	# `/api/agent*` itu berarti `/api/agent` ikut hilang sehingga backend
+	# menerima `/supervisor/health` dan menjawab 404 (terukur di VPS 4 Nov 2026:
+	# semua /api/agent/* 404 padahal /api/health dan /api/demo/agent/* normal).
+	handle /api/* {
+		uri strip_prefix /api
 		reverse_proxy backend:8000 {
 			flush_interval -1
 		}
-	}
-
-	handle_path /api/* {
-		reverse_proxy backend:8000
 	}
 
 	handle {
