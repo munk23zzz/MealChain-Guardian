@@ -98,6 +98,13 @@ export function terapkanBaca(
 
   if (polos === "/decisions") return saringKeputusan(utuh, body(isi), u);
   if (polos === "/batches") return ubahBatch(body(isi), u);
+  if (polos === "/receipts/menunggu") {
+    const b = body(isi);
+    const daftar = Array.isArray(b.items) ? (b.items as Record<string, unknown>[]) : [];
+    const sisa = daftar.filter((r) => !u.penerimaan[String(r.id ?? "")]);
+    if (sisa.length === daftar.length) return null;
+    return { ...b, items: sisa, total: sisa.length };
+  }
 
   if (polos.startsWith("/decisions/")) {
     const pecah = polos.split("/");

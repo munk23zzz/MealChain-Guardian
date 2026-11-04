@@ -722,7 +722,9 @@ export default function DemoControlPanel({
           {sesi?.active && <span className="badge status-safe dc-live">sesi berjalan</span>}
         </div>
         <p className="dc-sub">
-          Data dibangun saat tombol ditekan — jangkar waktu = sekarang.
+          {process.env.NEXT_PUBLIC_USE_MOCK === "true"
+            ? "Mode demo statis: dataset sudah terekam di halaman ini — menekan tombol memuat ulang sesi, bukan membangun data baru."
+            : "Data dibangun saat tombol ditekan — jangkar waktu = sekarang."}
         </p>
         <div className="dc-primary">
           <button

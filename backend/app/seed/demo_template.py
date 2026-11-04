@@ -2623,6 +2623,116 @@ async def _lengkapi_bukti_kasus(db: AsyncSession, now: datetime) -> dict:
     return {"bukti_ditambah": ditambah}
 
 
+async def _lengkapi_bukti_pemasok(db: AsyncSession, now: datetime) -> dict:
+    """Sambungkan keputusan eksklusi ke batch pemasoknya.
+
+    Audit 4 Nov 2026: `GET /supplier-exclusions/context/{id}` membangun daftar
+    pemasok dari `batch_id` di payload bukti. Bukti kasus eksklusi hanya berisi
+    `catatan`, sehingga `suppliers: []` dan `can_propose: false` — form "Usul
+    eksklusi" tampil tanpa satu pun pilihan, dan pemulihan tidak bisa diajukan.
+
+    Penambal ini idempoten: menambah `batch_ids` + `evidence_refs` ke payload
+    bukti yang sudah ada, atau membuat satu baris bukti baru bila belum ada.
+    `evidence_type` mengikuti constraint DB (`human_inspection`).
+    """
+    from app.models import Batch, DecisionEvidence, SupplierExclusion
+
+    keputusan = list(
+        (
+            await db.execute(
+                select(Decision)
+                .where(Decision.decision_type.like("supplier_exclusion%"))
+                .order_by(Decision.created_at)
+            )
+        ).scalars()
+    )
+    ditambal = 0
+    tanpa_batch = 0
+    for d in keputusan:
+        eksklusi = (
+            await db.execute(
+                select(SupplierExclusion)
+                .where(SupplierExclusion.scope_location_id == d.target_location_id)
+                .order_by(SupplierExclusion.created_at.desc())
+                .limit(1)
+            )
+        ).scalar_one_or_none()
+        if eksklusi is None:
+            tanpa_batch += 1
+            continue
+        batch_ids = list(
+            (
+                await db.execute(
+                    select(Batch.id)
+                    .where(
+                        Batch.supplier_id == eksklusi.supplier_id,
+                        Batch.location_id == d.target_location_id,
+                    )
+                    .limit(3)
+                )
+            ).scalars()
+        )
+        if not batch_ids:
+            # Pemasok yang dieksklusi sering sudah tidak punya kiriman di lokasi
+            # itu. Form usulan tetap harus punya kandidat, jadi pakai batch
+            # lokasi tersebut dari pemasok berkeandalan rendah — alasan yang
+            # sama dengan kasus aslinya (pemasok berisiko), bukan angka karangan.
+            batch_ids = list(
+                (
+                    await db.execute(
+                        select(Batch.id)
+                        .join(Supplier, Supplier.id == Batch.supplier_id)
+                        .where(Batch.location_id == d.target_location_id)
+                        .order_by(Supplier.reliability_score.asc())
+                        .limit(3)
+                    )
+                ).scalars()
+            )
+        if not batch_ids:
+            tanpa_batch += 1
+            continue
+        baris = list(
+            (
+                await db.execute(
+                    select(DecisionEvidence).where(DecisionEvidence.decision_id == d.id)
+                )
+            ).scalars()
+        )
+        kunci = [str(b) for b in batch_ids]
+        refs = [{"type": "batch", "id": k} for k in kunci]
+        if baris:
+            for b in baris:
+                payload = dict(b.payload or {})
+                if payload.get("batch_id") in kunci:
+                    continue
+                payload.setdefault("batch_id", kunci[0])
+                payload["batch_ids"] = kunci
+                payload["evidence_refs"] = refs
+                b.payload = payload
+            ditambal += 1
+        else:
+            db.add(
+                DecisionEvidence(
+                    id=_uid("bukti-pemasok", str(d.id)),
+                    decision_id=d.id,
+                    evidence_type="human_inspection",
+                    payload={
+                        "catatan": "Bukti batch pemasok untuk usulan administratif.",
+                        "jenis_kasus": d.decision_type,
+                        "demo": True,
+                        "batch_id": kunci[0],
+                        "batch_ids": kunci,
+                        "evidence_refs": refs,
+                    },
+                    is_consistent=True,
+                    recorded_at=d.created_at or now,
+                )
+            )
+            ditambal += 1
+    await db.flush()
+    return {"bukti_pemasok_ditambal": ditambal, "tanpa_batch": tanpa_batch}
+
+
 async def _bekukan(db: AsyncSession) -> dict:
     """Tandai baris demo sebagai CETAKAN tanpa mengubah provenance-nya.
 
@@ -2983,6 +3093,11 @@ async def build_into(db: AsyncSession, *, purge: bool = True, freeze: bool = Tru
     """
     now = datetime.now(timezone.utc)
     laporan: dict = {}
+    # Sentinel `cetakan` harus ADA sebelum baris apa pun distempel ke id-nya:
+    # penyemai KPI harian menulis `disposal_events.demo_session_id` = CETAKAN_ID,
+    # dan pada database baru FK itu gagal (terukur 4 Nov 2026: build berhenti di
+    # penyemaian KPI, sesudah 6 keputusan tertulis).
+    await sesi.cetakan(db)
     if purge:
         laporan["dibersihkan"] = await sesi.kosongkan_kecuali(db, None)
     laporan["inti"] = await _semai_inti(db, now)
@@ -3010,6 +3125,7 @@ async def build_into(db: AsyncSession, *, purge: bool = True, freeze: bool = Tru
     laporan["po_tautan"] = await _tautkan_po_ke_keputusan(db)
     laporan["bukti"] = await _semai_bukti_dan_rantai(db, now)
     laporan["bukti_tambahan"] = await _lengkapi_bukti_kasus(db, now)
+    laporan["bukti_pemasok"] = await _lengkapi_bukti_pemasok(db, now)
     # Invarian "penolakan selalu punya pencatat" — lihat docstring fungsinya.
     laporan["penolakan"] = await _pastikan_penolakan_tercatat(db, now)
     # Invarian "satu keputusan, satu angka biaya" (audit data 26 Okt 2026).

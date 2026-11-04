@@ -160,6 +160,10 @@ def main() -> None:
                 paths |= {f"/demand/{other}/{c}" for c in commodities}
                 paths |= {f"/demand/forecast/{other}/{c}?horizon_days=7" for c in commodities}
                 paths |= {f"/price/quotes/{other}/{c}" for c in commodities}
+                # Drill-down "Saldo" per lokasi: tanpa ini panel Supply & Demand
+                # berkata "Saldo gagal dimuat." untuk 9 dari 10 lokasi (audit
+                # 4 Nov 2026) — baris hanya direkam untuk lokasi akun sendiri.
+                paths |= {f"/balance/{other}/{c}" for c in commodities}
         data: dict[str, dict] = {}
         gagal = 0
         for path in sorted(paths):

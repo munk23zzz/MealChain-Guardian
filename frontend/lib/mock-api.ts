@@ -132,7 +132,7 @@ function tandaiSesi(aktif: boolean) {
 
 function sesiDemoAktifkan(contoh: Record<string, unknown>) {
   const sekarang = new Date();
-  const kedaluwarsa = new Date(sekarang.getTime() + 4 * 3600 * 1000);
+  const kedaluwarsa = new Date(kedaluwarsaSesi());
   return {
     ...contoh,
     active: true,
@@ -143,8 +143,33 @@ function sesiDemoAktifkan(contoh: Record<string, unknown>) {
     expires_at: kedaluwarsa.toISOString(),
     anchor_now: sekarang.toISOString(),
     server_now: sekarang.toISOString(),
-    remaining_seconds: 4 * 3600,
+    // Sisa waktu dihitung dari kedaluwarsa yang disimpan, bukan angka tetap:
+    // setelah "Perpanjang 30 menit" angka di layar harus ikut bertambah.
+    remaining_seconds: Math.max(0, Math.round((kedaluwarsa.getTime() - sekarang.getTime()) / 1000)),
   };
+}
+
+const KUNCI_KEDALUWARSA = "mealchain.demo.kedaluwarsa";
+
+/** Waktu kedaluwarsa sesi demo (ms). Default 4 jam bila belum ada. */
+function kedaluwarsaSesi(): number {
+  try {
+    const tersimpan = Number(sessionStorage.getItem(KUNCI_KEDALUWARSA));
+    if (Number.isFinite(tersimpan) && tersimpan > Date.now()) return tersimpan;
+  } catch {
+    /* mode privat */
+  }
+  const baru = Date.now() + 4 * 3600 * 1000;
+  simpanKedaluwarsa(baru);
+  return baru;
+}
+
+function simpanKedaluwarsa(ms: number): void {
+  try {
+    sessionStorage.setItem(KUNCI_KEDALUWARSA, String(ms));
+  } catch {
+    /* mode privat */
+  }
 }
 
 function kunci(path: string): { utuh: string; polos: string; pola: string } {
@@ -314,10 +339,18 @@ export async function jawabMock(
     }
     if (polosPath === "/demo/session/end") {
       tandaiSesi(false);
+      sesiPernahDibangun = false;
+      simpanKedaluwarsa(0);
       return {
         status: 200,
         body: { ...contohSesi, active: false, status: "kosong", session_id: null, remaining_seconds: 0 },
       };
+    }
+    if (polosPath === "/demo/session/extend") {
+      // Benar-benar menambah 30 menit, supaya angka "sisa …" di panel berubah.
+      simpanKedaluwarsa(kedaluwarsaSesi() + 30 * 60 * 1000);
+      tandaiSesi(true);
+      return { status: 200, body: { ...sesiDemoAktifkan(contohSesi), created: false } };
     }
     if (polosPath.startsWith("/demo/")) {
       // Panel memakai `created` untuk memutuskan memuat ulang halaman: klik
