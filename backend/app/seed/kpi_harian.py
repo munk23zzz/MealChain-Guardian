@@ -69,6 +69,17 @@ async def lengkapi_hari(
     """Tambahkan fakta KPI hari `hari` yang belum ada. Idempoten."""
     laporan: dict = {"hari": hari.isoformat(), "kiriman": 0, "limbah": 0, "keputusan": None}
 
+    # --- 0a. Pastikan sesi sentinel ada SEBELUM menulis baris ber-stempelnya --
+    # Semua INSERT di bawah menyimpan `demo_session_id = CETAKAN_ID`, dan kolom
+    # itu punya FK ke `demo_sessions`. Pada database baru (seed VPS 4 Nov 2026)
+    # tabel itu masih kosong sehingga INSERT gagal: ForeignKeyViolation
+    # disposal_events_demo_session_id_fkey. Membuatnya di sini membuat modul ini
+    # aman dipanggil dari jalur mana pun (CLI seed maupun /demo/seed API), tanpa
+    # bergantung pada urutan pemanggil.
+    from app.services.demo_session import cetakan as _pastikan_cetakan
+
+    await _pastikan_cetakan(db)
+
     # --- 0. Pulihkan diri: buang dulu fakta semai hari ini --------------------
     # Kenapa (30 Okt 2026): semua INSERT di bawah dijaga `ON CONFLICT` /
     # `ada is None`. Bila sebuah proses destruktif menghapus ANAK baris
