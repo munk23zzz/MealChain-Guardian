@@ -1,0 +1,65 @@
+# =============================================================================
+# Caddyfile.http — mode SATU PORT (khusus VPS yang hanya membuka 80/TCP)
+# =============================================================================
+#
+# Dipakai bila firewall VPS menutup 443 sehingga Let's Encrypt tidak bisa
+# melayani HTTPS. Semua trafik lewat http://<DOMAIN> saja:
+#
+#   http://<DOMAIN>/        -> frontend:3000
+#   http://<DOMAIN>/api/*   -> backend:8000   (prefix /api DIBUANG oleh Caddy)
+#
+# Frontend di-build dengan NEXT_PUBLIC_API_URL=/api, jadi permintaan API
+# bersifat same-origin: tidak ada preflight CORS, tidak ada campuran http/https.
+#
+# KONSEKUENSI YANG HARUS DISADARI: sandi demo dan token JWT lewat jaringan
+# TANPA enkripsi. Hanya layak untuk demo tertutup/juri, bukan produksi.
+# Begitu port 443 dibuka, ganti kembali ke Caddyfile (HTTPS otomatis).
+# =============================================================================
+
+{
+	admin off
+	email {$ACME_EMAIL:admin@localhost}
+
+	servers {
+		timeouts {
+			read_body 30s
+			idle 5m
+		}
+	}
+}
+
+:80 {
+	encode zstd gzip
+
+	# Batas ukuran body: unggahan besar tidak boleh menghabiskan memori
+	# kontainer backend.
+	request_body {
+		max_size {$MAX_BODY_API:10MB}
+	}
+
+	# SSE/streaming agen: jangan buffer.
+	@stream path /api/agent* /api/*/stream*
+	handle @stream {
+		reverse_proxy backend:8000 {
+			flush_interval -1
+		}
+	}
+
+	handle_path /api/* {
+		reverse_proxy backend:8000
+	}
+
+	handle {
+		request_body {
+			max_size {$MAX_BODY_FRONTEND:2MB}
+		}
+		reverse_proxy frontend:3000
+	}
+
+	header {
+		X-Content-Type-Options nosniff
+		X-Frame-Options SAMEORIGIN
+		Referrer-Policy strict-origin-when-cross-origin
+		-Server
+	}
+}

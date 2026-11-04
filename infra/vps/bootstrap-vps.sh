@@ -5,6 +5,8 @@
 #
 # Untuk: VPS Tencent Lighthouse, 2 vCPU / 2 GB RAM, Ubuntu 22/24, akses root.
 # Domain memakai sslip.io (DNS publik otomatis menunjuk ke IP server).
+# Mode bawaan: SATU PORT (80/TCP) — UI di /, API di /api, tanpa TLS, karena
+# firewall VPS ini menutup 443. Lihat Caddyfile.http.
 #
 # Pemakaian (di terminal VPS, sebagai root):
 #   curl -fsSL https://raw.githubusercontent.com/munk23zzz/MealChain-Guardian/vps-deploy/infra/vps/bootstrap-vps.sh | sudo bash
@@ -25,6 +27,7 @@ BRANCH="${BRANCH:-vps-deploy}"
 APP_DIR="${APP_DIR:-/opt/mealchain}"
 DOMAIN="${DOMAIN:-43-129-50-209.sslip.io}"
 ACME_EMAIL="${ACME_EMAIL:-admin@${DOMAIN}}"
+PUBLIC_SCHEME="${PUBLIC_SCHEME:-http}"
 
 langkah() { printf '\n==> %s\n' "$*"; }
 gagal()   { printf '\nGAGAL: %s\n' "$*" >&2; exit 1; }
@@ -42,7 +45,30 @@ ocpud="$(nproc)"; memmb="$(free -m | awk '/^Mem:/{print $2}')"
 info "CPU ${ocpud} core, RAM ${memmb} MB"
 
 # -----------------------------------------------------------------------------
-# 1. Swap
+# 1. Bebaskan port 80/443 dari layanan lain (disetujui pemilik VPS)
+# -----------------------------------------------------------------------------
+langkah "Memeriksa pemakai port 80/443"
+for svc in caddy nginx apache2 httpd; do
+  if systemctl is-active --quiet "$svc" 2>/dev/null; then
+    info "menghentikan systemd: $svc"
+    systemctl stop "$svc" || true
+    systemctl disable "$svc" >/dev/null 2>&1 || true
+  fi
+done
+if command -v docker >/dev/null 2>&1; then
+  ids="$(docker ps --format '{{.ID}} {{.Names}} {{.Ports}}' | grep -E '0\.0\.0\.0:(80|443)->' | grep -v mealchain-vps | awk '{print $1}' || true)"
+  if [ -n "$ids" ]; then
+    for id in $ids; do
+      info "menghentikan kontainer lama di 80/443: $(docker inspect -f '{{.Name}}' "$id" 2>/dev/null || echo "$id")"
+      docker stop "$id" >/dev/null 2>&1 || true
+    done
+  else
+    info "tidak ada kontainer lain di 80/443"
+  fi
+fi
+
+# -----------------------------------------------------------------------------
+# 2. Swap
 # -----------------------------------------------------------------------------
 if [ "$(free -m | awk '/^Swap:/{print $2}')" -lt 1024 ]; then
   langkah "Membuat swap 2 GB (build Next.js butuh memori lebih dari RAM fisik)"
@@ -61,9 +87,14 @@ fi
 # 2. Docker
 # -----------------------------------------------------------------------------
 langkah "Docker"
+export DEBIAN_FRONTEND=noninteractive
+if ! command -v git >/dev/null 2>&1 || ! command -v openssl >/dev/null 2>&1; then
+  apt-get update -qq
+  apt-get install -y -qq git openssl ca-certificates curl >/dev/null
+  info "git/openssl terpasang"
+fi
 if ! command -v docker >/dev/null 2>&1; then
   info "memasang Docker Engine + compose plugin"
-  export DEBIAN_FRONTEND=noninteractive
   apt-get update -qq
   apt-get install -y -qq ca-certificates curl gnupg git >/dev/null
   curl -fsSL https://get.docker.com -o /tmp/get-docker.sh
@@ -75,6 +106,8 @@ if ! command -v docker >/dev/null 2>&1; then
 else
   info "docker sudah terpasang: $(docker --version)"
 fi
+systemctl start docker >/dev/null 2>&1 || true
+docker info >/dev/null 2>&1 || gagal "daemon docker tidak berjalan"
 docker compose version >/dev/null 2>&1 || gagal "docker compose v2 tidak tersedia"
 info "$(docker compose version)"
 
@@ -110,9 +143,16 @@ else
     -e "s|^POSTGRES_PASSWORD=.*|POSTGRES_PASSWORD=${PW}|" \
     -e "s|^DATABASE_URL=.*|DATABASE_URL=postgresql+asyncpg://mealchain:${PW}@postgres:5432/mealchain|" \
     -e "s|^JWT_SECRET=.*|JWT_SECRET=${JWT}|" \
+    -e "s|^CORS_ORIGINS=.*|CORS_ORIGINS=${PUBLIC_SCHEME}://${DOMAIN}|" \
+    -e "s|^NEXT_PUBLIC_API_URL=.*|NEXT_PUBLIC_API_URL=/api|" \
     "$ENV_FILE"
+  {
+    echo ""
+    echo "# --- mode satu port (443 tertutup firewall; lihat Caddyfile.http) ---"
+    echo "CADDY_CONFIG=Caddyfile.http"
+  } >> "$ENV_FILE"
   chmod 600 "$ENV_FILE"
-  info "$ENV_FILE (chmod 600)"
+  info "$ENV_FILE (chmod 600, CADDY_CONFIG=Caddyfile.http, NEXT_PUBLIC_API_URL=/api)"
 fi
 
 # -----------------------------------------------------------------------------
@@ -123,18 +163,26 @@ cd "$APP_DIR"
 bash infra/vps/deploy.sh
 
 # -----------------------------------------------------------------------------
-# 6. Ringkasan
+# 6. Uji dari dalam server
 # -----------------------------------------------------------------------------
-IP="$(curl -fsS -m 8 https://api.ipify.org || echo '<IP-VPS>')"
-DOMAIN_SEBENAR="$(grep -E '^DOMAIN=' "$ENV_FILE" | tail -1 | cut -d= -f2-)"
+D="$(grep -E '^DOMAIN=' "$ENV_FILE" | tail -1 | cut -d= -f2-)"
+langkah "Uji dari dalam server"
+code="$(curl -s -o /dev/null -w '%{http_code}' -m 10 "http://127.0.0.1/api/health" || echo 000)"
+info "GET http://127.0.0.1/api/health -> ${code}"
+if [ "$code" != "200" ]; then
+  info "PERINGATAN: belum 200. Periksa: cd ${APP_DIR} && docker compose -f infra/vps/docker-compose.vps.yml logs --tail=80 backend"
+fi
+
+# -----------------------------------------------------------------------------
+# 7. Ringkasan
+# -----------------------------------------------------------------------------
 langkah "Selesai"
-info "UI  : https://${DOMAIN_SEBENAR}"
-info "API : https://api.${DOMAIN_SEBENAR}"
-info "Uji : curl -fsS https://api.${DOMAIN_SEBENAR}/health"
+info "UI  : ${PUBLIC_SCHEME}://${D}/"
+info "API : ${PUBLIC_SCHEME}://${D}/api/health"
 info ""
 info "Akun demo (sandi: lihat infra/vps/README.md):"
 info "  sppg.head@demo.local · sppg.nutritionist@demo.local · bgn.monitor@demo.local"
 info ""
 info "Reset data antar-juri : sudo bash ${APP_DIR}/infra/vps/reset-demo.sh"
 info "Log                  : cd ${APP_DIR} && docker compose -f infra/vps/docker-compose.vps.yml logs -f backend"
-info "IP publik saat ini    : ${IP}"
+info "Bila 443 kelak dibuka: ubah CADDY_CONFIG=Caddyfile di ${ENV_FILE}, lalu bash ${APP_DIR}/infra/vps/deploy.sh"

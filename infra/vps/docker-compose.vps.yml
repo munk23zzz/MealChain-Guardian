@@ -182,7 +182,9 @@ services:
       MAX_BODY_API: "${MAX_BODY_API:-10MB}"
       MAX_BODY_FRONTEND: "${MAX_BODY_FRONTEND:-2MB}"
     volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      # Berkas konfigurasi Caddy. CADDY_CONFIG=Caddyfile.http dipakai bila
+      # port 443 tertutup firewall (mode satu port, lihat Caddyfile.http).
+      - ./${CADDY_CONFIG:-Caddyfile}:/etc/caddy/Caddyfile:ro
       # Sertifikat Let's Encrypt. WAJIB volume bernama: tanpa ini setiap
       # `docker compose up` meminta sertifikat baru dan kena rate-limit ACME.
       - caddy_data:/data
